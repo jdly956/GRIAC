@@ -40,7 +40,7 @@ Dimensionnement du contexte : chaque requête mobilise 10 à 20 000 tokens (gaba
 
 ## 4. Périmètre du MVP
 
-Inclus : création de projets avec contexte et NFR associées (D19) ; workflow guidé de rédaction des stories conforme au prompt 3 interne (interview, hypothèses tracées, critères d'acceptation Gherkin, critères d'accessibilité DSFR, contrôle DoR), ancré par RAG avec citations ; mode Q&A sur la documentation ; feedback intégré (D18) ; export CSV compatible import Jira ; pipeline d'ingestion avec qualification minimale et rapport de couverture du corpus.
+Inclus : création de projets avec contexte et NFR associées (D19) ; workflow guidé de rédaction des stories conforme au prompt 3 interne (interview, hypothèses tracées, critères d'acceptation Gherkin, critères d'accessibilité DSFR, contrôle DoR), ancré par RAG avec citations ; question libre sur la documentation dans le fil de la rédaction, réponse sourcée — pas d'écran de recherche dédié : le RAG est un mécanisme interne mobilisé par le LLM pour accompagner le PO, jamais une recherche autonome (arbitrage A1 du 02/07/2026, cf. `backlog-fonctionnel.md`) ; feedback intégré (D18) ; export CSV compatible import Jira ; pipeline d'ingestion avec qualification minimale et rapport de couverture du corpus.
 
 Exclus : prompts 1 et 2 de la chaîne (cadrage d'Epic, découpage en Features), reportés en v2 ; plugin Jira ; intégration API Jira temps réel (prod uniquement) ; traitement de données personnelles ; multi-organisations.
 
