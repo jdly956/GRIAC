@@ -15,6 +15,7 @@ une génération sans source récupérable doit le signaler).
 
 from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
@@ -26,6 +27,10 @@ router = APIRouter(tags=["recherche"])
 
 RRF_K = 60
 LIMITE_PAR_VOLET = 30
+# Part des chunks dans le budget global ≤ 20 000 tokens par requête (CLAUDE.md) :
+# le reste est réservé au gabarit, au few-shot et au brief du PO (E3).
+BUDGET_CONTEXTE_TOKENS = 6000
+NB_CANDIDATS_RERANK = 15  # borne haute de l'assemblage E2 (8-15 chunks)
 
 REQUETE_DOSSIERS_PROJET = "SELECT dossier FROM project_dossiers WHERE project_id = %(id)s"
 
@@ -149,6 +154,108 @@ def rechercher(connexion, client, settings: Settings, entree: RechercheEntree) -
     return RechercheResultat(resultats=resultats)
 
 
+def reranker(
+    settings: Settings, question: str, contenus: list[str], http_post=None
+) -> list[int] | None:
+    """Ordre des candidats selon `/v1/rerank` d'Albert (bge-reranker-v2-m3).
+
+    L'endpoint est HORS périmètre du SDK OpenAI ; le schéma implémenté est celui
+    d'albert-api ({model, prompt, input} -> data[{index, score}]) — HYPOTHÈSE à
+    confirmer par curl sur le pod (plan S2.4). Toute erreur => None : l'appelant
+    conserve l'ordre RRF et le SIGNALE (jamais d'échec silencieux).
+    """
+    if http_post is None:  # résolu à l'appel : monkeypatchable, jamais de réseau en TU
+        http_post = httpx.post
+    try:
+        reponse = http_post(
+            settings.albert_base_url.rstrip("/") + "/rerank",
+            headers={"Authorization": f"Bearer {settings.albert_api_key.get_secret_value()}"},
+            json={
+                "model": settings.albert_model_rerank,
+                "prompt": question,
+                "input": contenus,
+            },
+            timeout=settings.albert_timeout_s,
+        )
+        reponse.raise_for_status()
+        scores = reponse.json()["data"]
+        return [
+            element["index"] for element in sorted(scores, key=lambda element: -element["score"])
+        ]
+    except Exception:  # 404/422/réseau : repli RRF signalé par l'appelant
+        return None
+
+
+class SourceCitee(BaseModel):
+    document: str
+    nom: str
+    section: str
+
+
+class ContexteResultat(BaseModel):
+    contexte: str  # blocs « [Source : nom — section] » prêts pour le prompt E3
+    sources: list[SourceCitee]
+    nb_tokens: int
+    rerank_applique: bool
+    avertissement: str | None = None
+
+
+def assembler_contexte(
+    chunks: list[ChunkTrouve], budget_tokens: int = BUDGET_CONTEXTE_TOKENS
+) -> tuple[str, list[ChunkTrouve], int]:
+    """8–15 chunks max dans le budget ; chaque bloc porte sa citation (traçabilité)."""
+    retenus: list[ChunkTrouve] = []
+    total = 0
+    for chunk in chunks[:NB_CANDIDATS_RERANK]:
+        if retenus and total + chunk.nb_tokens > budget_tokens:
+            break
+        retenus.append(chunk)
+        total += chunk.nb_tokens
+    blocs = [f"[Source : {chunk.nom} — {chunk.section}]\n{chunk.contenu}" for chunk in retenus]
+    return "\n\n---\n\n".join(blocs), retenus, total
+
+
+def construire_contexte(
+    connexion, client, settings: Settings, entree: RechercheEntree, http_post=None
+) -> ContexteResultat:
+    """Recherche hybride -> rerank (repli RRF signalé) -> assemblage cité (E2 complet)."""
+    candidats = rechercher(
+        connexion, client, settings, entree.model_copy(update={"nb": NB_CANDIDATS_RERANK})
+    )
+    if not candidats.resultats:
+        return ContexteResultat(
+            contexte="",
+            sources=[],
+            nb_tokens=0,
+            rerank_applique=False,
+            avertissement=candidats.avertissement,
+        )
+
+    ordre = reranker(
+        settings, entree.question, [chunk.contenu for chunk in candidats.resultats], http_post
+    )
+    rerank_applique = ordre is not None
+    ordonnes = (
+        [candidats.resultats[i] for i in ordre if i < len(candidats.resultats)]
+        if rerank_applique
+        else candidats.resultats
+    )
+
+    contexte, retenus, total = assembler_contexte(ordonnes[: entree.nb])
+    return ContexteResultat(
+        contexte=contexte,
+        sources=[
+            SourceCitee(document=chunk.document, nom=chunk.nom, section=chunk.section)
+            for chunk in retenus
+        ],
+        nb_tokens=total,
+        rerank_applique=rerank_applique,
+        avertissement=(
+            None if rerank_applique else "Rerank indisponible : ordre de la fusion RRF conservé."
+        ),
+    )
+
+
 def get_albert() -> tuple[Any, Settings]:
     """Client Albert par requête — surchargé par les tests (dependency_overrides)."""
     settings = charger_settings()
@@ -165,3 +272,12 @@ def rechercher_route(
 ) -> RechercheResultat:
     client, settings = albert
     return rechercher(connexion, client, settings, entree)
+
+
+@router.post("/contexte")
+def contexte_route(
+    entree: RechercheEntree, connexion: Connexion, albert: Albert
+) -> ContexteResultat:
+    """Contexte assemblé et cité, prêt à injecter dans le prompt (consommé par E3)."""
+    client, settings = albert
+    return construire_contexte(connexion, client, settings, entree)
