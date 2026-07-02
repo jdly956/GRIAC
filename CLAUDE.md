@@ -99,6 +99,14 @@ Aucune story n'est considérée **livrée** tant que :
 
 **Tests verts ≠ story livrée** : ils prouvent que le code marche en isolation, pas qu'il est branché dans la stack.
 
+### Règle « TU + TNR + plan de test avant toute livraison »
+
+Aucun code n'est **livré** (commit poussé, PR ouverte ou mise à jour) sans que l'assistant ait, dans la session même et dans cet ordre :
+
+1. **TU** — écrit ou mis à jour les tests unitaires de toute fonction métier nouvelle ou modifiée (Albert mocké, fixtures pour la DB) et vérifié qu'ils sont verts ;
+2. **TNR** — exécuté la baseline complète `make lint` + `make test` (tout le workspace) et vérifié qu'elle est verte : le nouveau code ne casse rien d'existant. Une régression se corrige avant livraison — jamais en modifiant un test existant sans accord explicite ;
+3. **Plan de test** — rédigé un plan de test systématique, versionné dans `docs/plans-test/<story>.md` et référencé dans la PR : étapes numérotées, commandes exactes (règle « commandes toujours préfixées »), **résultat attendu observable** à chaque étape, environnement cible précisé (pod Onyxia mode A/B, stack `make dev`). Le plan couvre les critères d'acceptation de la story **et** la non-régression du périmètre adjacent ; son exécution sur l'environnement cible alimente la règle « validation stack-live » et son résultat est consigné dans `SESSIONS.md`.
+
 ### Règle « pas de script de rattrapage sans fix pipeline d'abord »
 
 Aucune correction de données dérivées (chunks, embeddings, métadonnées, statuts) par script ad hoc tant que la fix n'a pas été livrée et validée stack-live dans le nœud concerné du DAG d'ingestion. La propagation à l'existant passe par le re-run du pipeline (`make ingest`, rescan avec reprise sur hash — D9), jamais par un script qui contourne le pipeline. Les scripts de rattrapage n'existent que pour propager une fix pipeline déjà validée, jamais pour compenser une fix manquante.

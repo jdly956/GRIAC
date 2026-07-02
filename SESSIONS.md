@@ -4,7 +4,7 @@
 
 ## État stratégique
 
-**Voie active** : sprint 1 — **S1.1 et S1.2 livrées et mergées** (PRs #1, #2, #3) ; **S1.4 livrée** (branche `claude/backlog-continuation-6ftff4`, PR #4 draft en attente de revue du référent) avec validation stack-live en session (uvicorn réel : refus de démarrer sans clé avec message explicite, /health 200 avec config, clé absente des logs). Prochaine story selon l'ordre du backlog : **S1.5 (client Albert & sonde des limites — fenêtre effective et quotas, test no-go n°1)** ; le code peut s'écrire en session (tests mockés), mais `make probe` exige la clé réelle → exécution et rapport `docs/albert-limits.md` à jouer sur le pod. Ensuite S1.3 (CI). **NB : `make dev` exige désormais un `.env` renseigné** (cp .env.example .env) — sans clé, le service api refuse de démarrer (comportement voulu S1.4). Pod de dev : prendre un service `vscode-python` **sans GPU** ; checklist premier login (maxima CPU/RAM, MinIO — action n°7) toujours à consigner. Bascule de la branche par défaut sur `main` : à vérifier dans les settings GitHub.
+**Voie active** : sprint 1 — **S1.1 et S1.2 livrées et mergées** (PRs #1, #2, #3) ; **S1.4 livrée** (branche `claude/backlog-continuation-6ftff4`, PR #4 draft en attente de revue du référent) avec validation stack-live en session (uvicorn réel : refus de démarrer sans clé avec message explicite, /health 200 avec config, clé absente des logs) ; plan de test à exécuter sur le pod : `docs/plans-test/s1.4-config-secrets.md`. Nouvelle règle de méthode dans CLAUDE.md : « TU + TNR + plan de test avant toute livraison ». Prochaine story selon l'ordre du backlog : **S1.5 (client Albert & sonde des limites — fenêtre effective et quotas, test no-go n°1)** ; le code peut s'écrire en session (tests mockés), mais `make probe` exige la clé réelle → exécution et rapport `docs/albert-limits.md` à jouer sur le pod. Ensuite S1.3 (CI). **NB : `make dev` exige désormais un `.env` renseigné** (cp .env.example .env) — sans clé, le service api refuse de démarrer (comportement voulu S1.4). Pod de dev : prendre un service `vscode-python` **sans GPU** ; checklist premier login (maxima CPU/RAM, MinIO — action n°7) toujours à consigner. Bascule de la branche par défaut sur `main` : à vérifier dans les settings GitHub.
 
 **Réserves / dettes actées** : validation compose réelle (S1.2, voir ci-dessus) ; `pre-commit run --all-files` jamais exécuté de bout en bout (proxy des sessions Claude Code restreint ; hooks installés, config validée) — à jouer une fois sur le pod ; benchmark E6 et stories gold : statu quo (arbitrage du 02/07).
 
@@ -25,12 +25,15 @@
 - `infra/compose.yaml` : le service api reçoit les variables `ALBERT_*` (défaut = alias pour les modèles, vide pour URL/clé → refus de démarrer, visible via `docker compose logs api`) ; commentaire obsolète « arrive avec S1.4 » recalé.
 - `api/tests/test_config.py` : 8 tests (chargement complet, alias par défaut + surcharge, clé absente/vide → RuntimeError nommant la variable, clé jamais dans str/repr, démarrage TestClient refusé sans config / OK avec). Aucun appel réseau.
 - README : section « Configuration & secrets (S1.4) », prérequis de la stack locale mis à jour (`.env` requis).
+- **Règle de méthode ajoutée à CLAUDE.md sur demande du référent : « TU + TNR + plan de test avant toute livraison »** — TU écrits et verts, baseline complète `make lint` + `make test` (TNR) verte avant tout push, et plan de test systématique versionné dans `docs/plans-test/<story>.md` (étapes numérotées, commandes préfixées, résultat attendu observable, environnement cible) référencé dans la PR.
+- Premier plan de test versionné : `docs/plans-test/s1.4-config-secrets.md` (8 étapes, pod Onyxia mode B + étape 7 optionnelle mode A qui lève aussi la réserve compose S1.2).
+- `docs/init-pod-onyxia.md` recalé : préalable commun `.env` au §4 (depuis S1.4 l'api refuse de démarrer sans clé — le mode B documenté aurait échoué), ligne de dépannage ajoutée.
 
 **Validation stack-live** (pas de daemon Docker en session — même limite que S1.2, la réserve compose reste ouverte) : uvicorn **réel** sans variables → `RuntimeError: Configuration Albert invalide — variables d'environnement manquantes ou vides : ALBERT_API_KEY, ALBERT_BASE_URL…` puis `Application startup failed. Exiting.` (exit 3) ; uvicorn réel avec clé factice → `GET /health` = 200 et **0 occurrence de la clé dans le log de démarrage** (grep). `docker compose config` : variables `ALBERT_*` rendues sur le service api. `make lint` vert ; `make test` : 13 tests verts.
 
 **Mini-récap** :
-- ✅ Fait : S1.4 livrée et validée stack-live en session ; PR #4 (draft) ouverte pour revue
-- ⏳ En cours : revue de la PR par le référent technique
+- ✅ Fait : S1.4 livrée et validée stack-live en session ; PR #4 (draft) ouverte pour revue ; règle « TU + TNR + plan de test » dans CLAUDE.md ; plan de test S1.4 versionné ; procédure pod recalée
+- ⏳ En cours : revue de la PR #4 par le référent + exécution du plan de test `docs/plans-test/s1.4-config-secrets.md` sur le pod Onyxia (la clé existe)
 - ⏳ À venir : S1.5 (client Albert + `make probe` — code écrivable en session, exécution réelle avec la clé sur le pod), puis S1.3 (CI)
 
 ---
