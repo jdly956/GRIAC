@@ -2,7 +2,7 @@
 
 ## Contexte
 
-Application interne pour Product Owners de l'administration française : génération de user stories conformes au gabarit interne, ancrées sur la documentation projet par RAG avec citations obligatoires, et mode Q&A documentaire. Le cadrage complet et le journal des 18 décisions (D1–D18) sont dans `/docs/note-cadrage-sia-po.md` : le lire avant toute tâche.
+Application interne pour Product Owners de l'administration française : génération de user stories conformes au gabarit interne, ancrées sur la documentation projet par RAG avec citations obligatoires, et mode Q&A documentaire. Le cadrage complet et le journal des 19 décisions (D1–D19) sont dans `/docs/note-cadrage-sia-po.md` : le lire avant toute tâche.
 
 ## Contraintes non négociables
 
@@ -49,6 +49,110 @@ Python 3.12, FastAPI, docling (parsing Word/PDF), PostgreSQL 16 + pgvector, fron
 - **E6 Évals** : harnais de benchmark des modèles de chat (`openweight-large` = gpt-oss-120b vs `openweight-medium` = Mistral-Small-3.2 ; Mistral Medium propriétaire si accès ALLiaNCE), grille 3 axes (gabarit, exactitude, complétude), démarrage sur `/evals/silver/` puis recalibrage sur `/evals/gold/` dès fourniture + test de fenêtre de contexte effective et de débit d'embeddings sous quotas.
 - **E7 Prod (post go)** : agent connecteur Jira interne en flux sortant, auth ProConnect, charts prod.
 - **E8 Projets — contexte & NFR (prérequis d'E3)** : entité Projet (nom, contexte libre, NFR typées : performance, volumétrie, SSI, RGPD, accessibilité RGAA, disponibilité, auditabilité, avec valeur cible optionnelle), CRUD API + écran DSFR, injection dans le prompt système et pré-remplissage des blocs NFR de l'interview ; filtre du corpus par projet (métadonnée D7).
+
+## Environnement et outils
+
+### Plateformes
+
+- **Dev & POC** : SSP Cloud (Onyxia), service VSCode **sans GPU** — l'inférence est déportée sur Albert, jamais d'inférence locale (pas d'Ollama). À compléter au premier login (action n°7 de la note de cadrage) : URL du service, working dir, maxima CPU/RAM, espace MinIO.
+- **Sessions Claude Code** : pod Onyxia (CLI) ou session remote (claude.ai/code) sur le repo GitHub privé `jdly956/GRIAC`.
+- **LLM** : Albert API exclusivement (voir Contraintes non négociables) ; clé jamais dans le repo ni dans les logs.
+
+### Règle « commandes toujours préfixées »
+
+Toute commande shell proposée à l'utilisateur commence par se placer à la racine du repo et activer l'environnement :
+
+```bash
+cd ~/work/GRIAC/ && source .venv/bin/activate
+```
+
+(chemin et mécanisme d'activation à recaler sur les choix de S1.1). Cela vaut même quand « on suppose » que l'utilisateur est déjà dans le bon état — la supposition se révèle régulièrement fausse (nouveau terminal, nouvelle session VSCode, panneau split) et fait perdre du temps en debug `pytest: command not found`. Le préfixe est idempotent et coûte zéro. Exception : commandes purement informatives (`git status`, `git log`) — mais en cas de doute, préfixer quand même.
+
+### Outils non disponibles (ne PAS proposer)
+
+- `gh` CLI → les PR se créent via l'interface web GitHub (ou l'intégration GitHub de Claude Code en session remote)
+- Client PostgreSQL hors conteneurs → passer par `docker compose exec` sur le service postgres du compose
+- Jira n'est pas joignable depuis l'environnement de dev (réseau interne, D10) → export CSV uniquement au MVP
+
+### Outils disponibles
+
+`python3`, `pytest`, `ruff`, `git`, `curl`, `make`, `docker` + `docker compose`, `nohup` pour les jobs longs en background (ingestion, embeddings de nuit).
+
+## Méthode de travail
+
+### Démarrage de chaque session
+
+1. Lire ce fichier (CLAUDE.md)
+2. Lire `SESSIONS.md` (en-tête « État stratégique » + les 2 dernières entrées) pour l'état courant
+3. Lire le backlog du sprint en cours (`docs/sprint-1-backlog.md`)
+4. Vérifier l'état Git : `git status` + `git log --oneline -5` + `git branch --show-current`
+5. Confirmer la direction de la session avec l'utilisateur avant d'agir
+
+### Règle « validation stack-live »
+
+Aucune story n'est considérée **livrée** tant que :
+
+1. le comportement a été démontré dans la stack réelle (`make dev`) — endpoint appelé, job d'ingestion exécuté sur les fixtures, écran affiché — et pas seulement en tests unitaires ;
+2. un signal observable (log, ligne en base, sortie de commande) prouve que le code exécuté est bien le code modifié ;
+3. le résultat de cette validation est noté dans `SESSIONS.md`.
+
+**Tests verts ≠ story livrée** : ils prouvent que le code marche en isolation, pas qu'il est branché dans la stack.
+
+### Règle « MAJ documentation à chaque clôture de session »
+
+Une session n'est **close** que quand la documentation reflète l'état réel du repo, avant le dernier commit/push :
+
+1. **`SESSIONS.md`** — nouvelle entrée datée en tête : contexte (branche, direction validée), livrables (commits avec hash), validation stack-live (résultat observable cité, sinon explicitement « validation à jouer post-merge »), mini-récap ✅/⏳
+2. **En-tête « État stratégique » de `SESSIONS.md`** recalé : voie active, PRs récentes, prochaine étape (l'état vivant vit dans SESSIONS.md — ce CLAUDE.md reste stable)
+3. **Backlog du sprint** : critères d'acceptation livrés cochés, reports notés
+4. **README / `docs/`** : à jour si la surface a changé (commandes make, API, écrans, déploiement)
+
+Échappatoire : session purement informative (audit, analyse sans code) → seule `SESSIONS.md` est mise à jour, avec la mention « analyse, aucun code livré ».
+
+### Diagnostic avant action
+
+- Message d'erreur collé par l'utilisateur : analyser avant de proposer une correction
+- Lire le contenu pertinent d'un fichier avant de le patcher ; patchs sur ancres uniques, jamais de regex hasardeuse
+
+### Validation post-modification
+
+1. `make lint` (ruff)
+2. Tests ciblés du module touché, puis `make test` (baseline complète)
+3. Si modif côté api/web : vérifier que le hot-reload a bien rechargé, sinon redémarrer le service compose concerné — sans quoi le code modifié ne tourne pas
+4. Tout appel Albert est mocké dans les tests unitaires ; `make test` ne fait jamais d'appel réseau réel
+
+### Convention Git
+
+- Une story = une branche = une PR (petite), revue par le référent technique humain avant merge
+- Branches : `feature/<nom>`, `fix/<nom>`, `chore/<nom>` ; commits `type(scope): description` (feat, fix, docs, chore, refactor, test), 1 commit par changement cohérent
+- **Demander avant tout `git push`** — l'utilisateur décide du moment
+- **Demander avant tout commit qui ajoute un fichier inattendu ou supprime du code existant**
+
+### Demander avant de
+
+- Refactorer du code qui marche déjà (risque de régression)
+- Modifier des tests existants (sauf demande explicite)
+- Supposer un nom de fichier ou une structure → demander à voir le contenu d'abord
+- Lancer des actions destructrices : `rm`, `git reset --hard`, `DROP TABLE`, suppression de volumes docker
+
+### Format des réponses
+
+- Code complet et prêt à utiliser (jamais de `# ... reste du code` ni d'ellipses)
+- Expliquer brièvement les **choix techniques** ET **les risques** ; si une décision a un trade-off, l'exposer et demander à trancher
+- Mini-récap obligatoire en fin de tâche complexe :
+
+```
+✅ Fait : ...
+⏳ En cours : ...
+⏳ À venir : ...
+```
+
+## Documents annexes
+
+- `docs/note-cadrage-sia-po.md` : note de cadrage (décisions D1–D19, architecture, annexe capacitaire)
+- `docs/sprint-1-backlog.md` : backlog opérationnel du sprint en cours (S1.1 → S1.11)
+- `SESSIONS.md` : état stratégique + journal détaillé des sessions (livrables, validations, découvertes)
+- `evals/silver/stories-silver-candidates.md` : candidates silver — fixtures S1.10 et few-shot provisoire
 
 ## Références
 
