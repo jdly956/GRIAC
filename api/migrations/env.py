@@ -1,3 +1,11 @@
+"""Environnement Alembic du schéma SIA PO.
+
+L'URL de connexion vient exclusivement de la variable DATABASE_URL (jamais
+d'URL en dur — contrainte CLAUDE.md) ; absence = échec explicite immédiat.
+Exécution normale : le conteneur one-shot `migrate` du compose (`alembic
+upgrade head`, idempotent, rejoué à chaque `make dev`).
+"""
+
 import os
 from logging.config import fileConfig
 

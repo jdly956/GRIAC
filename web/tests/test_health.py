@@ -1,3 +1,5 @@
+"""Tests du web (CA3 de S1.2) : /health et présence du bandeau D15 — sans Docker."""
+
 from fastapi.testclient import TestClient
 
 from sia_web.main import app

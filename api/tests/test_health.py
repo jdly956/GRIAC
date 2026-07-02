@@ -1,3 +1,5 @@
+"""Tests du /health de l'API (CA3 de S1.2) — sans Docker ni réseau."""
+
 from fastapi.testclient import TestClient
 
 from sia_api.main import app
