@@ -14,6 +14,25 @@
 
 ---
 
+## Session 02/07/2026 (4) — S1.3 : CI minimale (GitHub Actions)
+
+**Contexte** : même session remote, branche `claude/backlog-continuation-6ftff4` rebasée sur `main` après merge de la PR #5 (« ok on continue »). Direction : suite du backlog → S1.3.
+
+**Travail livré** :
+- `.github/workflows/ci.yml` : la note prévoyait « GitLab CI ou équivalent — adapter au dépôt réel » → dépôt réel GitHub, donc GitHub Actions. Déclenchement sur `pull_request` et `push` sur `main`. Job `lint-tests` (setup-uv 0.8.17 aligné dev, `uv sync --all-packages`, `make lint`, `make test` — mêmes commandes que la baseline locale, aucun appel réseau dans les tests) ; matrice `build-images` api/web (Dockerfiles cible `runtime`, images non poussées).
+- Plan de test `docs/plans-test/s1.3-ci.md` : CA1 = 3 checks verts observés sur la PR ; CA2 = procédure d'activation de la protection de branche par le référent, **avec la limite connue : dépôt privé en plan Free → protection non applicable** (repli : checks rouges visibles + règle de revue CLAUDE.md) ; test de blocage optionnel par PR jetable.
+- README : badge CI.
+- TU : sans objet (aucune fonction métier — workflow YAML) ; TNR : `make lint` + `make test` (24 verts) avant push.
+
+**Validation stack-live** : la CI ne se démontre que sur GitHub — checks de la PR de la story à observer verts (CA1), résultat à consigner ici. Protection de branche (CA2) : action référent.
+
+**Mini-récap** :
+- ✅ Fait : workflow CI + plan de test + badge ; TNR verte
+- ⏳ En cours : premiers runs de la CI sur la PR de la story ; activation de la protection de branche (référent)
+- ⏳ À venir : S1.7 (ingestion : scan & inventaire) selon l'ordre du backlog
+
+---
+
 ## Session 02/07/2026 (3) — S1.5 : client Albert & sonde des limites (code)
 
 **Contexte** : même session remote que S1.4, branche `claude/backlog-continuation-6ftff4`. Direction : « go pour la suite du backlog » → S1.5, prochaine story dans l'ordre. La PR #4 (S1.4) était encore ouverte au moment du développement — arbitrage rendu par le référent : **PR #4 mergée sur son instruction** (`dec80a9b`), branche rebasée sur `main`, **S1.5 livrée en PR #5 (draft)** — la règle « une story = une PR » est respectée.

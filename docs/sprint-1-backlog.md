@@ -38,6 +38,8 @@ Critères d'acceptation :
 - [ ] Pipeline (forge interne : GitLab CI ou équivalent — adapter au dépôt réel) : lint + tests + build des images
 - [ ] Échec du pipeline = merge bloqué
 
+*Code livré le 02/07/2026 : dépôt réel = GitHub → GitHub Actions (`.github/workflows/ci.yml`) — job `lint-tests` (uv + make lint + make test) et matrice `build-images` (api, web, cible runtime). Les CA se cochent après observation : CA1 = 3 checks verts sur la PR de la story ; CA2 = protection de branche à activer par le référent (procédure et limite plan Free dans `docs/plans-test/s1.3-ci.md`).*
+
 ## S1.4 — Configuration & secrets
 
 En tant que RSSI, je veux la garantie qu'aucun secret ne peut fuiter par le repo.

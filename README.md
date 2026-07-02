@@ -1,5 +1,7 @@
 # SIA PO — assistant de rédaction de user stories
 
+[![CI](https://github.com/jdly956/GRIAC/actions/workflows/ci.yml/badge.svg)](https://github.com/jdly956/GRIAC/actions/workflows/ci.yml)
+
 Application interne pour Product Owners : rédaction de user stories conformes au gabarit interne (chaîne SAFe, prompt 3), accompagnée par un LLM qui mobilise la documentation projet via un RAG avec citations obligatoires. Inférence exclusivement via [Albert API](https://ia.numerique.gouv.fr) (DINUM).
 
 Le cadre du projet vit dans [`CLAUDE.md`](CLAUDE.md) ; le cadrage complet dans [`docs/note-cadrage-sia-po.md`](docs/note-cadrage-sia-po.md) ; la cible fonctionnelle arbitrée dans [`docs/backlog-fonctionnel.md`](docs/backlog-fonctionnel.md).
