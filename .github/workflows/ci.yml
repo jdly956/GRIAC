@@ -1,0 +1,38 @@
+# CI minimale (S1.3) — lint + tests + build des images sur chaque PR et sur main.
+# La note de cadrage prévoyait « GitLab CI ou équivalent — adapter au dépôt réel » :
+# le dépôt réel est GitHub -> GitHub Actions.
+# CA2 (échec = merge bloqué) : protection de branche à activer côté GitHub par le
+# référent — procédure et limite du plan Free dans docs/plans-test/s1.3-ci.md.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.17" # aligné sur la version utilisée en dev (uv.lock)
+      - name: Installer le workspace (uv gère Python 3.12 via .python-version)
+        run: uv sync --all-packages
+      - name: Lint (ruff check + format --check)
+        run: make lint
+      - name: Tests (pytest, tout le workspace — aucun appel réseau, Albert mocké)
+        run: make test
+
+  build-images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image ${{ matrix.service }} (cible runtime, non poussée)
+        run: >
+          docker build -f infra/docker/${{ matrix.service }}.Dockerfile
+          --target runtime -t sia-${{ matrix.service }}:ci .

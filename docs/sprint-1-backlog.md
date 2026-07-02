@@ -35,8 +35,10 @@ Critères d'acceptation :
 En tant que référent technique, je veux que chaque PR soit vérifiée automatiquement.
 
 Critères d'acceptation :
-- [ ] Pipeline (forge interne : GitLab CI ou équivalent — adapter au dépôt réel) : lint + tests + build des images
-- [ ] Échec du pipeline = merge bloqué
+- [x] Pipeline (forge interne : GitLab CI ou équivalent — adapter au dépôt réel = GitHub → GitHub Actions) : lint + tests + build des images — **3 checks verts observés sur la PR #6** (`lint-tests`, `build-images (api)`, `build-images (web)`)
+- [ ] Échec du pipeline = merge bloqué — **action référent** : protection de branche sur `main` (procédure et limite plan Free dans `docs/plans-test/s1.3-ci.md`) ; les 3 checks sont désormais sélectionnables (premier run passé)
+
+*Livrée le 02/07/2026 (PR #6). `.github/workflows/ci.yml` : job `lint-tests` (uv + make lint + make test, mêmes commandes que la baseline locale) et matrice `build-images` (api, web, cible runtime — valide les Dockerfiles S1.2 à chaque PR). CA2 reporté à l'activation GitHub par le référent.*
 
 ## S1.4 — Configuration & secrets
 
