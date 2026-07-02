@@ -60,19 +60,20 @@ Python 3.12, FastAPI, docling (parsing Word/PDF), PostgreSQL 16 + pgvector, fron
 
 ### Règle « commandes toujours préfixées »
 
-Toute commande shell proposée à l'utilisateur commence par se placer à la racine du repo et activer l'environnement :
+Toute commande shell proposée à l'utilisateur commence par se placer à la racine du repo, puis activer l'environnement de dev retenu en S1.1 :
 
 ```bash
-cd ~/work/GRIAC/ && source .venv/bin/activate
+cd <racine du repo>            # chemin exact : à relever au premier login Onyxia
+source .venv/bin/activate      # OU exécution via docker compose exec api ... — selon le choix S1.1
 ```
 
-(chemin et mécanisme d'activation à recaler sur les choix de S1.1). Cela vaut même quand « on suppose » que l'utilisateur est déjà dans le bon état — la supposition se révèle régulièrement fausse (nouveau terminal, nouvelle session VSCode, panneau split) et fait perdre du temps en debug `pytest: command not found`. Le préfixe est idempotent et coûte zéro. Exception : commandes purement informatives (`git status`, `git log`) — mais en cas de doute, préfixer quand même.
+Cela vaut même quand « on suppose » que l'utilisateur est déjà dans le bon état — la supposition se révèle régulièrement fausse (nouveau terminal, nouvelle session VSCode, panneau split) et fait perdre du temps en debug `pytest: command not found`. Le préfixe est idempotent et coûte zéro. Exceptions : commandes purement informatives (`git status`, `git log`) et commandes purement docker/compose (`make dev`, `docker compose logs`) qui n'exigent que le `cd` — mais en cas de doute, préfixer quand même.
 
 ### Outils non disponibles (ne PAS proposer)
 
 - `gh` CLI → les PR se créent via l'interface web GitHub (ou l'intégration GitHub de Claude Code en session remote)
 - Client PostgreSQL hors conteneurs → passer par `docker compose exec` sur le service postgres du compose
-- Jira n'est pas joignable depuis l'environnement de dev (réseau interne, D10) → export CSV uniquement au MVP
+- Jira n'est pas joignable depuis l'environnement de dev (réseau interne, D10) → pas d'appel API Jira au MVP : export CSV importable et copier-coller formaté uniquement (E5)
 
 ### Outils disponibles
 
@@ -98,6 +99,10 @@ Aucune story n'est considérée **livrée** tant que :
 
 **Tests verts ≠ story livrée** : ils prouvent que le code marche en isolation, pas qu'il est branché dans la stack.
 
+### Règle « pas de script de rattrapage sans fix pipeline d'abord »
+
+Aucune correction de données dérivées (chunks, embeddings, métadonnées, statuts) par script ad hoc tant que la fix n'a pas été livrée et validée stack-live dans le nœud concerné du DAG d'ingestion. La propagation à l'existant passe par le re-run du pipeline (`make ingest`, rescan avec reprise sur hash — D9), jamais par un script qui contourne le pipeline. Les scripts de rattrapage n'existent que pour propager une fix pipeline déjà validée, jamais pour compenser une fix manquante.
+
 ### Règle « MAJ documentation à chaque clôture de session »
 
 Une session n'est **close** que quand la documentation reflète l'état réel du repo, avant le dernier commit/push :
@@ -108,6 +113,12 @@ Une session n'est **close** que quand la documentation reflète l'état réel du
 4. **README / `docs/`** : à jour si la surface a changé (commandes make, API, écrans, déploiement)
 
 Échappatoire : session purement informative (audit, analyse sans code) → seule `SESSIONS.md` est mise à jour, avec la mention « analyse, aucun code livré ».
+
+### Conventions code
+
+- **Pas de perfectionnisme** : le POC doit démontrer, pas être industriellement solide
+- **Pattern existant > innovation** : si une fonction équivalente existe dans le repo, calquer son pattern
+- **Tests unitaires pour toute nouvelle fonction métier** (Albert mocké, fixtures pour la DB)
 
 ### Diagnostic avant action
 

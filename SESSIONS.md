@@ -16,7 +16,7 @@
 
 **Travail livré** :
 - Commit fondateur `6473f87` : structure documentaire cible — `CLAUDE.md` (racine), `docs/note-cadrage-sia-po.md`, `docs/sprint-1-backlog.md`, `evals/silver/stories-silver-candidates.md`. Poussé après déblocage des droits d'écriture de l'app GitHub (403 initial).
-- Méthode de travail ajoutée à CLAUDE.md (adaptée du CLAUDE.md SIACT, mêmes outils : Onyxia SSP Cloud, Albert API) : environnement et outils, commandes préfixées, démarrage de session, validation stack-live, MAJ doc à chaque clôture, conventions git, garde-fous, format des réponses. Création de ce SESSIONS.md.
+- Méthode de travail ajoutée à CLAUDE.md (adaptée du CLAUDE.md SIACT — même plateforme Onyxia SSP Cloud et Albert API pour le LLM, mais stack différente ici : tout conteneurisé, aucun GPU ni LLM local) : environnement et outils, commandes préfixées, démarrage de session, validation stack-live, pas de script de rattrapage sans fix pipeline, MAJ doc à chaque clôture, conventions code et git, garde-fous, format des réponses. Création de ce SESSIONS.md.
 - Correction d'une dérive documentaire : CLAUDE.md référençait « 18 décisions (D1–D18) », la note v0.4 en compte 19 (D1–D19).
 
 **Validation stack-live** : sans objet (aucun code livré — documentation uniquement).
