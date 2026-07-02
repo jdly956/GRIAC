@@ -139,6 +139,151 @@ def test_decision_hypothese_et_redirection(api) -> None:
     assert api.appels[0][2] == {"statut": "confirmee"}
 
 
+# --- Écrans S2.9 : projets (E4.2) et « mes documents » (E4.3) ---
+
+PROJET_DETAIL = {
+    "id": 1,
+    "nom": "Téléservice X",
+    "contexte": "Suivi des demandes",
+    "nfrs": [{"type": "performance", "formulation": "p95 < 1 s", "valeur_cible": "1 s"}],
+    "dossiers": [
+        {"dossier": "projet-alpha", "origine": "suggestion"},
+        {"dossier": "dossier-manuel", "origine": "po"},
+    ],
+}
+SUGGESTIONS = [
+    {"dossier": "projet-alpha", "nb_documents": 3, "deja_associe": True},
+    {"dossier": "projet-beta", "nb_documents": 2, "deja_associe": False},
+]
+
+
+def test_ecran_projets_liste_et_formulaire(api) -> None:
+    api.brancher("GET", "/projects", 200, [PROJET_DETAIL])
+    reponse = client.get("/projets")
+    assert reponse.status_code == 200
+    assert "Téléservice X" in reponse.text
+    assert 'name="nfr_type_3"' in reponse.text  # 3 lignes NFR à la création
+    assert "accessibilite_rgaa" in reponse.text  # les 7 types proposés
+
+
+def test_creation_projet_construit_les_nfr(api) -> None:
+    api.brancher("POST", "/projects", 201, {"id": 4, "nom": "P", "nfrs": [], "dossiers": []})
+    reponse = client.post(
+        "/projets",
+        data={
+            "nom": "P",
+            "contexte": "ctx",
+            "nfr_type_1": "performance",
+            "nfr_formulation_1": "p95 < 1 s",
+            "nfr_valeur_1": "1 s",
+            "nfr_type_2": "rgpd",
+            "nfr_formulation_2": "",  # formulation vide : la ligne est ignorée
+        },
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    assert reponse.headers["location"] == "/projets/4"
+    assert api.appels[0][2] == {
+        "nom": "P",
+        "contexte": "ctx",
+        "nfrs": [{"type": "performance", "formulation": "p95 < 1 s", "valeur_cible": "1 s"}],
+        "dossiers": [],
+    }
+
+
+def test_creation_projet_nom_duplique_reste_sur_l_ecran(api) -> None:
+    api.brancher("POST", "/projects", 409, {"detail": "Projet « P » déjà existant"})
+    api.brancher("GET", "/projects", 200, [])
+    reponse = client.post("/projets", data={"nom": "P"})
+    assert reponse.status_code == 200
+    assert "déjà existant" in reponse.text
+
+
+def test_ecran_projet_detail_suggestions_et_ajout_manuel(api) -> None:
+    api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
+    api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
+    reponse = client.get("/projets/1")
+    assert reponse.status_code == 200
+    assert 'value="projet-alpha" checked' in reponse.text  # associé : coché
+    assert 'value="projet-beta" ' in reponse.text  # suggéré non associé : présent…
+    assert 'value="projet-beta" checked' not in reponse.text  # … mais pas coché
+    assert "dossier-manuel" in reponse.text and "(ajout manuel)" in reponse.text
+    assert "elles ne valent pas association" in reponse.text  # A6
+
+
+def test_association_dossiers_envoie_un_put_complet(api) -> None:
+    api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
+    api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
+    api.brancher("PUT", "/projects/1", 200, PROJET_DETAIL)
+    reponse = client.post(
+        "/projets/1/dossiers",
+        data={"dossiers": ["projet-alpha", "projet-beta"], "dossier_libre": "dossier-z"},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    methode, chemin, corps = api.appels[-1]
+    assert (methode, chemin) == ("PUT", "/projects/1")
+    assert corps["nom"] == "Téléservice X"  # nom/contexte/nfrs préservés
+    assert corps["nfrs"] == PROJET_DETAIL["nfrs"]
+    assert corps["dossiers"] == [
+        {"dossier": "projet-alpha", "origine": "suggestion"},  # origine existante conservée
+        {"dossier": "projet-beta", "origine": "suggestion"},  # nouvelle suggestion cochée
+        {"dossier": "dossier-z", "origine": "po"},  # ajout manuel
+    ]
+
+
+DOCUMENTS = [
+    {
+        "chemin": "projet-alpha/spec-v2.docx",
+        "nom": "spec-v2.docx",
+        "extension": "docx",
+        "statut_parsing": "parse",
+        "est_reference": True,
+        "doublon": False,
+        "projet_suggere": "projet-alpha",
+    },
+    {
+        "chemin": "divers/scan.pdf",
+        "nom": "scan.pdf",
+        "extension": "pdf",
+        "statut_parsing": "ocr_requis",
+        "est_reference": False,
+        "doublon": False,
+        "projet_suggere": None,
+    },
+]
+
+
+def _stats(couverture: float) -> dict:
+    return {
+        "total": 10,
+        "parsables": 8,
+        "parses": int(couverture * 8),
+        "echecs": 1,
+        "ocr_requis": 1,
+        "references": 4,
+        "couverture_parsing": couverture,
+    }
+
+
+def test_ecran_documents_alerte_couverture_faible(api) -> None:
+    api.brancher("GET", "/documents", 200, DOCUMENTS)
+    api.brancher("GET", "/documents/stats", 200, _stats(0.5))
+    reponse = client.get("/documents")
+    assert reponse.status_code == 200
+    assert "Couverture documentaire faible" in reponse.text  # alerte A5
+    assert "indexé" in reponse.text and "OCR requis" in reponse.text  # statuts libellés
+    assert "✔ référence" in reponse.text
+
+
+def test_ecran_documents_couverture_ok_sans_alerte(api) -> None:
+    api.brancher("GET", "/documents", 200, DOCUMENTS)
+    api.brancher("GET", "/documents/stats", 200, _stats(0.875))
+    reponse = client.get("/documents")
+    assert reponse.status_code == 200
+    assert "Couverture documentaire faible" not in reponse.text
+
+
 def test_export_proxifie(api, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         api_client,

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titre %}Mes documents{% endblock %}
+{% block contenu %}
+<h1>Mes documents</h1>
+
+{% if alerte_couverture %}
+<div class="fr-alert fr-alert--warning" role="alert">
+  <p><strong>Couverture documentaire faible :</strong>
+    {{ (stats.couverture_parsing * 100) | round(1) }} % des documents parsables
+    sont indexés (seuil d'alerte : {{ (seuil * 100) | round | int }} %).
+    Les générations peuvent manquer de sources — traitez les échecs et
+    « OCR requis » ci-dessous.</p>
+</div>
+{% endif %}
+
+<div class="panneau">
+  <h2>État du corpus</h2>
+  <ul>
+    <li>{{ stats.total }} documents, dont {{ stats.parsables }} parsables (docx/pdf)</li>
+    <li>{{ stats.parses }} indexés — couverture
+      {{ (stats.couverture_parsing * 100) | round(1) }} %</li>
+    <li>{{ stats.echecs }} en échec, {{ stats.ocr_requis }} OCR requis</li>
+    <li>{{ stats.references }} documents de référence</li>
+  </ul>
+</div>
+
+<div class="panneau">
+  <h2>Inventaire ({{ documents | length }})</h2>
+  {% if documents %}
+  <table class="fr-table">
+    <thead>
+      <tr><th>Chemin</th><th>Statut</th><th>Référence</th><th>Doublon</th><th>Projet suggéré</th></tr>
+    </thead>
+    <tbody>
+      {% for document in documents %}
+      <tr>
+        <td>{{ document.chemin }}</td>
+        <td>{{ libelles.get(document.statut_parsing, document.statut_parsing) }}</td>
+        <td>{{ "✔ référence" if document.est_reference else "—" }}</td>
+        <td>{{ "doublon" if document.doublon else "—" }}</td>
+        <td>{{ document.projet_suggere or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Aucun document — lancez l'ingestion (<code>make ingest CORPUS=…</code>).</p>
+  {% endif %}
+</div>
+{% endblock %}

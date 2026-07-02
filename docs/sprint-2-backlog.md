@@ -80,3 +80,13 @@ Critères d'acceptation :
 - [ ] Exports E5 accessibles (proxy web → api) ; bandeau D15 sur toutes les pages ; **aucun JavaScript requis** (formulaires HTML) ; api injoignable → page/alerte lisible, jamais de traceback
 
 *Code livré le 02/07/2026 : `sia_web/api_client.py` (SIA_API_URL, timeout 120 s, erreurs 599 lisibles), routes + gabarits Jinja (base DSFR CDN + styles de repli, index, session, erreur), endpoint api `GET /workflows/{id}/messages` ajouté pour le fil. v1 assumée : sources/avertissements affichés dans la réponse du POST (non persistés côté UI). 9 TU web + 1 TU api (156 au total). Restent pour E4 : écran projet complet (E4.2), écran « mes documents » + alerte couverture (E4.3, A5), note 1–5 + télémétrie (E4.4). CA à cocher via `docs/plans-test/s2.8-ui-conversation.md`.*
+
+## S2.9 — E4.2 + E4.3 : écran projet (A6) et écran « mes documents » (A5)
+
+Critères d'acceptation :
+- [ ] Écran projets : liste, création (nom, contexte, jusqu'à 3 NFR typées à la création — les 7 types E8), erreurs api lisibles (409 nom dupliqué affiché sur le formulaire)
+- [ ] Écran projet : détail (contexte, tableau NFR) + **association explicite projet ↔ dossiers (A6)** : suggestions S1.9 en cases à cocher avec nombre de documents (« elles ne valent pas association »), ajouts manuels visibles et décochables, dossier libre saisissable ; l'enregistrement passe par `PUT /projects/{id}` en préservant nom/contexte/NFR et les origines existantes (suggestion vs po)
+- [ ] Endpoints api : `GET /documents` (inventaire : statut de parsing, référence, doublon, projet suggéré) et `GET /documents/stats` (couverture = parsés/parsables, 1.0 si rien à parser)
+- [ ] Écran « mes documents » (A5) : état du corpus, inventaire avec statuts libellés (indexé/échec/OCR requis/en attente), **alerte « couverture faible » si couverture < 0,8** ; api injoignable → page lisible
+
+*Code livré le 02/07/2026 : `sia_api/documents.py` (2 endpoints lecture seule sur la table `documents` de S1.7–S1.9), routes web `/projets`, `/projets/{id}`, `/projets/{id}/dossiers`, `/documents` + 3 gabarits Jinja + navigation dans `base.html`. Le volet conversationnel de l'alerte couverture (A5) est déjà porté par l'avertissement « aucune source récupérable » du moteur S2.6. 3 TU api + 7 TU web (166 au total). Reste pour E4 : note 1–5 + commentaire et télémétrie (E4.4). CA à cocher via `docs/plans-test/s2.9-ecrans-projet-documents.md`.*

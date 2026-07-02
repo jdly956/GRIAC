@@ -1,4 +1,5 @@
-"""Interface web du SIA PO — écran de conversation du workflow (E4.1, S2.8).
+"""Interface web du SIA PO — conversation (E4.1, S2.8), écrans projets et
+« mes documents » (E4.2/E4.3, S2.9).
 
 Front volontairement simple (CLAUDE.md) : formulaires HTML classiques, aucun
 JavaScript requis — htmx pourra enrichir plus tard. Le DSFR est chargé par CDN
@@ -29,10 +30,41 @@ ETAPES_LIBELLES = {
     "synthese": "5 — Synthèse finale",
 }
 
+# Les 7 types de NFR de l'entité Projet (E8/D19) — mêmes valeurs que l'api.
+TYPES_NFR = [
+    "performance",
+    "volumetrie",
+    "ssi",
+    "rgpd",
+    "accessibilite_rgaa",
+    "disponibilite",
+    "auditabilite",
+]
+
+# Statuts de parsing (S1.8) → libellés de l'écran « mes documents » (A5).
+STATUTS_PARSING_LIBELLES = {
+    "a_parser": "en attente",
+    "parse": "indexé",
+    "echec": "échec",
+    "ocr_requis": "OCR requis",
+}
+
+# Sous ce ratio parsés/parsables, l'écran affiche l'alerte « couverture faible » (A5).
+SEUIL_COUVERTURE = 0.8
+
 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _page_erreur(request: Request, statut: int, corps: dict) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="erreur.html",
+        context={"detail": corps.get("detail", "erreur inconnue")},
+        status_code=statut if statut != 599 else 502,
+    )
 
 
 def _page_session(
@@ -43,12 +75,7 @@ def _page_session(
 ) -> HTMLResponse:
     statut_etat, etat = api_client.appeler("GET", f"/workflows/{session_id}")
     if statut_etat != 200:
-        return templates.TemplateResponse(
-            request=request,
-            name="erreur.html",
-            context={"detail": etat.get("detail", "erreur inconnue")},
-            status_code=statut_etat if statut_etat != 599 else 502,
-        )
+        return _page_erreur(request, statut_etat, etat)
     _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
     return templates.TemplateResponse(
         request=request,
@@ -128,6 +155,141 @@ def decider_hypothese(
         json={"statut": statut},
     )
     return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+
+
+# --- Écran projets (E4.2, S2.9) ---
+
+
+def _page_projets(request: Request, erreur: str | None = None) -> HTMLResponse:
+    statut, projets = api_client.appeler("GET", "/projects")
+    return templates.TemplateResponse(
+        request=request,
+        name="projets.html",
+        context={
+            "projets": projets if statut == 200 else [],
+            "types_nfr": TYPES_NFR,
+            "erreur": erreur or (None if statut == 200 else projets.get("detail")),
+        },
+    )
+
+
+@app.get("/projets", response_class=HTMLResponse)
+def ecran_projets(request: Request) -> HTMLResponse:
+    return _page_projets(request)
+
+
+@app.post("/projets", response_class=HTMLResponse, response_model=None)
+def creer_projet(
+    request: Request,
+    nom: Annotated[str, Form()],
+    contexte: Annotated[str, Form()] = "",
+    nfr_type_1: Annotated[str, Form()] = "",
+    nfr_formulation_1: Annotated[str, Form()] = "",
+    nfr_valeur_1: Annotated[str, Form()] = "",
+    nfr_type_2: Annotated[str, Form()] = "",
+    nfr_formulation_2: Annotated[str, Form()] = "",
+    nfr_valeur_2: Annotated[str, Form()] = "",
+    nfr_type_3: Annotated[str, Form()] = "",
+    nfr_formulation_3: Annotated[str, Form()] = "",
+    nfr_valeur_3: Annotated[str, Form()] = "",
+) -> HTMLResponse | RedirectResponse:
+    nfrs = [
+        {"type": type_nfr, "formulation": formulation.strip(), "valeur_cible": valeur or None}
+        for type_nfr, formulation, valeur in [
+            (nfr_type_1, nfr_formulation_1, nfr_valeur_1),
+            (nfr_type_2, nfr_formulation_2, nfr_valeur_2),
+            (nfr_type_3, nfr_formulation_3, nfr_valeur_3),
+        ]
+        if type_nfr and formulation.strip()
+    ]
+    corps = {"nom": nom, "contexte": contexte, "nfrs": nfrs, "dossiers": []}
+    statut, projet = api_client.appeler("POST", "/projects", json=corps)
+    if statut != 201:
+        return _page_projets(request, erreur=projet.get("detail", "création impossible"))
+    return RedirectResponse(f"/projets/{projet['id']}", status_code=303)
+
+
+@app.get("/projets/{projet_id}", response_class=HTMLResponse)
+def voir_projet(request: Request, projet_id: int) -> HTMLResponse:
+    statut, projet = api_client.appeler("GET", f"/projects/{projet_id}")
+    if statut != 200:
+        return _page_erreur(request, statut, projet)
+    statut_sugg, suggestions = api_client.appeler("GET", "/dossiers/suggestions")
+    suggestions = suggestions if statut_sugg == 200 else []
+    # Cases à cocher = union suggestions (S1.9) + dossiers déjà associés : un
+    # ajout manuel (origine po) hors suggestions reste visible et décochable.
+    associes = {d["dossier"] for d in projet["dossiers"]}
+    suggeres = {s["dossier"] for s in suggestions}
+    lignes = [
+        {
+            "dossier": s["dossier"],
+            "nb_documents": s["nb_documents"],
+            "coche": s["dossier"] in associes,
+        }
+        for s in suggestions
+    ] + [
+        {"dossier": d["dossier"], "nb_documents": None, "coche": True}
+        for d in projet["dossiers"]
+        if d["dossier"] not in suggeres
+    ]
+    return templates.TemplateResponse(
+        request=request,
+        name="projet.html",
+        context={"projet": projet, "dossiers": lignes},
+    )
+
+
+@app.post("/projets/{projet_id}/dossiers", response_model=None)
+def associer_dossiers(
+    request: Request,
+    projet_id: int,
+    dossiers: Annotated[list[str] | None, Form()] = None,
+    dossier_libre: Annotated[str, Form()] = "",
+) -> HTMLResponse | RedirectResponse:
+    """Association explicite projet ↔ dossiers (A6) : remplace la liste via PUT."""
+    statut, projet = api_client.appeler("GET", f"/projects/{projet_id}")
+    if statut != 200:
+        return _page_erreur(request, statut, projet)
+    _, suggestions = api_client.appeler("GET", "/dossiers/suggestions")
+    suggeres = {s["dossier"] for s in suggestions} if isinstance(suggestions, list) else set()
+    origines = {d["dossier"]: d["origine"] for d in projet["dossiers"]}
+    ajout = [dossier_libre.strip()] if dossier_libre.strip() else []
+    retenus = list(dict.fromkeys([*(dossiers or []), *ajout]))
+    corps = {
+        "nom": projet["nom"],
+        "contexte": projet["contexte"],
+        "nfrs": projet["nfrs"],
+        "dossiers": [
+            {"dossier": d, "origine": origines.get(d, "suggestion" if d in suggeres else "po")}
+            for d in retenus
+        ],
+    }
+    api_client.appeler("PUT", f"/projects/{projet_id}", json=corps)
+    return RedirectResponse(f"/projets/{projet_id}", status_code=303)
+
+
+# --- Écran « mes documents » (E4.3, S2.9, arbitrage A5) ---
+
+
+@app.get("/documents", response_class=HTMLResponse)
+def ecran_documents(request: Request) -> HTMLResponse:
+    statut, documents = api_client.appeler("GET", "/documents")
+    if statut != 200:
+        return _page_erreur(request, statut, documents)
+    statut_stats, stats = api_client.appeler("GET", "/documents/stats")
+    if statut_stats != 200:
+        return _page_erreur(request, statut_stats, stats)
+    return templates.TemplateResponse(
+        request=request,
+        name="documents.html",
+        context={
+            "documents": documents,
+            "stats": stats,
+            "libelles": STATUTS_PARSING_LIBELLES,
+            "alerte_couverture": stats["couverture_parsing"] < SEUIL_COUVERTURE,
+            "seuil": SEUIL_COUVERTURE,
+        },
+    )
 
 
 @app.get("/sessions/{session_id}/export/{format_export}")

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block titre %}Projets{% endblock %}
+{% block contenu %}
+<h1>Projets</h1>
+
+{% if erreur %}
+<div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
+{% endif %}
+
+<div class="panneau">
+  <h2>Projets existants ({{ projets | length }})</h2>
+  {% if projets %}
+  <ul>
+    {% for projet in projets %}
+    <li><a href="/projets/{{ projet.id }}"><strong>{{ projet.nom }}</strong></a> —
+      {{ projet.contexte or "sans contexte" }}
+      ({{ projet.nfrs | length }} NFR, dossiers :
+      {{ projet.dossiers | map(attribute="dossier") | join(", ") or "aucun" }})</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Aucun projet pour l'instant — créez le premier ci-dessous.</p>
+  {% endif %}
+</div>
+
+<form method="post" action="/projets" class="panneau">
+  <h2>Nouveau projet</h2>
+  <p>Le contexte et les NFR sont injectés dans le prompt système et pré-remplissent
+    les blocs NFR de l'interview (E8).</p>
+  <label class="fr-label" for="nom">Nom</label>
+  <input class="fr-input" id="nom" name="nom" required>
+  <label class="fr-label" for="contexte">Contexte libre</label>
+  <textarea class="fr-input" id="contexte" name="contexte" rows="4"
+    placeholder="Périmètre, usagers, contraintes métier…"></textarea>
+  <h3>Exigences non fonctionnelles (jusqu'à 3 à la création)</h3>
+  {% for i in [1, 2, 3] %}
+  <fieldset class="fr-fieldset">
+    <legend>NFR {{ i }}</legend>
+    <select class="fr-select" name="nfr_type_{{ i }}" aria-label="Type de la NFR {{ i }}">
+      <option value="">— type —</option>
+      {% for type_nfr in types_nfr %}
+      <option value="{{ type_nfr }}">{{ type_nfr }}</option>
+      {% endfor %}
+    </select>
+    <input class="fr-input" name="nfr_formulation_{{ i }}"
+      placeholder="Formulation vérifiable (ex. p95 &lt; 1 s)"
+      aria-label="Formulation de la NFR {{ i }}">
+    <input class="fr-input" name="nfr_valeur_{{ i }}"
+      placeholder="Valeur cible (optionnelle)"
+      aria-label="Valeur cible de la NFR {{ i }}">
+  </fieldset>
+  {% endfor %}
+  <button class="fr-btn" type="submit">Créer le projet</button>
+</form>
+{% endblock %}
