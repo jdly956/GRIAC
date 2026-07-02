@@ -14,6 +14,26 @@
 
 ---
 
+## Session 02/07/2026 (12) — S2.1 : chunking par sections (E1, nœud D)
+
+**Contexte** : poursuite de l'instruction « continue à coder les features à venir ». Le sprint 1 étant code-complet, ouverture d'un **squelette de backlog sprint 2** (`docs/sprint-2-backlog.md`, S2.1→S2.4 — à amender par le référent) déclinant les epics E1/E2 de CLAUDE.md.
+
+**Travail livré** :
+- `sia_ingestion/chunk.py` + `make ingest-chunk` — nœud D : dérivés markdown → blocs atomiques (paragraphes et **tableaux entiers**) sous leur **fil de titres**, assemblage glouton 500–800 tokens, **tableaux jamais coupés** (un tableau > budget reste entier — la règle prime), paragraphes géants scindés par lignes, **chevauchement** (le dernier bloc ≤ 150 tokens du chunk N ouvre le chunk N+1), petites sections fusionnées (pas de miettes sous la cible basse). Tokens ≈ caractères/4 (POC — fenêtre bge-m3 relevée : 8192, très au-dessus).
+- Migration 0006 : table `chunks` (document, sha256 pour reprise D9, ordinal, section, contenu, nb_tokens, **`embedding vector(1024)` NULL** — prête pour le nœud E/S2.2).
+- Reprise sur hash : chunks existants pour le sha courant → document sauté ; document modifié → chunks remplacés (purge + réinsertion). Échec de lecture d'un dérivé = échec isolé.
+- 12 TU (fonctions pures + fausse connexion : fil de titres, tableau atomique, budget, tableau géant intact 200 lignes, chevauchement vérifié, scission, reprise, échec isolé) — **88 tests au total**.
+- Plan `docs/plans-test/s2.1-chunking.md` (s'insère dans la chaîne Onyxia après S1.8).
+
+**Validation en session** : lint vert, 88 tests verts. Exécution sur base réelle = plan (session Onyxia de demain).
+
+**Mini-récap** :
+- ✅ Fait : S2.1 livrée ; sprint 2 squeletté
+- ⏳ En cours : S2.2 (embeddings par lots) — suite immédiate
+- ⏳ À venir : S2.3/S2.4 (RAG) ; demain : session TU/TNR Onyxia sur toute la chaîne
+
+---
+
 ## Session 02/07/2026 (11) — S1.10 : gabarits internes — templates structurés & validateur
 
 **Contexte** : instruction référent « continue à coder les features à venir jusqu'à épuisement des crédits, puis demain TU et TNR Onyxia sur toute la session ». Direction : S1.10 (dernière story du sprint 1), puis poursuite sur E1/E2.
