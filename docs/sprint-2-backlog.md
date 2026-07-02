@@ -20,6 +20,8 @@ Critères d'acceptation :
 - [ ] Erreurs réseau/quotas gérées (lot en échec isolé, relance possible — embeddings de nuit D9 si quotas)
 - [ ] `make ingest-embed` ; TU (Albert mocké)
 
+*Code livré le 02/07/2026 : `sia_ingestion/embed.py` (lots de 32, commit par lot — l'acquis survit aux échecs —, dimension 1024 contrôlée, vecteurs écrits par cast `::vector` sans dépendance Python pgvector, réutilise le client S1.5 via la dépendance workspace `sia-api`), 7 TU (95 au total). CA à cocher via `docs/plans-test/s2.2-embeddings.md` (exige la clé — pod).*
+
 ## S2.3 — RAG : recherche hybride (E2)
 
 Critères d'acceptation :

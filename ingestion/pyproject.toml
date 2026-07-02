@@ -7,11 +7,16 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "docling>=2.15",
     "pypdf>=5",
+    "sia-api",
 ]
 
 # docling est volontairement importé paresseusement (torch, lourd) : les TU ne
 # le chargent jamais. pypdf sert à détecter les PDF sans couche texte (S1.8).
-# boto3 (S3/MinIO) et le client Albert (embeddings) arrivent avec la suite d'E1.
+# sia-api (membre du workspace) fournit Settings + client Albert (S1.4/S1.5)
+# pour le nœud embeddings (S2.2). boto3 (S3/MinIO) arrivera avec la lecture S3.
+
+[tool.uv.sources]
+sia-api = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
