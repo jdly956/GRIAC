@@ -23,7 +23,7 @@ def _settings() -> Settings:
 class FauxClient:
     """Client OpenAI factice : catalogue, chat et embeddings canoniques."""
 
-    def __init__(self) -> None:
+    def __init__(self, contenu_chat: str = "OK", finish_reason: str = "stop") -> None:
         self.models = SimpleNamespace(
             list=lambda: SimpleNamespace(
                 data=[
@@ -41,7 +41,12 @@ class FauxClient:
             completions=SimpleNamespace(
                 create=lambda **_: SimpleNamespace(
                     model="gpt-oss-120b",
-                    choices=[SimpleNamespace(message=SimpleNamespace(content="OK"))],
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(content=contenu_chat),
+                            finish_reason=finish_reason,
+                        )
+                    ],
                 )
             )
         )
@@ -79,6 +84,22 @@ def test_sonde_nominale_et_rapport(monkeypatch: pytest.MonkeyPatch) -> None:
     assert '"tpm": 100000' in rapport
     assert "1024" in rapport
     assert CLE_TEST not in rapport
+
+
+def test_chat_reponse_vide_signalee_en_echec(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Constaté sur pod : modèle à raisonnement + max_tokens trop bas => contenu vide
+    # alors que l'appel API aboutit. Ce cas doit être un échec explicite, pas un ok.
+    monkeypatch.setattr(httpx, "get", lambda *_, **__: FausseReponseHttp({"limits": {}}))
+    donnees = executer_sonde(
+        FauxClient(contenu_chat="", finish_reason="length"),  # type: ignore[arg-type]
+        _settings(),
+    )
+    etape = donnees["etapes"]["chat"]
+    assert etape["statut"] == "échec"
+    assert "vide" in etape["erreur"]
+    assert "length" in etape["erreur"]
+    # Les autres relevés ne sont pas interrompus.
+    assert donnees["etapes"]["embeddings"]["statut"] == "ok"
 
 
 def test_quotas_ne_gardent_que_limits(monkeypatch: pytest.MonkeyPatch) -> None:

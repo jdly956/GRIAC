@@ -45,17 +45,31 @@ def relever_quotas(settings: Settings) -> dict[str, Any]:
 
 
 def tester_chat(client: OpenAI, settings: Settings) -> dict[str, Any]:
-    """Un appel de chat minimal sur l'alias configuré."""
+    """Un appel de chat minimal sur l'alias configuré.
+
+    max_tokens large à dessein : les modèles à raisonnement (gpt-oss-120b)
+    consomment des tokens de raisonnement AVANT le contenu — constaté sur le
+    premier run pod (16 tokens => réponse vide). Une réponse vide est un échec
+    explicite, pas un « ok » de façade : l'appel API qui aboutit ne suffit pas.
+    """
     debut = time.perf_counter()
     reponse = client.chat.completions.create(
         model=settings.albert_model_chat,
         messages=[{"role": "user", "content": "Réponds uniquement : OK"}],
-        max_tokens=16,
+        max_tokens=512,
     )
+    choix = reponse.choices[0]
+    contenu = (choix.message.content or "").strip()
+    if not contenu:
+        raise RuntimeError(
+            f"réponse de chat vide (finish_reason={choix.finish_reason}) — l'appel API "
+            "aboutit mais aucun contenu n'est produit ; augmenter max_tokens ?"
+        )
     return {
         "alias_demande": settings.albert_model_chat,
         "modele_resolu": reponse.model,
-        "reponse": (reponse.choices[0].message.content or "").strip(),
+        "reponse": contenu,
+        "finish_reason": choix.finish_reason,
         "latence_s": round(time.perf_counter() - debut, 2),
     }
 
