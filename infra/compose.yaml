@@ -1,0 +1,76 @@
+name: sia-po
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.0-pg16
+    environment:
+      # Identifiants de dev locaux, substituables, aucune donnée réelle.
+      # Le mécanisme définitif (pydantic-settings + .env) arrive avec S1.4.
+      POSTGRES_USER: ${POSTGRES_USER:-sia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sia_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-sia}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sia} -d ${POSTGRES_DB:-sia}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+      target: dev
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia_dev}@postgres:5432/${POSTGRES_DB:-sia}
+    command: ["uv", "run", "--no-sync", "alembic", "upgrade", "head"]
+    volumes:
+      # Les migrations écrites sur le poste sont appliquées sans rebuild.
+      - ./api/migrations:/app/api/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+      target: dev
+    ports:
+      - "8000:8000"
+    volumes:
+      # Seul le code source est monté — jamais le venv (il vit dans l'image).
+      - ./api/sia_api:/app/api/sia_api
+      - ./api/migrations:/app/api/migrations
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      target: dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./web/sia_web:/app/web/sia_web
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

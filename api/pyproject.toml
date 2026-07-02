@@ -1,0 +1,27 @@
+[project]
+name = "sia-api"
+version = "0.1.0"
+description = "SIA PO — API : RAG, génération, feedback, export"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "alembic>=1.13",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+]
+
+# psycopg et sqlalchemy sont exigés par Alembic et le conteneur migrate ;
+# l'app FastAPI n'ouvre aucune connexion DB en S1.2 (pas d'engine/session).
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sia_api"]

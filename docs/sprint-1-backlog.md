@@ -28,6 +28,8 @@ Critères d'acceptation :
 - [ ] Migration initiale activant l'extension pgvector
 - [ ] `GET /health` répond 200 ; `make dev` documenté dans le README
 
+*Code livré le 02/07/2026 (branche `feature/s1.2-dev-env`). Validations observées en session : 5 tests pytest verts, `GET /health` api et web = 200 sous uvicorn réel, bandeau D15 servi, migration Alembic validée en mode offline (SQL `CREATE EXTENSION IF NOT EXISTS vector` généré ; échec propre sans `DATABASE_URL`), compose validé par `docker compose config`. **Validation stack-live complète (`make dev` + `make dev-validate`) à jouer sur un poste/pod avec daemon Docker** (absent de la session) — procédure : `docs/init-pod-onyxia.md`. Cases à cocher après cette validation.*
+
 ## S1.3 — CI minimale
 
 En tant que référent technique, je veux que chaque PR soit vérifiée automatiquement.

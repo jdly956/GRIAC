@@ -7,6 +7,10 @@ requires-python = ">=3.12,<3.13"
 [tool.uv]
 package = false
 
+[tool.uv.workspace]
+members = ["api", "web"]
+# ingestion rejoindra le workspace avec S1.7.
+
 [dependency-groups]
 dev = [
     "ruff>=0.15",
@@ -23,6 +27,9 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["sia_api", "sia_web", "sia_ingestion"]
+
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
-testpaths = ["tests"]
+testpaths = ["tests", "api/tests", "web/tests"]

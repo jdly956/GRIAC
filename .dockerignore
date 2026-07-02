@@ -1,0 +1,13 @@
+# Contexte de build assaini — et barrière mécanique : ni documents du corpus
+# ni évals n'entrent jamais dans une image (contrainte CLAUDE.md).
+.git
+.venv
+docs/
+evals/
+derived/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.env
+.env.*
