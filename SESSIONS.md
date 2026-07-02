@@ -4,13 +4,34 @@
 
 ## État stratégique
 
-**Voie active** : sprint 1 — **S1.1 et S1.2 livrées et mergées** (PRs #1, #2, #3). S1.2 validée stack-live sur pod Onyxia (5 tests verts, /health api et web = 200) avec une réserve actée : la stack compose complète (`make dev`) reste à démontrer sur un hôte avec daemon Docker, au plus tard avec S1.6. Prochaines stories selon l'ordre du backlog : **S1.4 (config & secrets, pydantic-settings)** puis **S1.5 (sonde Albert — fenêtre effective et quotas, test no-go n°1)** ; la clé Albert existe. Pod de dev : prendre un service `vscode-python` **sans GPU** ; checklist premier login (maxima CPU/RAM, MinIO — action n°7) toujours à consigner. Bascule de la branche par défaut sur `main` : à vérifier dans les settings GitHub.
+**Voie active** : sprint 1 — **S1.1 et S1.2 livrées et mergées** (PRs #1, #2, #3) ; **S1.4 livrée** (branche `claude/backlog-continuation-6ftff4`, PR draft en attente de revue du référent) avec validation stack-live en session (uvicorn réel : refus de démarrer sans clé avec message explicite, /health 200 avec config, clé absente des logs). Prochaine story selon l'ordre du backlog : **S1.5 (client Albert & sonde des limites — fenêtre effective et quotas, test no-go n°1)** ; le code peut s'écrire en session (tests mockés), mais `make probe` exige la clé réelle → exécution et rapport `docs/albert-limits.md` à jouer sur le pod. Ensuite S1.3 (CI). **NB : `make dev` exige désormais un `.env` renseigné** (cp .env.example .env) — sans clé, le service api refuse de démarrer (comportement voulu S1.4). Pod de dev : prendre un service `vscode-python` **sans GPU** ; checklist premier login (maxima CPU/RAM, MinIO — action n°7) toujours à consigner. Bascule de la branche par défaut sur `main` : à vérifier dans les settings GitHub.
 
 **Réserves / dettes actées** : validation compose réelle (S1.2, voir ci-dessus) ; `pre-commit run --all-files` jamais exécuté de bout en bout (proxy des sessions Claude Code restreint ; hooks installés, config validée) — à jouer une fois sur le pod ; benchmark E6 et stories gold : statu quo (arbitrage du 02/07).
 
 **Arbitrages du référent technique (02/07/2026)** : (1) le référent technique est désigné — c'est l'utilisateur de ces sessions ; (2) les 3 prompts SAFe sont fournis et versionnés ; (3) calendrier du benchmark E6 vs contenu du sprint 1 : statu quo pour l'instant, pas de décision ; (4) objectif 5–10 stories gold vs 3 silver disponibles : statu quo pour l'instant. **Cible fonctionnelle arbitrée en itération Q/R (9 arbitrages A1–A9, journal complet dans `docs/backlog-fonctionnel.md`)** — points saillants : le RAG est un mécanisme interne au service du LLM accompagnant (jamais une recherche autonome), mobilisé à chaque étape du workflow ; question libre conservée dans le fil ; transparence à 3 niveaux (citations inline, panneau sources avec extraits, marquage d'origine corpus/PO/modèle) ; divergences corpus↔PO signalées et arbitrées par le PO ; pas de jalon de démo intermédiaire (risque tunnel assumé) ; écran couverture + alerte conversationnelle ; PO autonome jusqu'à la sélection des dossiers documentaires de son projet ; instance partagée sans comptes au MVP ; export non bloquant avec récapitulatif des hypothèses. Amendements induits appliqués : note §4, CLAUDE.md (contexte, E3/E4/E5/E8, annexes), backlog sprint 1 (S1.9, S1.11). Plan S1.1/S1.2 validé (« ok go »).
 
 **Prérequis en attente (note de cadrage §7)** : snapshot du corpus (PM) ; stories gold (extraction Jira et/ou validation des silver, avant fin sprint 1) ; panel des PO pilotes ; relevé des curseurs CPU/RAM et espace MinIO au premier login SSP Cloud (architecte). La clé Albert existe — le relevé des quotas est intégré à S1.5.
+
+---
+
+## Session 02/07/2026 (2) — S1.4 : configuration & secrets
+
+**Contexte** : session remote (claude.ai/code), branche dédiée `claude/backlog-continuation-6ftff4`. Direction : « go pour la suite du backlog » → S1.4, prochaine story dans l'ordre (S1.1/S1.2 mergées, cf. en-tête précédent).
+
+**Travail livré** :
+- `api/sia_api/config.py` : `Settings` pydantic-settings — `ALBERT_BASE_URL` (requise), `ALBERT_API_KEY` (requise, `SecretStr` : masquée dans str/repr donc jamais dans les logs), alias `ALBERT_MODEL_CHAT`/`_EMBEDDINGS`/`_RERANK` avec défauts `openweight-*` surchargeables par env. Chaîne vide traitée comme absence (cas compose `${VAR:-}`). `charger_settings()` convertit la ValidationError en RuntimeError explicite qui **nomme** les variables en cause sans jamais afficher de valeur.
+- `api/sia_api/main.py` : lifespan FastAPI — config chargée au démarrage, échec = refus de démarrer (l'absence de clé se découvre au boot, pas au premier appel Albert). `/health` inchangé (toujours sans dépendance).
+- `.env.example` documenté (Albert + variables compose) ; exception `!.env.example` ajoutée au `.gitignore` (le motif `.env.*` existant l'aurait ignoré) ; template Secret Kubernetes `infra/k8s/secret-albert.example.yaml` (aucune valeur réelle, usage kubectl documenté, consommation `envFrom` prévue avec S1.6).
+- `infra/compose.yaml` : le service api reçoit les variables `ALBERT_*` (défaut = alias pour les modèles, vide pour URL/clé → refus de démarrer, visible via `docker compose logs api`) ; commentaire obsolète « arrive avec S1.4 » recalé.
+- `api/tests/test_config.py` : 8 tests (chargement complet, alias par défaut + surcharge, clé absente/vide → RuntimeError nommant la variable, clé jamais dans str/repr, démarrage TestClient refusé sans config / OK avec). Aucun appel réseau.
+- README : section « Configuration & secrets (S1.4) », prérequis de la stack locale mis à jour (`.env` requis).
+
+**Validation stack-live** (pas de daemon Docker en session — même limite que S1.2, la réserve compose reste ouverte) : uvicorn **réel** sans variables → `RuntimeError: Configuration Albert invalide — variables d'environnement manquantes ou vides : ALBERT_API_KEY, ALBERT_BASE_URL…` puis `Application startup failed. Exiting.` (exit 3) ; uvicorn réel avec clé factice → `GET /health` = 200 et **0 occurrence de la clé dans le log de démarrage** (grep). `docker compose config` : variables `ALBERT_*` rendues sur le service api. `make lint` vert ; `make test` : 13 tests verts.
+
+**Mini-récap** :
+- ✅ Fait : S1.4 livrée et validée stack-live en session ; PR draft ouverte pour revue
+- ⏳ En cours : revue de la PR par le référent technique
+- ⏳ À venir : S1.5 (client Albert + `make probe` — code écrivable en session, exécution réelle avec la clé sur le pod), puis S1.3 (CI)
 
 ---
 

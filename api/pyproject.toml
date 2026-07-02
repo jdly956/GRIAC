@@ -9,6 +9,7 @@ dependencies = [
     "alembic>=1.13",
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.6",
 ]
 
 # psycopg et sqlalchemy sont exigés par Alembic et le conteneur migrate ;

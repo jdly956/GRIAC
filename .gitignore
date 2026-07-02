@@ -1,6 +1,7 @@
 # Environnements & secrets — jamais dans le repo (CLAUDE.md)
 .env
 .env.*
+!.env.example
 .venv/
 
 # Python

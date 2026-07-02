@@ -4,8 +4,8 @@ services:
   postgres:
     image: pgvector/pgvector:0.8.0-pg16
     environment:
-      # Identifiants de dev locaux, substituables, aucune donnée réelle.
-      # Le mécanisme définitif (pydantic-settings + .env) arrive avec S1.4.
+      # Identifiants de dev locaux, substituables (via .env — cf. .env.example),
+      # aucune donnée réelle.
       POSTGRES_USER: ${POSTGRES_USER:-sia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sia_dev}
       POSTGRES_DB: ${POSTGRES_DB:-sia}
@@ -39,6 +39,15 @@ services:
       context: .
       dockerfile: infra/docker/api.Dockerfile
       target: dev
+    environment:
+      # Config Albert (S1.4), lue depuis l'environnement de l'hôte ou le .env à
+      # la racine (cp .env.example .env). Vide => l'API refuse de démarrer avec
+      # un message explicite, visible via `docker compose logs api`.
+      ALBERT_BASE_URL: ${ALBERT_BASE_URL:-}
+      ALBERT_API_KEY: ${ALBERT_API_KEY:-}
+      ALBERT_MODEL_CHAT: ${ALBERT_MODEL_CHAT:-openweight-large}
+      ALBERT_MODEL_EMBEDDINGS: ${ALBERT_MODEL_EMBEDDINGS:-openweight-embeddings}
+      ALBERT_MODEL_RERANK: ${ALBERT_MODEL_RERANK:-openweight-rerank}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
