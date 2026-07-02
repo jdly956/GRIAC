@@ -17,6 +17,26 @@ cd <racine du repo>
 make install        # uv sync + installation des hooks pre-commit
 ```
 
+## Configuration & secrets (S1.4)
+
+Toute la configuration passe par des variables d'environnement (pydantic-settings,
+`api/sia_api/config.py`) — jamais d'URL ni de clé en dur, aucun secret dans le repo.
+
+```bash
+cd <racine du repo>
+cp .env.example .env   # .env est ignoré par git ; renseigner ALBERT_API_KEY
+```
+
+- **Sans clé, l'API refuse de démarrer** avec un message explicite (visible via
+  `docker compose logs api` dans la stack) : les variables en cause sont nommées,
+  leur valeur n'est jamais affichée.
+- La clé est portée par un `SecretStr` : masquée dans les repr/str, jamais dans les logs.
+- Alias de modèles Albert par défaut : `openweight-large` (chat), `openweight-embeddings`,
+  `openweight-rerank` — surchargeables par `ALBERT_MODEL_*` (cf. `.env.example`).
+- Déploiement Kubernetes : les variables viennent d'un Secret — template versionné
+  dans [`infra/k8s/secret-albert.example.yaml`](infra/k8s/secret-albert.example.yaml)
+  (sans valeur réelle ; la clé est injectée hors repo).
+
 ## Commandes
 
 ```bash
@@ -31,7 +51,9 @@ make fmt            # correction/formatage automatique
 ## Lancer la stack locale (S1.2)
 
 Prérequis : Docker avec daemon actif (poste local, ou pod avec docker — voir
-[`docs/init-pod-onyxia.md`](docs/init-pod-onyxia.md) pour le mode sans daemon).
+[`docs/init-pod-onyxia.md`](docs/init-pod-onyxia.md) pour le mode sans daemon),
+et un `.env` renseigné (voir « Configuration & secrets » ci-dessus — sans clé
+Albert, le service api refuse de démarrer).
 
 ```bash
 make dev            # build + démarrage : postgres+pgvector -> migrate -> api -> web (attend l'état sain)

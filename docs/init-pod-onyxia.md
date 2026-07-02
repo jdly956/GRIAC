@@ -53,6 +53,15 @@ uv run pre-commit run --all-files   # première exécution : télécharge les ho
 
 ## 4. Lancer le service
 
+**Préalable commun (S1.4)** : l'api exige la configuration Albert — sans clé, elle refuse
+de démarrer avec un message explicite (comportement voulu, CA3 de S1.4) :
+
+```bash
+cd ~/work/GRIAC/
+cp .env.example .env      # .env est ignoré par git
+# puis renseigner ALBERT_API_KEY=<clé> dans .env avec l'éditeur — jamais en ligne de commande
+```
+
 ### Mode A — le pod dispose d'un daemon Docker
 
 ```bash
@@ -114,5 +123,6 @@ Ne jamais écrire l'URL ou le mot de passe dans un fichier versionné.
 | `pytest: command not found` | environnement non activé | `cd ~/work/GRIAC/ && source .venv/bin/activate`, ou préfixer par `uv run` |
 | `make dev` échoue immédiatement | pas de daemon Docker | passer en mode B |
 | `[Errno 98] address already in use` sur 8080, ou `401` au curl | code-server occupe 8080 sur les pods VSCode | web sur 8081 (mode B) ; en mode A : `WEB_PORT=8081 make dev` |
+| `Configuration Albert invalide — variables … manquantes ou vides` au lancement de l'api | config S1.4 absente ou incomplète | `cp .env.example .env` puis renseigner `ALBERT_API_KEY` (§4, préalable commun) |
 | hot-reload inopérant | inotify indisponible sur le pod | `export WATCHFILES_FORCE_POLLING=true` avant de lancer |
 | `DATABASE_URL absente` | migration lancée sans URL | fournir `DATABASE_URL` dans l'environnement du shell (jamais dans un fichier versionné) |
