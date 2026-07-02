@@ -13,16 +13,31 @@ Procédure pas-à-pas pour un premier démarrage sur https://datalab.sspcloud.fr
 
 ## 2. Cloner le repo et installer l'outillage
 
-Dans le terminal du VSCode web :
+Dans le terminal du VSCode web — **premier clone** :
 
 ```bash
 cd ~/work/
 git clone https://github.com/jdly956/GRIAC.git   # authentification : token GitHub (compte jdly956)
 cd ~/work/GRIAC/
+```
 
+**Repo déjà présent** (relance, nouveau pod sur volume persistant) — ne pas recloner :
+
+```bash
+cd ~/work/GRIAC/
+git fetch origin
+git checkout main && git pull origin main
+# Pour valider une PR non mergée : git checkout <branche-de-la-PR> && git pull
+```
+
+Puis l'outillage :
+
+```bash
 # uv (gestionnaire Python du projet) — installe aussi Python 3.12 si absent
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source ~/.local/bin/env   # ou relancer le terminal
+export PATH="$HOME/.local/bin:$PATH" && hash -r
+# NB : les images Onyxia embarquent parfois déjà un uv (message « shadowed ») —
+# n'importe quel uv >= 0.8 convient, vérifier avec : uv --version
 
 make install              # uv sync --all-packages + hooks pre-commit
 ```
@@ -90,6 +105,9 @@ Ne jamais écrire l'URL ou le mot de passe dans un fichier versionné.
 
 | Symptôme | Cause probable | Remède |
 |---|---|---|
+| `destination path 'GRIAC' already exists` | repo déjà cloné ; le `cd` chaîné après `&&` n'a pas été exécuté | `cd ~/work/GRIAC/` puis `git fetch` + `checkout`/`pull` (§2, « repo déjà présent ») |
+| `make: No rule to make target 'install'` ou `No pyproject.toml found` | commandes lancées hors de la racine du repo | `cd ~/work/GRIAC/` puis relancer — cf. règle « commandes toujours préfixées » (CLAUDE.md) |
+| `WARN: … shadowed by other commands in your PATH` à l'installation d'uv | l'image du pod embarque déjà un uv | `export PATH="$HOME/.local/bin:$PATH" && hash -r`, ou garder le uv de l'image s'il est ≥ 0.8 |
 | `pytest: command not found` | environnement non activé | `cd ~/work/GRIAC/ && source .venv/bin/activate`, ou préfixer par `uv run` |
 | `make dev` échoue immédiatement | pas de daemon Docker | passer en mode B |
 | hot-reload inopérant | inotify indisponible sur le pod | `export WATCHFILES_FORCE_POLLING=true` avant de lancer |
