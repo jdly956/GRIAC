@@ -4,7 +4,7 @@
 
 ## État stratégique
 
-**Voie active** : sprint 1 — **S1.1 et S1.2 livrées et mergées** (PRs #1, #2, #3) ; **S1.4 livrée** (branche `claude/backlog-continuation-6ftff4`, PR #4 draft en attente de revue du référent) avec validation stack-live en session **et plan de test exécuté sur pod Onyxia le 02/07 : étapes 1–5 ✅** (13 tests verts, refus sans clé exit 3, refus variables vides, /health 200 par le bon process, 0 occurrence de la clé dans les logs, SecretStr masqué) ; étape 7 (mode A compose) non jouée — réserve compose S1.2 inchangée. **Découverte pod : `ALBERT_API_KEY` est injectée dans l'environnement du pod et prime sur le `.env`** (ALBERT_BASE_URL vient du `.env`) — S1.5 (`make probe`) tournera sans manipulation de clé. Nouvelle règle de méthode dans CLAUDE.md : « TU + TNR + plan de test avant toute livraison ». Reste : revue/merge PR #4. Prochaine story selon l'ordre du backlog : **S1.5 (client Albert & sonde des limites — fenêtre effective et quotas, test no-go n°1)** ; le code peut s'écrire en session (tests mockés), mais `make probe` exige la clé réelle → exécution et rapport `docs/albert-limits.md` à jouer sur le pod. Ensuite S1.3 (CI). **NB : `make dev` exige désormais un `.env` renseigné** (cp .env.example .env) — sans clé, le service api refuse de démarrer (comportement voulu S1.4). Pod de dev : prendre un service `vscode-python` **sans GPU** ; checklist premier login (maxima CPU/RAM, MinIO — action n°7) toujours à consigner. Bascule de la branche par défaut sur `main` : à vérifier dans les settings GitHub.
+**Voie active** : sprint 1 — **S1.1, S1.2 et S1.4 livrées et mergées** (PRs #1, #2, #3, #4 — S1.4 validée stack-live en session et sur pod, plan de test étapes 1–5 ✅). **S1.5 livrée en PR #5 (draft, branche `claude/backlog-continuation-6ftff4`)** : client Albert (timeouts/retries) + sonde `make probe` (modèles, quotas `limits`, chat et embeddings minimaux), 10 TU (23 au total), gestion d'erreurs démontrée en réel ; **reste l'exécution nominale sur le pod** (plan `docs/plans-test/s1.5-albert-probe.md` — test no-go n°1 : fenêtre effective et quotas à comparer au budget 20k tokens) puis commit du rapport `docs/albert-limits.md` et revue/merge. Ensuite : S1.3 (CI). **Découverte pod : `ALBERT_API_KEY` est injectée dans l'environnement du pod et prime sur le `.env`** (ALBERT_BASE_URL vient du `.env`). **NB : `make dev` exige un `.env` renseigné** (comportement voulu S1.4). Règle de méthode active : « TU + TNR + plan de test avant toute livraison » (CLAUDE.md). Réserve S1.2 (compose complet) inchangée — étape 7 des plans de test, au plus tard S1.6. Pod de dev : prendre un service `vscode-python` **sans GPU** ; checklist premier login (maxima CPU/RAM, MinIO — action n°7) toujours à consigner. Bascule de la branche par défaut sur `main` : à vérifier dans les settings GitHub.
 
 **Réserves / dettes actées** : validation compose réelle (S1.2, voir ci-dessus) ; `pre-commit run --all-files` jamais exécuté de bout en bout (proxy des sessions Claude Code restreint ; hooks installés, config validée) — à jouer une fois sur le pod ; benchmark E6 et stories gold : statu quo (arbitrage du 02/07).
 
@@ -16,7 +16,7 @@
 
 ## Session 02/07/2026 (3) — S1.5 : client Albert & sonde des limites (code)
 
-**Contexte** : même session remote que S1.4, branche `claude/backlog-continuation-6ftff4`. Direction : « go pour la suite du backlog » → S1.5, prochaine story dans l'ordre. La PR #4 (S1.4) était encore ouverte au moment du développement — arbitrage de livraison demandé au référent (une story = une PR).
+**Contexte** : même session remote que S1.4, branche `claude/backlog-continuation-6ftff4`. Direction : « go pour la suite du backlog » → S1.5, prochaine story dans l'ordre. La PR #4 (S1.4) était encore ouverte au moment du développement — arbitrage rendu par le référent : **PR #4 mergée sur son instruction** (`dec80a9b`), branche rebasée sur `main`, **S1.5 livrée en PR #5 (draft)** — la règle « une story = une PR » est respectée.
 
 **Travail livré** :
 - `api/sia_api/albert.py` : `creer_client()` — client OpenAI pointé sur Albert, clé via `SecretStr` (S1.4), timeout et retries configurables par env (`ALBERT_TIMEOUT_S` défaut 30 s, `ALBERT_MAX_RETRIES` défaut 2, nouveaux champs Settings) ; aucun appel réseau à l'import.
@@ -28,9 +28,9 @@
 **Validation en session** : `make lint` vert ; `make test` **23 tests verts**. Démonstration réelle de la gestion d'erreurs : `make probe` vers un hôte injoignable → rapport écrit, 4 relevés « échec — APIConnectionError/ConnectError » sans traceback, exit ≠ 0, clé factice absente du rapport (grep = 0). **L'exécution nominale exige le réseau Albert + la clé : à jouer sur le pod via le plan de test — c'est le test no-go n°1 (fenêtre effective et quotas, à comparer au budget 20k tokens).**
 
 **Mini-récap** :
-- ✅ Fait : S1.5 code complet (client + sonde + make probe), 10 TU, TNR verte, plan de test versionné
-- ⏳ En cours : arbitrage livraison (PR #4 encore ouverte) puis push ; exécution de `make probe` sur le pod
-- ⏳ À venir : rapport `docs/albert-limits.md` committé + verdict no-go n°1 consigné ; ensuite S1.3 (CI)
+- ✅ Fait : S1.5 code complet (client + sonde + make probe), 10 TU, TNR verte (23 tests), plan de test versionné ; PR #4 mergée (instruction référent) ; **PR #5 (draft) ouverte pour S1.5**
+- ⏳ En cours : exécution de `make probe` sur le pod (plan `docs/plans-test/s1.5-albert-probe.md`) + revue PR #5
+- ⏳ À venir : rapport `docs/albert-limits.md` committé + verdict no-go n°1 consigné (fenêtre vs budget 20k) ; ensuite S1.3 (CI)
 
 ---
 
