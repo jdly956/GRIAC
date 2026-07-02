@@ -50,4 +50,14 @@ Critères d'acceptation :
 - [ ] Synthèse (étape 5) : récapitulatif des hypothèses non levées, transmis à l'export (E5/A8) ; refusée avant l'étape finale
 - [ ] Garde-fou règle 1 : contrôle « 3 questions max par lot » disponible pour le moteur ; TU sans DB réelle
 
-*Code livré le 02/07/2026 : `sia_api/workflow.py` (machine PURE : transitions, extraction d'hypothèses via le marqueur S1.10, contrôle de lot), `sia_api/workflows.py` (sessions persistées : `POST/GET /workflows`, `/avancer`, `/hypotheses` + décision individuelle, `/synthese` avec avertissement A8), migration 0008 (3 tables, CHECK sur étapes/origines/statuts). 14 TU (126 au total). Le moteur conversationnel (Albert + `/contexte` à chaque étape, A2/A9) = **S2.6 (E3.2), prochaine story**. CA à cocher via `docs/plans-test/s2.5-workflow-etats.md`.*
+*Code livré le 02/07/2026 : `sia_api/workflow.py` (machine PURE : transitions, extraction d'hypothèses via le marqueur S1.10, contrôle de lot), `sia_api/workflows.py` (sessions persistées : `POST/GET /workflows`, `/avancer`, `/hypotheses` + décision individuelle, `/synthese` avec avertissement A8), migration 0008 (3 tables, CHECK sur étapes/origines/statuts). 14 TU (126 au total). CA à cocher via `docs/plans-test/s2.5-workflow-etats.md`.*
+
+## S2.6 — E3.2 : moteur conversationnel (Albert + RAG à chaque étape)
+
+Critères d'acceptation :
+- [ ] `POST /workflows/{id}/message` : prompt 3 intégral en système + étape courante + contexte/NFR projet (E8) + extraits cités (`/contexte`, A2 : à chaque étape, question libre comprise) + few-shot (gold sinon repli silver JAMAIS présenté comme validé)
+- [ ] Réponses versées au fil (`workflow_messages`) ; [HYPOTHÈSE À VALIDER] extraites automatiquement vers le registre (origine `modele`, dédup textuelle v0)
+- [ ] Traçabilité A3 (sources mobilisées restituées) ; divergences corpus↔PO signalées `[DIVERGENCE]` avec source, arbitrées par le PO (A9)
+- [ ] Garde-fous : règle 1 signalée à l'interview, budget ~20k surveillé, réponse vide = 502 explicite, aucune source = avertissement ; TU Albert/RAG mockés
+
+*Code livré le 02/07/2026 : `sia_api/moteur.py` (assemblage du prompt système testé, `max_tokens=4096` — gotcha raisonnement S1.5 —, historique borné à 8 messages + Feature). 12 TU (138 au total). **Première génération réelle = plan `docs/plans-test/s2.6-moteur.md`** (exige clé + base peuplée).*

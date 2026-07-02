@@ -1,0 +1,246 @@
+"""Tests E3.2 : moteur conversationnel — Albert et RAG simulés, invariants A2/A3/A8/A9."""
+
+from collections import deque
+from types import SimpleNamespace
+
+import pytest
+from fastapi.testclient import TestClient
+
+import sia_api.moteur as moteur
+from sia_api.config import Settings
+from sia_api.db import get_connexion
+from sia_api.main import app
+from sia_api.moteur import (
+    charger_few_shot,
+    construire_prompt_systeme,
+    extraire_divergences,
+)
+from sia_api.recherche import ContexteResultat, SourceCitee, get_albert
+
+
+def _settings() -> Settings:
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        albert_base_url="https://albert.example/v1",
+        albert_api_key="cle-de-test",
+    )
+
+
+# --- assemblage du prompt système (pur) ---
+
+
+def test_prompt_systeme_contient_le_prompt3_et_les_consignes() -> None:
+    prompt = construire_prompt_systeme("interview", None, "extraits cités ici", None)
+    assert "PROMPT 3 — RÉDIGER MES USER STORIES" in prompt
+    assert "Étape courante du workflow : **interview**" in prompt
+    assert "extraits cités ici" in prompt
+    assert "[HYPOTHÈSE À VALIDER]" in prompt
+    assert "[DIVERGENCE]" in prompt  # A9
+    assert "[Source :" in prompt  # A3
+
+
+def test_prompt_systeme_injecte_projet_et_nfr() -> None:
+    projet = {
+        "nom": "Téléservice X",
+        "contexte": "Refonte du suivi.",
+        "nfrs": [{"type": "rgpd", "formulation": "aucune donnée sensible", "valeur_cible": None}],
+    }
+    prompt = construire_prompt_systeme("interview", projet, "", None)
+    assert "Téléservice X" in prompt
+    assert "- rgpd : aucune donnée sensible" in prompt
+    assert "bloc G" in prompt  # pré-remplissage NFR de l'interview (E8)
+
+
+def test_prompt_systeme_sans_source_impose_le_signalement() -> None:
+    prompt = construire_prompt_systeme("redaction", None, "", None)
+    assert "AUCUNE source récupérable" in prompt
+
+
+def test_few_shot_silver_jamais_presente_comme_valide() -> None:
+    few_shot = charger_few_shot()
+    assert few_shot is not None  # les silver du repo existent
+    exemple, origine = few_shot
+    assert origine == "silver"  # gold vide à ce jour
+    prompt = construire_prompt_systeme("redaction", None, "", few_shot)
+    assert "NON VALIDÉE" in prompt
+    assert "**US — " in prompt  # l'exemple est bien inclus
+
+
+def test_extraire_divergences() -> None:
+    texte = (
+        "Réponse.\n"
+        "[DIVERGENCE] Le PO annonce 15 jours, la spec cite 30 jours [Source : spec].\n"
+        "Suite."
+    )
+    assert len(extraire_divergences(texte)) == 1
+
+
+# --- endpoint /workflows/{id}/message (DB scriptée, Albert et RAG simulés) ---
+
+
+class FauxCurseur:
+    def __init__(self, resultats: deque) -> None:
+        self.resultats = resultats
+        self.requetes: list[tuple[str, dict]] = []
+
+    def execute(self, requete: str, parametres: dict | None = None) -> None:
+        self.requetes.append((requete, parametres or {}))
+
+    def fetchone(self):
+        return self.resultats.popleft()
+
+    def fetchall(self):
+        return self.resultats.popleft()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
+
+
+class FausseConnexion:
+    def __init__(self, resultats: list) -> None:
+        self.curseur = FauxCurseur(deque(resultats))
+        self.commits = 0
+
+    def cursor(self):
+        return self.curseur
+
+    def commit(self) -> None:
+        self.commits += 1
+
+
+class FauxChat:
+    def __init__(self, contenu: str, finish_reason: str = "stop") -> None:
+        self.appels: list[dict] = []
+        self._contenu = contenu
+        self._finish = finish_reason
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._creer))
+
+    def _creer(self, **kwargs):
+        self.appels.append(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content=self._contenu), finish_reason=self._finish
+                )
+            ]
+        )
+
+
+CONTEXTE_CANNE = ContexteResultat(
+    contexte="[Source : spec_v2.docx — Spec > CA]\ncontenu",
+    sources=[
+        SourceCitee(document="projet-alpha/spec_v2.docx", nom="spec_v2.docx", section="Spec > CA")
+    ],
+    nb_tokens=120,
+    rerank_applique=True,
+    avertissement=None,
+)
+
+client_http = TestClient(app)
+
+
+@pytest.fixture
+def brancher(monkeypatch: pytest.MonkeyPatch):
+    def _brancher(
+        resultats: list,
+        reponse_llm: str,
+        contexte: ContexteResultat = CONTEXTE_CANNE,
+        finish_reason: str = "stop",
+    ):
+        connexion = FausseConnexion(resultats)
+        faux_client = FauxChat(reponse_llm, finish_reason)
+        app.dependency_overrides[get_connexion] = lambda: connexion
+        app.dependency_overrides[get_albert] = lambda: (faux_client, _settings())
+        monkeypatch.setattr(moteur, "construire_contexte", lambda *a, **k: contexte)
+        return connexion, faux_client
+
+    yield _brancher
+    app.dependency_overrides.clear()
+
+
+SCRIPT_NOMINAL = [
+    ("interview", None, "Ma Feature"),  # session
+    [("po", "Ma Feature")],  # historique
+    [],  # hypothèses déjà connues (aucune)
+]
+
+
+def test_message_nominal_alimente_fil_et_registre(brancher) -> None:
+    reponse = "Q1 ? Q2 ?\nSeuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]"
+    connexion, faux_client = brancher(list(SCRIPT_NOMINAL), reponse)
+
+    http = client_http.post("/workflows/7/message", json={"message": "quel seuil de taille ?"})
+    assert http.status_code == 200
+    corps = http.json()
+    assert corps["reponse"] == reponse
+    assert corps["sources"][0]["nom"] == "spec_v2.docx"  # panneau A3
+    assert corps["hypotheses_ajoutees"] == ["Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]"]
+    assert corps["avertissements"] == []
+
+    requetes = [r for r, _ in connexion.curseur.requetes]
+    assert sum("INSERT INTO workflow_messages" in r for r in requetes) == 2  # PO + assistant
+    assert any("INSERT INTO workflow_hypotheses" in r for r in requetes)
+    assert connexion.commits == 1
+
+    appel = faux_client.appels[0]
+    assert appel["model"] == "openweight-large"
+    assert appel["max_tokens"] == 4096
+    assert appel["messages"][0]["role"] == "system"
+    assert "PROMPT 3" in appel["messages"][0]["content"]
+    assert appel["messages"][-1]["content"] == "quel seuil de taille ?"
+
+
+def test_hypothese_deja_connue_non_dupliquee(brancher) -> None:
+    script = [
+        ("interview", None, "Ma Feature"),
+        [],
+        [("Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]",)],  # déjà au registre
+    ]
+    # Même ligne exacte que celle du registre : la dédup v0 est textuelle.
+    connexion, _ = brancher(script, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]")
+    corps = client_http.post("/workflows/7/message", json={"message": "ok ?"}).json()
+    assert corps["hypotheses_ajoutees"] == []
+    assert not any("INSERT INTO workflow_hypotheses" in r for r, _ in connexion.curseur.requetes)
+
+
+def test_divergence_corpus_po_signalee(brancher) -> None:
+    reponse = (
+        "[DIVERGENCE] Vous annoncez 15 jours ; la spec indique 30 jours [Source : spec_v2.docx]."
+    )
+    brancher(list(SCRIPT_NOMINAL), reponse)
+    corps = client_http.post("/workflows/7/message", json={"message": "le délai est 15 j"}).json()
+    assert len(corps["divergences"]) == 1  # A9 : signalée, arbitrée par le PO
+
+
+def test_regle_1_interview_signalee(brancher) -> None:
+    brancher(list(SCRIPT_NOMINAL), "Q1 ? Q2 ? Q3 ? Q4 ?")
+    corps = client_http.post("/workflows/7/message", json={"message": "allons-y"}).json()
+    assert any("règle 1" in a for a in corps["avertissements"])
+
+
+def test_aucune_source_avertit(brancher) -> None:
+    contexte_vide = ContexteResultat(
+        contexte="",
+        sources=[],
+        nb_tokens=0,
+        rerank_applique=False,
+        avertissement="Aucune source récupérable dans le corpus pour cette question — signalement.",
+    )
+    brancher(list(SCRIPT_NOMINAL), "Réponse prudente.", contexte=contexte_vide)
+    corps = client_http.post("/workflows/7/message", json={"message": "sujet inconnu"}).json()
+    assert any("Aucune source récupérable" in a for a in corps["avertissements"])
+
+
+def test_reponse_vide_erreur_explicite(brancher) -> None:
+    brancher(list(SCRIPT_NOMINAL), "", finish_reason="length")
+    http = client_http.post("/workflows/7/message", json={"message": "?"})
+    assert http.status_code == 502
+    assert "finish_reason=length" in http.json()["detail"]
+
+
+def test_session_inconnue_404(brancher) -> None:
+    brancher([None], "peu importe")
+    assert client_http.post("/workflows/99/message", json={"message": "?"}).status_code == 404
