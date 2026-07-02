@@ -29,6 +29,10 @@ Critères d'acceptation :
 - [ ] Filtres métadonnées : `est_reference = true` par défaut, filtre par projet (dossiers confirmés S1.11)
 - [ ] Endpoint api de recherche interne (consommé par E3, pas un écran) ; TU
 
+*Code livré le 02/07/2026 : `api/sia_api/recherche.py` (`POST /recherche`, fusion RRF k=60 pure et testée, question vectorisée en float — gotcha S1.5 —, aucune source → avertissement anti-invention explicite), migration 0007 (index GIN français ; ivfflat différé à la vraie volumétrie). 8 TU (103 au total). CA à cocher via `docs/plans-test/s2.3-recherche-hybride.md`.*
+
+**Note S2.4** : le rerank passe par l'endpoint `/v1/rerank` d'Albert, **hors périmètre du SDK OpenAI** — première action de la story : relever le schéma exact par curl sur le pod (à défaut, repli documenté sur l'ordre RRF avec signalement).
+
 ## S2.4 — RAG : rerank + assemblage du contexte (E2)
 
 Critères d'acceptation :
