@@ -113,11 +113,13 @@ Critères d'acceptation :
 En tant que PO, je veux que les prompts officiels soient la source unique des formats et du workflow (prépare E3 et E6).
 
 Critères d'acceptation :
-- [ ] Les 3 fichiers fournis déposés dans `/api/prompts/` : prompt-1 (Epic), prompt-2 (Features), prompt-3 (Stories)
-- [ ] Extraction en templates structurés : format US du prompt 3 (blocs, tableau Gherkin des CA, critères DSFR) et tableau DoR
-- [ ] Validateur de conformité d'une US au format interne, couvert par tests
-- [ ] Candidates silver (`stories-silver-candidates.md`) déposées dans `/evals/silver/` et utilisées comme fixtures du validateur
-- [ ] Dépendance restante : 5–10 stories gold dans `/evals/gold/`, obtenues par extraction des meilleures stories Jira (reformatées) et/ou promotion des candidates silver (`stories-silver-candidates.md`) après validation par les PO pilotes
+- [x] Les 3 fichiers fournis déposés dans `/api/prompts/` : prompt-1 (Epic), prompt-2 (Features), prompt-3 (Stories) — fait au kickoff
+- [x] Extraction en templates structurés : format US du prompt 3 (blocs, tableau Gherkin des CA, critères DSFR) et tableau DoR — constantes de `api/sia_api/gabarit.py` (blocs récit/champs, colonnes CA, colonnes stories candidates, 10 critères DoR + statuts)
+- [x] Validateur de conformité d'une US au format interne, couvert par tests — `valider_us` + `valider_dor`, 16 TU (75 au total, verts) ; hypothèses relevées jamais bloquantes (A8) ; CLI `python -m sia_api.gabarit <fichier.md>`
+- [x] Candidates silver (`stories-silver-candidates.md`) déposées dans `/evals/silver/` et utilisées comme fixtures du validateur — les 3 passent CONFORME en exécution réelle (4/4/3 CA, 1/2/3 hypothèses relevées)
+- [ ] Dépendance restante : 5–10 stories gold dans `/evals/gold/`, obtenues par extraction des meilleures stories Jira (reformatées) et/ou promotion des candidates silver (`stories-silver-candidates.md`) après validation par les PO pilotes — **statu quo (arbitrage du 02/07), dépendance externe**
+
+*Livrée le 02/07/2026 — plan `docs/plans-test/s1.10-gabarit-validateur.md` (aucune base requise). Le validateur (DoR compris : « estimée en refinement » doit rester 🔵) sera consommé par le contrôle DoR automatisé d'E3 et le harnais E6.*
 
 ## S1.11 — Entité Projet : modèle de données (contexte & NFR)
 
