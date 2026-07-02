@@ -61,3 +61,12 @@ Critères d'acceptation :
 - [ ] Garde-fous : règle 1 signalée à l'interview, budget ~20k surveillé, réponse vide = 502 explicite, aucune source = avertissement ; TU Albert/RAG mockés
 
 *Code livré le 02/07/2026 : `sia_api/moteur.py` (assemblage du prompt système testé, `max_tokens=4096` — gotcha raisonnement S1.5 —, historique borné à 8 messages + Feature). 12 TU (138 au total). **Première génération réelle = plan `docs/plans-test/s2.6-moteur.md`** (exige clé + base peuplée).*
+
+## S2.7 — E5 : export CSV Jira + copier-coller formaté (récapitulatif A8)
+
+Critères d'acceptation :
+- [ ] `GET /workflows/{id}/export/jira.csv` : CSV importable (Summary / Issue Type / Description), stories extraites des messages de rédaction, dédupliquées par titre (la dernière version gagne — itérations règle 5)
+- [ ] `GET /workflows/{id}/export/markdown` : copier-coller formaté avec **avertissement + récapitulatif des hypothèses non levées en tête** (arbitrage A8 — export autorisé mais jamais silencieux) et annotation de conformité S1.10 par story
+- [ ] Aucune story rédigée → 409 explicite ; pas d'appel API Jira (D10 : Jira injoignable du dev)
+
+*Code livré le 02/07/2026 : `sia_api/export.py`, 8 TU (146 au total). Le CSV porte aussi l'en-tête `X-Hypotheses-Non-Levees`. CA à cocher via `docs/plans-test/s2.7-export.md` (après une session S2.6 réelle ayant produit des US).*

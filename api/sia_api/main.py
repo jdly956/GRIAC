@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from sia_api.config import charger_settings
+from sia_api.export import router as router_export
 from sia_api.moteur import router as router_moteur
 from sia_api.projets import router as router_projets
 from sia_api.recherche import router as router_recherche
@@ -31,6 +32,7 @@ app.include_router(router_projets)
 app.include_router(router_recherche)
 app.include_router(router_workflows)
 app.include_router(router_moteur)
+app.include_router(router_export)
 
 
 @app.get("/health")
