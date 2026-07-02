@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titre %}Projet {{ projet.nom }}{% endblock %}
+{% block contenu %}
+<h1>{{ projet.nom }}</h1>
+<p>{{ projet.contexte or "Sans contexte." }}</p>
+
+<div class="panneau">
+  <h2>Exigences non fonctionnelles ({{ projet.nfrs | length }})</h2>
+  {% if projet.nfrs %}
+  <table class="fr-table">
+    <thead><tr><th>Type</th><th>Formulation</th><th>Valeur cible</th></tr></thead>
+    <tbody>
+      {% for nfr in projet.nfrs %}
+      <tr>
+        <td>{{ nfr.type }}</td>
+        <td>{{ nfr.formulation }}</td>
+        <td>{{ nfr.valeur_cible or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Aucune NFR déclarée — les blocs NFR de l'interview ne seront pas pré-remplis.</p>
+  {% endif %}
+</div>
+
+<form method="post" action="/projets/{{ projet.id }}/dossiers" class="panneau">
+  <h2>Dossiers documentaires associés (A6)</h2>
+  <p>Les suggestions viennent de la qualification automatique (S1.9) :
+    <strong>elles ne valent pas association</strong> — cochez pour confirmer,
+    décochez pour corriger. Le corpus mobilisé par le RAG est filtré sur ces dossiers.</p>
+  {% for ligne in dossiers %}
+  <div class="fr-checkbox-group">
+    <input type="checkbox" id="dossier-{{ loop.index }}" name="dossiers"
+      value="{{ ligne.dossier }}" {% if ligne.coche %}checked{% endif %}>
+    <label class="fr-label" for="dossier-{{ loop.index }}">{{ ligne.dossier }}
+      {% if ligne.nb_documents is not none %}({{ ligne.nb_documents }} documents — suggestion)
+      {% else %}(ajout manuel){% endif %}
+    </label>
+  </div>
+  {% else %}
+  <p>Aucune suggestion — le corpus n'est pas encore ingéré, ou aucun chemin
+    n'a pu être qualifié.</p>
+  {% endfor %}
+  <label class="fr-label" for="dossier_libre">Ajouter un dossier manuellement</label>
+  <input class="fr-input" id="dossier_libre" name="dossier_libre" placeholder="nom-du-dossier">
+  <button class="fr-btn" type="submit">Enregistrer l'association</button>
+</form>
+
+<p><a href="/projets">← Retour aux projets</a></p>
+{% endblock %}
