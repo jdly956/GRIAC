@@ -102,7 +102,9 @@ Critères d'acceptation :
 - [ ] Métadonnées inférées : projet (1er niveau du chemin), date (mtime + date dans le nom si présente), version (motifs `v\d+`, `VF`, `final`), statut brouillon (`draft`, `brouillon`, `WIP`)
 - [ ] L'inférence du champ `projet` est enregistrée comme **suggestion** : l'association faisant foi est celle confirmée par le PO via S1.11 (arbitrage A6, `docs/backlog-fonctionnel.md`)
 - [ ] Doublons détectés par hash ; versions regroupées par similarité de nom, la plus récente taguée `référence`
-- [ ] Jeu de fixtures piégé (spec_v1, spec_v2_final_VF3, copie conforme) correctement qualifié, couvert par tests unitaires
+- [x] Jeu de fixtures piégé (spec_v1, spec_v2_final_VF3, copie conforme) correctement qualifié, couvert par tests unitaires — `test_jeu_piege_correctement_qualifie` (TU verts)
+
+*Code livré le 02/07/2026 : `sia_ingestion/qualify.py` + `make ingest-qualify` (nœud C du DAG, fonction pure sans accès fichier), migration 0004 (colonne `projet_suggere` — nommée « suggérée » pour porter l'arbitrage A6 —, date_nom, version_no, marque_finale, statut_brouillon, groupe_version, est_reference, doublon_de). Règle de référence documentée : non-brouillon > version_no > marque finale > date (nom sinon mtime) ; doublons (même sha256) rattachés à un canonique et jamais référence ; `est_reference` alimentera le filtre « statut = référence » du RAG (E2). 9 TU (49 au total, verts). **CA 1–3 à cocher après le plan `docs/plans-test/s1.9-ingest-qualify.md` sur base réelle.***
 
 ## S1.10 — Intégration des gabarits internes (3 prompts SAFe)
 
