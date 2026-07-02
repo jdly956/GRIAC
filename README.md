@@ -50,6 +50,7 @@ make probe          # sonde Albert (S1.5) : modèles + quotas -> docs/albert-lim
 make ingest-scan CORPUS=<dossier>   # scan du corpus (S1.7) -> table documents + derived/inventaire.csv (DATABASE_URL requise)
 make ingest-parse CORPUS=<dossier>  # parsing docling (S1.8) -> derived/md/<sha256>.md + statuts en base
 make ingest-qualify                 # qualification v0 (S1.9) : métadonnées, doublons, versions, référence
+uv run --package sia-api python -m sia_api.gabarit <fichier.md>   # validateur de conformité US (S1.10)
 ```
 
 `make ingest` et `make eval` arrivent avec S1.7 et E6.

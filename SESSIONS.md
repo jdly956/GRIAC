@@ -14,6 +14,26 @@
 
 ---
 
+## Session 02/07/2026 (11) — S1.10 : gabarits internes — templates structurés & validateur
+
+**Contexte** : instruction référent « continue à coder les features à venir jusqu'à épuisement des crédits, puis demain TU et TNR Onyxia sur toute la session ». Direction : S1.10 (dernière story du sprint 1), puis poursuite sur E1/E2.
+
+**Travail livré** :
+- `api/sia_api/gabarit.py` — **source unique : le prompt 3** (relu intégralement avant extraction). Templates structurés en constantes : blocs récit (En tant que / Je veux / Afin de), blocs champs (Contexte, Écran/module, Parcours, Pré-requis, Règles métier, Maquettes), colonnes exactes du tableau Gherkin des CA (`# | Étant donné que… | Lorsque… | Alors…`), colonnes du tableau des stories candidates (étape 2), **10 critères DoR** + statuts ✅⚠️❌🔵 (étape 4), marqueur [HYPOTHÈSE À VALIDER], adverbes flous (règle 4).
+- `valider_us()` : entête, blocs présents et non vides, ≥1 attendu, tableau CA (colonnes exactes, ≥1 ligne, cellules complètes), ≥1 critère DSFR ; **hypothèses relevées mais jamais bloquantes** (A8) ; adverbes flous = avertissement non bloquant (le PO arbitre). `valider_dor()` : 10 critères, statuts valides, justifications, et **« estimée et revue en refinement » doit rester 🔵** (l'IA n'estime jamais à la place de l'équipe).
+- CLI `python -m sia_api.gabarit <fichier.md>` : rapport par story, exit ≠ 0 si non conforme — première surface exécutable, consommée demain par le plan de test.
+- 16 TU (fixtures = les 3 silver + US minimale + variantes dégradées + tableaux DoR construits) ; piège de regex corrigé en cours de route (`\s*` avalait le saut de ligne → `[ \t]*`).
+- Plan `docs/plans-test/s1.10-gabarit-validateur.md` (aucune base requise) ; README et backlog à jour.
+
+**Validation en session (réelle)** : CLI exécuté sur `evals/silver/stories-silver-candidates.md` → **3 × [CONFORME], 4/4/3 CA, 1/2/3 hypothèses relevées, exit 0**. `make lint` vert, **75 tests verts**. Le CA « gold » reste une dépendance externe (statu quo).
+
+**Mini-récap** :
+- ✅ Fait : S1.10 livrée — le sprint 1 est code-complet (11 stories) ; poursuite sur E1 (chunking)
+- ⏳ En cours : validations Onyxia de demain (TU/TNR + plans, session dédiée)
+- ⏳ À venir : E1 chunking + embeddings, E2 RAG — enchaînés cette session tant que possible
+
+---
+
 ## Session 02/07/2026 (10) — Incident : fuite de la clé dans le traceback de config (fix S1.4)
 
 **Contexte** : premier run consolidé des plans de test sur pod (référent). Le run a cascadé en échecs — cause racine : **toutes les commandes lancées depuis `~/work/GRIAC/api/`** au lieu de la racine (dérivés introuvables, `make` sans Makefile, uvicorn sans le `.env` racine, chemins helm cassés — le piège exact visé par la règle « commandes toujours préfixées » ; le « OK : 0 gpu » du run était vacueux, template en échec).
