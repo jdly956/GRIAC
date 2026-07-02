@@ -14,6 +14,26 @@
 
 ---
 
+## Session 02/07/2026 (3) — S1.5 : client Albert & sonde des limites (code)
+
+**Contexte** : même session remote que S1.4, branche `claude/backlog-continuation-6ftff4`. Direction : « go pour la suite du backlog » → S1.5, prochaine story dans l'ordre. La PR #4 (S1.4) était encore ouverte au moment du développement — arbitrage de livraison demandé au référent (une story = une PR).
+
+**Travail livré** :
+- `api/sia_api/albert.py` : `creer_client()` — client OpenAI pointé sur Albert, clé via `SecretStr` (S1.4), timeout et retries configurables par env (`ALBERT_TIMEOUT_S` défaut 30 s, `ALBERT_MAX_RETRIES` défaut 2, nouveaux champs Settings) ; aucun appel réseau à l'import.
+- `api/sia_api/probe.py` + cible `make probe` : 4 relevés — `GET /v1/models` (catalogue complet + tableau id/type/aliases/max_context_length), `GET /v1/me/info` (**seul l'objet `limits` est conservé** — jamais d'email/identifiant dans le rapport), appel de chat minimal (alias chat, latence), appel d'embeddings minimal (dimension attendue 1024 pour bge-m3). Une erreur sur un relevé n'interrompt pas les autres ; messages d'erreur **expurgés de la clé** (`_sans_cle`) ; rapport écrit dans `docs/albert-limits.md` ; exit 0 seulement si les 4 relevés sont ok.
+- 10 TU (Albert mocké, aucun appel réseau) : construction du client (base_url, timeouts par défaut et surchargés), sonde nominale + rapport, filtrage `limits`, avertissement si `limits` absent, panne réseau sans interruption des relevés suivants, expurgation de la clé des erreurs, affichage des échecs dans le rapport, timeout/retries dans la config.
+- `.env.example` et compose : variables `ALBERT_TIMEOUT_S`/`ALBERT_MAX_RETRIES` ; README : `make probe` ; plan de test `docs/plans-test/s1.5-albert-probe.md` (6 étapes, test négatif clé invalide AVANT le relevé nominal, rapport à committer en clôture).
+- openai ajouté aux dépendances api (httpx promu en dépendance runtime).
+
+**Validation en session** : `make lint` vert ; `make test` **23 tests verts**. Démonstration réelle de la gestion d'erreurs : `make probe` vers un hôte injoignable → rapport écrit, 4 relevés « échec — APIConnectionError/ConnectError » sans traceback, exit ≠ 0, clé factice absente du rapport (grep = 0). **L'exécution nominale exige le réseau Albert + la clé : à jouer sur le pod via le plan de test — c'est le test no-go n°1 (fenêtre effective et quotas, à comparer au budget 20k tokens).**
+
+**Mini-récap** :
+- ✅ Fait : S1.5 code complet (client + sonde + make probe), 10 TU, TNR verte, plan de test versionné
+- ⏳ En cours : arbitrage livraison (PR #4 encore ouverte) puis push ; exécution de `make probe` sur le pod
+- ⏳ À venir : rapport `docs/albert-limits.md` committé + verdict no-go n°1 consigné ; ensuite S1.3 (CI)
+
+---
+
 ## Session 02/07/2026 (2) — S1.4 : configuration & secrets
 
 **Contexte** : session remote (claude.ai/code), branche dédiée `claude/backlog-continuation-6ftff4`. Direction : « go pour la suite du backlog » → S1.4, prochaine story dans l'ordre (S1.1/S1.2 mergées, cf. en-tête précédent).

@@ -20,6 +20,9 @@ fmt: ## Corrige et formate le code (ruff)
 test: ## Lance les tests (pytest, tous les membres du workspace)
 	uv run --all-packages pytest
 
+probe: ## Sonde Albert (S1.5) : modèles servis + quotas + appels minimaux -> docs/albert-limits.md
+	uv run --package sia-api python -m sia_api.probe
+
 dev: ## Lance la stack locale (postgres+pgvector, migrate, api, web) et attend qu'elle soit saine
 	$(COMPOSE) up -d --build --wait
 
@@ -43,4 +46,4 @@ dev-validate: ## Preuves stack-live : /health api+web, extension pgvector (à co
 	curl -fsS http://localhost:8080/health && echo
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-sia} -d $${POSTGRES_DB:-sia} -c "select extname from pg_extension where extname = 'vector'"
 
-.PHONY: help install lint fmt test dev dev-down dev-logs dev-reset migrate psql dev-validate
+.PHONY: help install lint fmt test probe dev dev-down dev-logs dev-reset migrate psql dev-validate

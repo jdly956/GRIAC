@@ -48,6 +48,8 @@ services:
       ALBERT_MODEL_CHAT: ${ALBERT_MODEL_CHAT:-openweight-large}
       ALBERT_MODEL_EMBEDDINGS: ${ALBERT_MODEL_EMBEDDINGS:-openweight-embeddings}
       ALBERT_MODEL_RERANK: ${ALBERT_MODEL_RERANK:-openweight-rerank}
+      ALBERT_TIMEOUT_S: ${ALBERT_TIMEOUT_S:-30.0}
+      ALBERT_MAX_RETRIES: ${ALBERT_MAX_RETRIES:-2}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:

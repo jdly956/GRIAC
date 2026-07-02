@@ -58,6 +58,8 @@ Critères d'acceptation :
 - [ ] `make probe` : appelle `GET /v1/models` et `GET /v1/me/info`, écrit `/docs/albert-limits.md` (modèles, alias, fenêtres, limits TPM/TPD)
 - [ ] Un appel de chat minimal et un appel d'embedding réussissent ; erreurs réseau gérées
 
+*Code livré le 02/07/2026 : client `api/sia_api/albert.py` (timeouts/retries configurables `ALBERT_TIMEOUT_S`/`ALBERT_MAX_RETRIES`), sonde `api/sia_api/probe.py` + cible `make probe`, 10 TU (23 au total, verts). Gestion d'erreurs démontrée en réel (hôte injoignable : 4 relevés en échec propre sans traceback, exit ≠ 0, clé absente du rapport). **Les CA se cochent après l'exécution réelle sur le pod** (réseau Albert + clé requis) via `docs/plans-test/s1.5-albert-probe.md` — c'est le test no-go n°1 (fenêtre effective vs budget 20k tokens).*
+
 ## S1.6 — Charts Helm minimaux Onyxia
 
 En tant qu'architecte, je veux déployer la stack sur le SSP Cloud.
