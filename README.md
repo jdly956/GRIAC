@@ -47,6 +47,7 @@ make lint           # ruff check + format --check (obligatoire avant toute PR)
 make test           # pytest (obligatoire avant toute PR)
 make fmt            # correction/formatage automatique
 make probe          # sonde Albert (S1.5) : modèles + quotas -> docs/albert-limits.md (clé requise)
+make ingest-scan CORPUS=<dossier>   # scan du corpus (S1.7) -> table documents + derived/inventaire.csv (DATABASE_URL requise)
 ```
 
 `make ingest` et `make eval` arrivent avec S1.7 et E6.

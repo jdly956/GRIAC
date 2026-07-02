@@ -8,8 +8,7 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["api", "web"]
-# ingestion rejoindra le workspace avec S1.7.
+members = ["api", "web", "ingestion"]
 
 [dependency-groups]
 dev = [
@@ -32,4 +31,4 @@ known-first-party = ["sia_api", "sia_web", "sia_ingestion"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
-testpaths = ["tests", "api/tests", "web/tests"]
+testpaths = ["tests", "api/tests", "web/tests", "ingestion/tests"]

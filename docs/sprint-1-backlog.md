@@ -80,6 +80,8 @@ Critères d'acceptation :
 - [ ] Table `documents` alimentée par upsert sur hash ; relance = zéro doublon (idempotence)
 - [ ] Fixtures synthétiques dans `/evals/fixtures` (docx, pdf natif, pdf scanné, doublons, versions) ; inventaire CSV exporté
 
+*Code livré le 02/07/2026 : membre workspace `ingestion` (`sia_ingestion/scan.py`), migration 0002 (table `documents`, chemin UNIQUE = clé d'idempotence, index sha256 pour doublons S1.9 et reprise D9), `make ingest-scan`, 6 fixtures synthétiques (versions v1/v2_final_VF3, copie byte-à-byte, PDF natif/scanné, txt), export CSV, 7 TU (31 au total, verts). Choix documenté : upsert sur le **chemin relatif** (un fichier = une ligne, relance = zéro doublon) ; les doublons de contenu (même sha256) restent des lignes distinctes détectées par S1.9. `s3://` refusé explicitement tant que le snapshot MinIO n'existe pas (prérequis §7). **CA à cocher après exécution du plan `docs/plans-test/s1.7-ingest-scan.md` sur une base réelle** (mode A compose — lèverait aussi la réserve S1.2 — ou service PostgreSQL Onyxia).*
+
 ## S1.8 — Ingestion : parsing docling → markdown structuré
 
 En tant que système, je veux convertir docx et pdf en markdown structuré exploitable pour le chunking.
