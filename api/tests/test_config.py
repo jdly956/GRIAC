@@ -1,5 +1,7 @@
 """Tests S1.4 : config par l'environnement, échec propre sans clé, clé jamais en clair."""
 
+import traceback
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -91,6 +93,18 @@ def test_cle_jamais_en_clair(env_vierge) -> None:
     ]
     for rendu in rendus:
         assert "cle-ultra-secrete" not in rendu
+
+
+def test_traceback_echec_ne_contient_jamais_la_cle(env_vierge) -> None:
+    # Fuite constatée sur pod (02/07/2026) : quand la clé est présente mais qu'une
+    # autre variable manque, la ValidationError chaînée affichait input_value avec
+    # la clé en clair dans le traceback uvicorn. Le RuntimeError doit être orphelin.
+    env_vierge.setenv("ALBERT_API_KEY", "cle-ultra-secrete-fuite")
+    with pytest.raises(RuntimeError) as excinfo:
+        charger_settings()
+    rendu = "".join(traceback.format_exception(excinfo.value))
+    assert "cle-ultra-secrete-fuite" not in rendu
+    assert "ALBERT_BASE_URL" in str(excinfo.value)
 
 
 def test_demarrage_api_sans_cle_refuse(env_vierge) -> None:

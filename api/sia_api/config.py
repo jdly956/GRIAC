@@ -51,10 +51,13 @@ def charger_settings() -> Settings:
         return Settings()
     except ValidationError as exc:
         variables = sorted({str(erreur["loc"][0]).upper() for erreur in exc.errors()})
+        # `from None` obligatoire : la ValidationError chaînée affiche les
+        # input_value — donc la clé en clair si elle est présente pendant qu'une
+        # autre variable manque (fuite constatée sur pod le 02/07/2026).
         raise RuntimeError(
             "Configuration Albert invalide — variables d'environnement manquantes ou "
             f"vides : {', '.join(variables)}. En dev : copier .env.example vers .env "
             "puis renseigner la clé (cp .env.example .env). En déploiement : Secret "
             "Kubernetes (infra/k8s/secret-albert.example.yaml). La clé ne doit jamais "
             "figurer dans le repo ni dans les logs (CLAUDE.md)."
-        ) from exc
+        ) from None
