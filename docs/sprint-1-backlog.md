@@ -47,7 +47,7 @@ Critères d'acceptation :
 - [x] `.env.example` documenté, `.env` ignoré par git (+ exception `!.env.example`), template de Secret Kubernetes dans `infra/k8s/secret-albert.example.yaml`
 - [x] Démarrage sans clé = échec propre avec message explicite ; la clé n'apparaît jamais dans les logs — démontré en uvicorn réel (exit 3, variables nommées sans valeur ; `SecretStr` masqué, 0 occurrence de la clé dans les logs de démarrage)
 
-*Livrée le 02/07/2026 (branche `claude/backlog-continuation-6ftff4`). Validation stack-live en session : uvicorn réel sans config → refus avec message explicite ; avec config → `GET /health` 200 et clé absente des logs. 8 tests unitaires ajoutés (13 au total, verts) ; le service api du compose reçoit désormais les variables `ALBERT_*` (vide = refus de démarrer, visible via `docker compose logs api`).*
+*Livrée le 02/07/2026 (branche `claude/backlog-continuation-6ftff4`, PR #4). Validation stack-live en session : uvicorn réel sans config → refus avec message explicite ; avec config → `GET /health` 200 et clé absente des logs. 8 tests unitaires ajoutés (13 au total, verts) ; le service api du compose reçoit désormais les variables `ALBERT_*` (vide = refus de démarrer, visible via `docker compose logs api`). **Plan de test `docs/plans-test/s1.4-config-secrets.md` exécuté sur pod Onyxia le 02/07 : étapes 1–5 ✅** (13 tests verts, refus sans clé exit 3, refus variables vides, /health 200 par le bon process, 0 occurrence de la clé dans les logs) ; étape 7 (mode A) non jouée — réserve compose S1.2 inchangée. Découverte pod : `ALBERT_API_KEY` injectée dans l'environnement du pod, prime sur le `.env`.*
 
 ## S1.5 — Client Albert & sonde des limites
 
