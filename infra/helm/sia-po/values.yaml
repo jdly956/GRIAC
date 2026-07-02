@@ -1,0 +1,42 @@
+# Values par défaut pour le lab SSP Cloud (*.lab.sspcloud.fr) — S1.6.
+# Adapter <utilisateur> aux hostnames de votre espace ; procédure : docs/deploy-onyxia.md.
+# AUCUNE demande de GPU dans ce chart (contrainte CLAUDE.md) : l'inférence est sur Albert.
+
+images:
+  # Images construites depuis infra/docker/*.Dockerfile (cible runtime), à pousser
+  # vers un registre accessible du cluster (prérequis, cf. docs/deploy-onyxia.md).
+  api:
+    repository: sia-api
+    tag: latest
+  web:
+    repository: sia-web
+    tag: latest
+  pullPolicy: IfNotPresent
+
+albert:
+  # Secret Kubernetes portant ALBERT_BASE_URL / ALBERT_API_KEY (jamais dans le chart) :
+  # créé au préalable depuis infra/k8s/secret-albert.example.yaml (S1.4).
+  existingSecret: sia-albert
+
+postgres:
+  image: pgvector/pgvector:0.8.0-pg16
+  user: sia
+  # Mot de passe du LAB uniquement — surcharger à l'installation :
+  #   helm install ... --set postgres.password=<valeur>   (jamais commitée)
+  password: sia_lab
+  database: sia
+  storage: 2Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  apiHost: sia-api.<utilisateur>.lab.sspcloud.fr
+  webHost: sia-web.<utilisateur>.lab.sspcloud.fr
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
