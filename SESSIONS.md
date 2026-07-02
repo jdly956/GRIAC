@@ -14,6 +14,23 @@
 
 ---
 
+## Session 02/07/2026 (10) — Incident : fuite de la clé dans le traceback de config (fix S1.4)
+
+**Contexte** : premier run consolidé des plans de test sur pod (référent). Le run a cascadé en échecs — cause racine : **toutes les commandes lancées depuis `~/work/GRIAC/api/`** au lieu de la racine (dérivés introuvables, `make` sans Makefile, uvicorn sans le `.env` racine, chemins helm cassés — le piège exact visé par la règle « commandes toujours préfixées » ; le « OK : 0 gpu » du run était vacueux, template en échec).
+
+**🔴 Découverte de sécurité** : au démarrage raté d'uvicorn (clé présente dans l'env du pod, `ALBERT_BASE_URL` absente car `.env` hors cwd), **la ValidationError pydantic chaînée au RuntimeError affichait `input_value={'albert_api_key': '…'}` — la clé en clair dans les logs**, contournant SecretStr et le message qui ne nomme que les variables. Violation du CA3 de S1.4, détectée uniquement par l'exécution réelle.
+
+**Fix livré (PR #12)** : `charger_settings()` lève désormais `RuntimeError … from None` (cause supprimée — plus aucun input_value dans les tracebacks) + TU dédié rejouant le scénario exact (clé présente, base_url manquante → `traceback.format_exception` ne contient pas la clé). 60 tests verts. **Reproduction réelle avant/après en session** : uvicorn en échec de config avec clé factice → 0 occurrence dans la sortie.
+
+**Actions référent** : (1) **faire tourner la clé Albert** (exposée en partie dans le terminal du pod et un screenshot) puis mettre à jour l'env du pod / le `.env` ; (2) rejouer le bloc de validation consolidé — chaque étape re-préfixée `cd ~/work/GRIAC/` (transmis en session). Acquis conservé du run : `ingest-parse` réel sur pod = `1 ocr_requis, 0 échecs ; exit 0` (modèles docling téléchargés, parsing PDF fonctionnel).
+
+**Mini-récap** :
+- ✅ Fait : fuite corrigée (from None + TU), reproduction avant/après, PR #12
+- ⏳ En cours : rotation de la clé (référent) puis re-run du bloc consolidé depuis la racine
+- ⏳ À venir : S1.10 (dernière story du sprint)
+
+---
+
 ## Session 02/07/2026 (9) — S1.6 : charts Helm minimaux Onyxia (code)
 
 **Contexte** : même session remote, branche rebasée après merge de la PR #10 (« ok go »). Direction : suite du backlog → S1.6.
