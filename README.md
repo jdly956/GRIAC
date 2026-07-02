@@ -68,7 +68,7 @@ make dev-logs       # suivre les logs
 make dev-down       # arrêt (données conservées) ; make dev-reset pour repartir de zéro
 ```
 
-- **api** : http://localhost:8000 — `/health`, doc interactive sur `/docs`
+- **api** : http://localhost:8000 — `/health`, CRUD projets/NFR (S1.11 : `/projects`, `/dossiers/suggestions`), doc interactive sur `/docs`
 - **web** : http://localhost:8080 — page placeholder (bandeau « Ne collez pas de données personnelles »)
 - **postgres** : localhost:5432 (identifiants de dev substituables `sia`/`sia_dev`/`sia`, cf. `infra/compose.yaml`)
 

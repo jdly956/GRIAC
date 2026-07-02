@@ -123,8 +123,10 @@ En tant que PO, je veux créer un projet portant son contexte et ses NFR pour qu
 
 Critères d'acceptation :
 - [ ] Tables `projects` (nom, contexte libre) et `project_nfrs` (type parmi : performance, volumétrie, SSI, RGPD, accessibilité RGAA, disponibilité, auditabilité ; formulation vérifiable ; valeur cible optionnelle)
-- [ ] API CRUD minimale (création, lecture, mise à jour) couverte par tests — l'écran DSFR arrive avec E4
+- [x] API CRUD minimale (création, lecture, mise à jour) couverte par tests — l'écran DSFR arrive avec E4 — 10 TU verts (POST/GET/PUT, 404, 409 nom dupliqué, 422 type NFR, 503 sans DB)
 - [ ] Association explicite projet ↔ dossiers documentaires : table dédiée, éditable ; la suggestion inférée par S1.9 est proposée puis confirmée ou corrigée par le PO (arbitrage A6 — le champ `projet` des documents ingérés est rattachable à un projet existant via cette table)
+
+*Code livré le 02/07/2026 : migration 0005 (projects, project_nfrs avec CHECK sur les 7 types, project_dossiers UNIQUE(project_id, dossier) + origine po/suggestion), routes FastAPI `POST/GET/PUT /projects` + `GET /dossiers/suggestions` (expose les `projet_suggere` de S1.9 avec compteur et drapeau deja_associe — boucle A6), connexion par dépendance (`sia_api/db.py`, 503 explicite sans DATABASE_URL, démontré en uvicorn réel), DATABASE_URL fournie au service api du compose. 10 TU (59 au total, verts). **CA 1 et 3 à cocher après le plan `docs/plans-test/s1.11-projets.md` sur base réelle.***
 
 ---
 

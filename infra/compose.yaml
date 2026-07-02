@@ -40,6 +40,8 @@ services:
       dockerfile: infra/docker/api.Dockerfile
       target: dev
     environment:
+      # Routes projets (S1.11) : même URL que le conteneur migrate.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-sia}:${POSTGRES_PASSWORD:-sia_dev}@postgres:5432/${POSTGRES_DB:-sia}
       # Config Albert (S1.4), lue depuis l'environnement de l'hôte ou le .env à
       # la racine (cp .env.example .env). Vide => l'API refuse de démarrer avec
       # un message explicite, visible via `docker compose logs api`.
