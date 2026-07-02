@@ -139,6 +139,87 @@ def test_decision_hypothese_et_redirection(api) -> None:
     assert api.appels[0][2] == {"statut": "confirmee"}
 
 
+# --- S2.10 : feedback par story + télémétrie (E4.4) ---
+
+
+def test_panneau_de_notation_quand_des_stories_existent(api) -> None:
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
+    api.brancher("GET", "/workflows/1/stories", 200, ["Consulter mon dossier"])
+    reponse = client.get("/sessions/1")
+    assert reponse.status_code == 200
+    assert "Noter les stories" in reponse.text
+    assert "Consulter mon dossier" in reponse.text
+
+
+def test_pas_de_panneau_sans_stories(api) -> None:
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
+    api.brancher("GET", "/workflows/1/stories", 200, [])
+    reponse = client.get("/sessions/1")
+    assert reponse.status_code == 200
+    assert "Noter les stories" not in reponse.text
+
+
+def test_notation_envoie_le_feedback_et_redirige(api) -> None:
+    api.brancher("POST", "/workflows/1/feedback", 201, {"id": 12})
+    reponse = client.post(
+        "/sessions/1/feedback",
+        data={"story_titre": "Consulter mon dossier", "note": "4", "commentaire": "CA2 à revoir"},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    assert api.appels[0][2] == {
+        "story_titre": "Consulter mon dossier",
+        "note": 4,
+        "commentaire": "CA2 à revoir",
+    }
+
+
+def test_ecran_telemetrie_affiche_les_proxys(api) -> None:
+    api.brancher(
+        "GET",
+        "/telemetrie",
+        200,
+        {
+            "sessions_total": 10,
+            "actifs_hebdo": [{"semaine": "2026-06-29", "sessions": 4}],
+            "stories_notees": 5,
+            "note_moyenne": 4.2,
+            "pourcentage_conservees": 0.8,
+            "validations_total": 8,
+            "taux_edition": 0.25,
+        },
+    )
+    reponse = client.get("/telemetrie")
+    assert reponse.status_code == 200
+    assert "10 sessions au total" in reponse.text
+    assert "80.0" in reponse.text  # % conservées
+    assert "25.0" in reponse.text  # taux d'édition
+    assert "2026-06-29" in reponse.text
+
+
+def test_ecran_telemetrie_sans_donnees_reste_lisible(api) -> None:
+    api.brancher(
+        "GET",
+        "/telemetrie",
+        200,
+        {
+            "sessions_total": 0,
+            "actifs_hebdo": [],
+            "stories_notees": 0,
+            "note_moyenne": None,
+            "pourcentage_conservees": None,
+            "validations_total": 0,
+            "taux_edition": None,
+        },
+    )
+    reponse = client.get("/telemetrie")
+    assert reponse.status_code == 200
+    assert "aucune story notée" in reponse.text
+    assert "aucune validation" in reponse.text
+
+
 # --- Écrans S2.9 : projets (E4.2) et « mes documents » (E4.3) ---
 
 PROJET_DETAIL = {

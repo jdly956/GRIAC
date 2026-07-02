@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block titre %}Télémétrie{% endblock %}
+{% block contenu %}
+<h1>Télémétrie d'usage</h1>
+<p>Indicateurs v0 — proxys assumés : sans comptes (A7), les « actifs hebdo »
+  sont les sessions créées par semaine ; « conservée » = story notée ≥ 4 ;
+  « taux d'édition » = part des validations « Non » (itérations règle 5).</p>
+
+<div class="panneau">
+  <h2>Indicateurs</h2>
+  <ul>
+    <li>{{ telemetrie.sessions_total }} sessions au total</li>
+    <li>{{ telemetrie.stories_notees }} stories notées —
+      note moyenne : {{ telemetrie.note_moyenne if telemetrie.note_moyenne is not none else "—" }}</li>
+    <li>Stories conservées (note ≥ 4) :
+      {% if telemetrie.pourcentage_conservees is not none %}
+      {{ (telemetrie.pourcentage_conservees * 100) | round(1) }} %
+      {% else %}— (aucune story notée){% endif %}</li>
+    <li>Taux d'édition (itérations « Non ») :
+      {% if telemetrie.taux_edition is not none %}
+      {{ (telemetrie.taux_edition * 100) | round(1) }} %
+      sur {{ telemetrie.validations_total }} validations
+      {% else %}— (aucune validation){% endif %}</li>
+  </ul>
+</div>
+
+<div class="panneau">
+  <h2>Sessions par semaine (proxy « actifs hebdo »)</h2>
+  {% if telemetrie.actifs_hebdo %}
+  <table class="fr-table">
+    <thead><tr><th>Semaine du</th><th>Sessions</th></tr></thead>
+    <tbody>
+      {% for semaine in telemetrie.actifs_hebdo %}
+      <tr><td>{{ semaine.semaine }}</td><td>{{ semaine.sessions }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Aucune session pour l'instant.</p>
+  {% endif %}
+</div>
+{% endblock %}

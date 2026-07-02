@@ -77,12 +77,14 @@ def _page_session(
     if statut_etat != 200:
         return _page_erreur(request, statut_etat, etat)
     _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
+    _, stories = api_client.appeler("GET", f"/workflows/{session_id}/stories")
     return templates.TemplateResponse(
         request=request,
         name="session.html",
         context={
             "etat": etat,
             "messages": messages if isinstance(messages, list) else [],
+            "stories": stories if isinstance(stories, list) else [],
             "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
             "dernier_resultat": dernier_resultat,
             "erreur": erreur,
@@ -155,6 +157,34 @@ def decider_hypothese(
         json={"statut": statut},
     )
     return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+
+
+@app.post("/sessions/{session_id}/feedback")
+def noter_story(
+    session_id: int,
+    story_titre: Annotated[str, Form()],
+    note: Annotated[int, Form()],
+    commentaire: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    """Note 1-5 + commentaire par story (E4.4) — alimente la télémétrie."""
+    api_client.appeler(
+        "POST",
+        f"/workflows/{session_id}/feedback",
+        json={"story_titre": story_titre, "note": note, "commentaire": commentaire},
+    )
+    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+
+
+@app.get("/telemetrie", response_class=HTMLResponse)
+def ecran_telemetrie(request: Request) -> HTMLResponse:
+    statut, telemetrie = api_client.appeler("GET", "/telemetrie")
+    if statut != 200:
+        return _page_erreur(request, statut, telemetrie)
+    return templates.TemplateResponse(
+        request=request,
+        name="telemetrie.html",
+        context={"telemetrie": telemetrie},
+    )
 
 
 # --- Écran projets (E4.2, S2.9) ---

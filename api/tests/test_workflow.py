@@ -159,6 +159,15 @@ def test_validation_non_reste_sur_l_etape(brancher) -> None:
     )  # le commentaire du PO est conservé (itération règle 5)
 
 
+def test_validation_journalisee_pour_la_telemetrie(brancher) -> None:
+    # S2.10 : chaque Oui/Non entre dans workflow_validations — la part des
+    # « Non » est le proxy v0 du taux d'édition (E4.4).
+    connexion = brancher([(7, "redaction", None), [], (7, "redaction", None), []])
+    client.post("/workflows/7/avancer", json={"valide": False, "commentaire": "revoir"})
+    journal = [p for r, p in connexion.curseur.requetes if "INSERT INTO workflow_validations" in r]
+    assert journal == [{"id": 7, "etape": "redaction", "valide": False, "commentaire": "revoir"}]
+
+
 def test_decision_individuelle_leve_une_hypothese(brancher) -> None:
     connexion = brancher(
         [
