@@ -54,9 +54,11 @@ Critères d'acceptation :
 En tant qu'architecte, je veux relever la fenêtre effective et les quotas réels avant tout tuning (test no-go n°1 de la note, §6).
 
 Critères d'acceptation :
-- [ ] Client compatible OpenAI pointé sur Albert, timeouts et retries configurés
-- [ ] `make probe` : appelle `GET /v1/models` et `GET /v1/me/info`, écrit `/docs/albert-limits.md` (modèles, alias, fenêtres, limits TPM/TPD)
-- [ ] Un appel de chat minimal et un appel d'embedding réussissent ; erreurs réseau gérées
+- [x] Client compatible OpenAI pointé sur Albert, timeouts et retries configurés (`ALBERT_TIMEOUT_S`, `ALBERT_MAX_RETRIES`)
+- [x] `make probe` : appelle `GET /v1/models` et `GET /v1/me/info`, écrit `/docs/albert-limits.md` (modèles, alias, fenêtres, limits TPM/TPD) — exécuté sur pod, rapport committé (`bb3127c`)
+- [x] Un appel de chat minimal et un appel d'embedding réussissent (chat `OK`/`stop` en 0,27 s ; embeddings dim 1024 en 0,06 s) ; erreurs réseau gérées (démontré : hôte injoignable, clé invalide, 500 Albert)
+
+*Livrée le 02/07/2026 (PR #5). Plan de test `docs/plans-test/s1.5-albert-probe.md` exécuté sur pod : 4/4 relevés ok, exit 0, 0 fuite de clé. **Verdict no-go n°1 : GO** — fenêtre effective `openweight-large` (gpt-oss-120b) = **131 072 tokens** ≫ budget 20k (marge ×6,5) ; tpm 128 000 (~6 requêtes pleines/min), tpd 2,46 M (vigilance : ~120 requêtes pleines/jour) ; bge-m3 fenêtre 8192 (chunks 500–800 très à l'aise). Deux bugs découverts et corrigés par les runs réels : max_tokens vs modèles à raisonnement, `encoding_format="float"` obligatoire sur les embeddings (gotcha E1/E2).*
 
 ## S1.6 — Charts Helm minimaux Onyxia
 

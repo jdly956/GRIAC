@@ -43,6 +43,19 @@ def test_alias_surchargeables_par_env(env_vierge) -> None:
     assert charger_settings().albert_model_chat == "openweight-medium"
 
 
+def test_timeout_et_retries_par_defaut_et_surcharge(env_vierge) -> None:
+    env_vierge.setenv("ALBERT_BASE_URL", "https://albert.example/v1")
+    env_vierge.setenv("ALBERT_API_KEY", "cle-de-test")
+    settings = charger_settings()
+    assert settings.albert_timeout_s == 30.0
+    assert settings.albert_max_retries == 2
+    env_vierge.setenv("ALBERT_TIMEOUT_S", "5")
+    env_vierge.setenv("ALBERT_MAX_RETRIES", "0")
+    settings = charger_settings()
+    assert settings.albert_timeout_s == 5.0
+    assert settings.albert_max_retries == 0
+
+
 def test_cle_absente_echec_explicite(env_vierge) -> None:
     env_vierge.setenv("ALBERT_BASE_URL", "https://albert.example/v1")
     with pytest.raises(RuntimeError) as excinfo:

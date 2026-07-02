@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     albert_model_chat: str = "openweight-large"
     albert_model_embeddings: str = "openweight-embeddings"
     albert_model_rerank: str = "openweight-rerank"
+    # Réseau (S1.5) : appliqués au client Albert, surchargeables par env.
+    albert_timeout_s: float = 30.0
+    albert_max_retries: int = 2
 
     @field_validator("albert_base_url", "albert_api_key", mode="before")
     @classmethod
