@@ -5,10 +5,13 @@ description = "SIA PO — pipeline d'ingestion : scan, parsing, qualification, c
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "psycopg[binary]>=3.2",
+    "docling>=2.15",
+    "pypdf>=5",
 ]
 
-# docling, boto3 (S3/MinIO) et le client Albert (embeddings) rejoindront ces
-# dépendances avec S1.8+ ; S1.7 ne fait que scanner un dossier local.
+# docling est volontairement importé paresseusement (torch, lourd) : les TU ne
+# le chargent jamais. pypdf sert à détecter les PDF sans couche texte (S1.8).
+# boto3 (S3/MinIO) et le client Albert (embeddings) arrivent avec la suite d'E1.
 
 [build-system]
 requires = ["hatchling"]

@@ -87,10 +87,12 @@ Critères d'acceptation :
 En tant que système, je veux convertir docx et pdf en markdown structuré exploitable pour le chunking.
 
 Critères d'acceptation :
-- [ ] Conversion docx et pdf natifs : hiérarchie de titres préservée, tableaux jamais détruits
+- [ ] Conversion docx et pdf natifs : hiérarchie de titres préservée, tableaux jamais détruits — *docx démontré en session (docling réel : `##`/`###` + tableau markdown) ; pdf à démontrer sur pod (modèles docling téléchargés au 1er run, bloqués par le proxy de session)*
 - [ ] Dérivés `.md` stockés hors repo (dossier `derived/` ou S3) ; statut de parsing en base
 - [ ] Un document en échec n'interrompt pas le lot ; rapport d'échecs produit
 - [ ] PDF scannés détectés et marqués `ocr_requis` (traitement OCR = sprint 2)
+
+*Code livré le 02/07/2026 : `sia_ingestion/parse.py` + `make ingest-parse` (nœud B du DAG), migration 0003 (statut_parsing/chemin_derive/erreur_parsing/date_parsing), dérivés `derived/md/<sha256>.md` (reprise sur hash D9 : dérivé existant = pas de reconversion ; couvre aussi les doublons byte-à-byte), détection PDF sans couche texte par pypdf → `ocr_requis` AVANT docling (OCR docling désactivé — cohérent sprint 2), échec isolé → statut `echec` + rapport `derived/rapport-parsing.csv`, 9 TU (40 au total, verts — docling jamais chargé par les TU). Fixtures régénérées : PDF conformes (xref) dont un réellement sans texte, docx avec titres stylés + tableau. **CA à cocher après le plan `docs/plans-test/s1.8-ingest-parse.md` sur base réelle.***
 
 ## S1.9 — Ingestion : qualification v0 (métadonnées & versions)
 
