@@ -136,7 +136,8 @@ def assembler_chunks(blocs: list[Bloc]) -> list[Chunk]:
             )
         )
 
-    for bloc in [morceau for bloc in blocs for morceau in _scinder_bloc(bloc)]:
+    morceaux = [morceau for origine in blocs for morceau in _scinder_bloc(origine)]
+    for bloc in morceaux:
         taille_courante = estimer_tokens("\n\n".join(b.contenu for b in courant)) if courant else 0
         changement_de_section = courant and bloc.section != courant[0].section
         deborde = courant and taille_courante + estimer_tokens(bloc.contenu) > TOKENS_MAX
