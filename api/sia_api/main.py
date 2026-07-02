@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from sia_api.config import charger_settings
 from sia_api.projets import router as router_projets
 from sia_api.recherche import router as router_recherche
+from sia_api.workflows import router as router_workflows
 
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="SIA PO — API", lifespan=lifespan)
 app.include_router(router_projets)
 app.include_router(router_recherche)
+app.include_router(router_workflows)
 
 
 @app.get("/health")

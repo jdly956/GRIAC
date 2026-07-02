@@ -41,3 +41,13 @@ Critères d'acceptation :
 - [ ] Traçabilité : chaque chunk retenu porte document + section (citations obligatoires) ; signalement si aucune source récupérable
 
 *Code livré le 02/07/2026 : `POST /contexte` (recherche hybride → rerank `/v1/rerank` — schéma albert-api en HYPOTHÈSE, étape 0 du plan le vérifie par curl — → assemblage cité). **Repli sûr** : rerank indisponible ⇒ ordre RRF conservé + `rerank_applique: false` + avertissement (jamais d'échec silencieux). Budget chunks : 6 000 tokens (part du ≤ 20k global, gabarit/few-shot/brief à part), 15 candidats max, le 1er chunk toujours servi même hors budget (tableau géant S2.1). 9 TU (112 au total). CA à cocher via `docs/plans-test/s2.4-rerank-contexte.md`.*
+
+## S2.5 — E3.1 : machine à états du workflow + registre des hypothèses
+
+Critères d'acceptation :
+- [ ] États = étapes 0→5 du prompt 3 ; « Oui » avance, « Non » itère sur place (règle 5) ; synthèse terminale
+- [ ] Registre des hypothèses persistant avec marquage d'origine A3 (corpus / po / modèle) ; **une validation d'étape ne lève JAMAIS une hypothèse** — décision individuelle uniquement (règle 3, A8)
+- [ ] Synthèse (étape 5) : récapitulatif des hypothèses non levées, transmis à l'export (E5/A8) ; refusée avant l'étape finale
+- [ ] Garde-fou règle 1 : contrôle « 3 questions max par lot » disponible pour le moteur ; TU sans DB réelle
+
+*Code livré le 02/07/2026 : `sia_api/workflow.py` (machine PURE : transitions, extraction d'hypothèses via le marqueur S1.10, contrôle de lot), `sia_api/workflows.py` (sessions persistées : `POST/GET /workflows`, `/avancer`, `/hypotheses` + décision individuelle, `/synthese` avec avertissement A8), migration 0008 (3 tables, CHECK sur étapes/origines/statuts). 14 TU (126 au total). Le moteur conversationnel (Albert + `/contexte` à chaque étape, A2/A9) = **S2.6 (E3.2), prochaine story**. CA à cocher via `docs/plans-test/s2.5-workflow-etats.md`.*
