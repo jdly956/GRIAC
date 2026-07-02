@@ -1,0 +1,8 @@
+apiVersion: v2
+name: sia-po
+description: >-
+  SIA PO — assistant de rédaction de user stories (api FastAPI + web + PostgreSQL/pgvector).
+  Chart minimal pour le lab SSP Cloud (S1.6) ; aucun GPU (l'inférence est déportée sur Albert).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -69,7 +69,9 @@ En tant qu'architecte, je veux déployer la stack sur le SSP Cloud.
 Critères d'acceptation :
 - [ ] Chart Helm api + web + PostgreSQL, values adaptées au lab (`*.lab.sspcloud.fr`)
 - [ ] `helm template` valide ; procédure pas-à-pas dans `/docs/deploy-onyxia.md`
-- [ ] Aucune demande de GPU (contrainte CLAUDE.md)
+- [ ] Aucune demande de GPU (contrainte CLAUDE.md) — aucun `nvidia.com/gpu` ni équivalent dans le chart
+
+*Code livré le 02/07/2026 : chart `infra/helm/sia-po` (postgres+pgvector avec PVC et Secret, job de migrations en hook post-install/upgrade, api avec `envFrom` sur le Secret `sia-albert` de S1.4 + DATABASE_URL, web, Ingress api/web sur `*.lab.sspcloud.fr`, probes /health, aucun GPU), job CI `helm-chart` (helm lint + helm template — helm est indisponible en session, la CI est le validateur), procédure `docs/deploy-onyxia.md` (prérequis registre d'images + secret Albert, install/upgrade/uninstall, vérifications). **CA à cocher : CA2-rendu via le job CI vert sur la PR ; CA1 et le déploiement réel via le plan `docs/plans-test/s1.6-helm.md` sur le lab.***
 
 ## S1.7 — Ingestion : scan & inventaire du corpus
 

@@ -37,3 +37,13 @@ jobs:
         run: >
           docker build -f infra/docker/${{ matrix.service }}.Dockerfile
           --target runtime -t sia-${{ matrix.service }}:ci .
+
+  helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: helm lint
+        run: helm lint infra/helm/sia-po
+      - name: helm template (rendu complet, valeurs par défaut)
+        run: helm template sia-po infra/helm/sia-po
