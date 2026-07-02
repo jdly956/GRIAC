@@ -40,7 +40,7 @@ services:
       dockerfile: infra/docker/api.Dockerfile
       target: dev
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     volumes:
       # Seul le code source est monté — jamais le venv (il vit dans l'image).
       - ./api/sia_api:/app/api/sia_api
@@ -60,7 +60,8 @@ services:
       dockerfile: infra/docker/web.Dockerfile
       target: dev
     ports:
-      - "8080:8080"
+      # 8080 est occupé par code-server sur les pods VSCode Onyxia : WEB_PORT=8081 make dev
+      - "${WEB_PORT:-8080}:8080"
     volumes:
       - ./web/sia_web:/app/web/sia_web
     healthcheck:

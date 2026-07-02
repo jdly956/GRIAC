@@ -68,17 +68,20 @@ Consigner la sortie de `make dev-validate` dans `SESSIONS.md` (règle « validat
 Les images VSCode d'Onyxia n'embarquent généralement pas de daemon Docker : lancer les
 applications directement (le `/health` de l'api est sans dépendance DB, par conception) :
 
+⚠️ **Le port 8080 est occupé par code-server** (le VSCode web lui-même) sur ces pods :
+lancer le web sur **8081**. Un `401` en interrogeant 8080 = vous parlez à code-server.
+
 ```bash
 cd ~/work/GRIAC/
 uv run --package sia-api uvicorn sia_api.main:app --host 0.0.0.0 --port 8000 &
-uv run --package sia-web uvicorn sia_web.main:app --host 0.0.0.0 --port 8080 &
+uv run --package sia-web uvicorn sia_web.main:app --host 0.0.0.0 --port 8081 &
 
 curl -fsS http://localhost:8000/health   # {"status":"ok"}
-curl -fsS http://localhost:8080/health   # {"status":"ok"}
-curl -fsS http://localhost:8080/ | grep "Ne collez pas"   # bandeau D15 présent
+curl -fsS http://localhost:8081/health   # {"status":"ok"}
+curl -fsS http://localhost:8081/ | grep "Ne collez pas"   # bandeau D15 présent
 ```
 
-Accès navigateur : via l'URL du service VSCode, chemin `/proxy/8000/health` et `/proxy/8080/`
+Accès navigateur : via l'URL du service VSCode, chemin `/proxy/8000/health` et `/proxy/8081/`
 (le proxy Onyxia expose les ports du pod ; noter l'URL exacte au premier essai).
 
 Pour la base PostgreSQL en mode B : lancer un service **PostgreSQL** du catalogue Onyxia,
@@ -110,5 +113,6 @@ Ne jamais écrire l'URL ou le mot de passe dans un fichier versionné.
 | `WARN: … shadowed by other commands in your PATH` à l'installation d'uv | l'image du pod embarque déjà un uv | `export PATH="$HOME/.local/bin:$PATH" && hash -r`, ou garder le uv de l'image s'il est ≥ 0.8 |
 | `pytest: command not found` | environnement non activé | `cd ~/work/GRIAC/ && source .venv/bin/activate`, ou préfixer par `uv run` |
 | `make dev` échoue immédiatement | pas de daemon Docker | passer en mode B |
+| `[Errno 98] address already in use` sur 8080, ou `401` au curl | code-server occupe 8080 sur les pods VSCode | web sur 8081 (mode B) ; en mode A : `WEB_PORT=8081 make dev` |
 | hot-reload inopérant | inotify indisponible sur le pod | `export WATCHFILES_FORCE_POLLING=true` avant de lancer |
 | `DATABASE_URL absente` | migration lancée sans URL | fournir `DATABASE_URL` dans l'environnement du shell (jamais dans un fichier versionné) |
