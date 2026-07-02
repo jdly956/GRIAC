@@ -7,12 +7,11 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "jinja2>=3.1",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
 ]
 
-[dependency-groups]
-dev = [
-    "httpx>=0.27",
-]
+# httpx : client serveur -> api (E4) ; python-multipart : formulaires HTML.
 
 [build-system]
 requires = ["hatchling"]

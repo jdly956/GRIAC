@@ -1,18 +1,38 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SIA PO — assistant de rédaction de user stories</title>
-</head>
-<body>
-  <!-- Page placeholder S1.2 : l'interface DSFR/htmx arrive avec E4. -->
-  <header>
-    <p><strong>⚠️ Ne collez pas de données personnelles.</strong></p>
-  </header>
-  <main>
-    <h1>SIA PO — assistant de rédaction de user stories</h1>
-    <p>POC en construction (sprint 1). L'interface de rédaction arrive avec l'epic E4.</p>
-  </main>
-</body>
-</html>
+{% extends "base.html" %}
+{% block titre %}Accueil{% endblock %}
+{% block contenu %}
+<h1>Démarrer une session de rédaction</h1>
+
+{% if erreur %}
+<div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
+{% endif %}
+
+<form method="post" action="/sessions" class="panneau">
+  <h2>Nouvelle session (workflow prompt 3)</h2>
+  <label class="fr-label" for="projet_id">Projet (contexte &amp; NFR injectés dans la génération — E8)</label>
+  <select class="fr-select" id="projet_id" name="projet_id">
+    <option value="">— aucun projet —</option>
+    {% for projet in projets %}
+    <option value="{{ projet.id }}">{{ projet.nom }}</option>
+    {% endfor %}
+  </select>
+  <label class="fr-label" for="feature">Feature validée (issue du prompt 2) — collez-la ici</label>
+  <textarea class="fr-input" id="feature" name="feature" rows="8" required
+    placeholder="Description, hypothèse de gain, critères d'acceptation, NFR, dépendances…"></textarea>
+  <button class="fr-btn" type="submit">Créer la session</button>
+</form>
+
+<div class="panneau">
+  <h2>Projets ({{ projets | length }})</h2>
+  {% if projets %}
+  <ul>
+    {% for projet in projets %}
+    <li><strong>{{ projet.nom }}</strong> — {{ projet.contexte or "sans contexte" }}
+      ({{ projet.nfrs | length }} NFR, dossiers : {{ projet.dossiers | map(attribute="dossier") | join(", ") or "aucun" }})</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Aucun projet — créez-en un via l'API (<code>POST /projects</code>) ; l'écran projet complet arrive avec E4.2.</p>
+  {% endif %}
+</div>
+{% endblock %}
