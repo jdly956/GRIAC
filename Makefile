@@ -35,6 +35,9 @@ ingest-qualify: ## Qualification v0 (S1.9) : métadonnées, doublons, versions, 
 ingest-chunk: ## Chunking (E1, nœud D) : dérivés markdown -> table chunks (DATABASE_URL requise)
 	uv run --package sia-ingestion python -m sia_ingestion.chunk
 
+ingest-embed: ## Embeddings bge-m3 (E1, nœud E) : chunks -> pgvector (DATABASE_URL + clé Albert requises)
+	uv run --package sia-ingestion python -m sia_ingestion.embed
+
 dev: ## Lance la stack locale (postgres+pgvector, migrate, api, web) et attend qu'elle soit saine
 	$(COMPOSE) up -d --build --wait
 
@@ -58,4 +61,4 @@ dev-validate: ## Preuves stack-live : /health api+web, extension pgvector (à co
 	curl -fsS http://localhost:8080/health && echo
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-sia} -d $${POSTGRES_DB:-sia} -c "select extname from pg_extension where extname = 'vector'"
 
-.PHONY: help install lint fmt test probe ingest-scan ingest-parse ingest-qualify ingest-chunk dev dev-down dev-logs dev-reset migrate psql dev-validate
+.PHONY: help install lint fmt test probe ingest-scan ingest-parse ingest-qualify ingest-chunk ingest-embed dev dev-down dev-logs dev-reset migrate psql dev-validate
