@@ -75,9 +75,19 @@ def tester_chat(client: OpenAI, settings: Settings) -> dict[str, Any]:
 
 
 def tester_embeddings(client: OpenAI, settings: Settings) -> dict[str, Any]:
-    """Un appel d'embeddings minimal sur l'alias configuré."""
+    """Un appel d'embeddings minimal sur l'alias configuré.
+
+    encoding_format="float" obligatoire : le défaut du SDK OpenAI est base64,
+    non supporté par le serveur d'embeddings d'Albert (500 constaté sur pod,
+    curl sans le paramètre = 200). À reproduire sur TOUT appel d'embeddings
+    Albert via le SDK (ingestion E1 comprise).
+    """
     debut = time.perf_counter()
-    reponse = client.embeddings.create(model=settings.albert_model_embeddings, input="sonde SIA PO")
+    reponse = client.embeddings.create(
+        model=settings.albert_model_embeddings,
+        input="sonde SIA PO",
+        encoding_format="float",
+    )
     return {
         "alias_demande": settings.albert_model_embeddings,
         "modele_resolu": reponse.model,

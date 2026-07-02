@@ -50,12 +50,16 @@ class FauxClient:
                 )
             )
         )
-        self.embeddings = SimpleNamespace(
-            create=lambda **_: SimpleNamespace(
+        self.embeddings_appels: list[dict[str, Any]] = []
+
+        def _creer_embeddings(**kwargs: Any) -> Any:
+            self.embeddings_appels.append(kwargs)
+            return SimpleNamespace(
                 model="bge-m3",
                 data=[SimpleNamespace(embedding=[0.0] * 1024)],
             )
-        )
+
+        self.embeddings = SimpleNamespace(create=_creer_embeddings)
 
 
 class FausseReponseHttp:
@@ -73,11 +77,14 @@ def test_sonde_nominale_et_rapport(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         httpx, "get", lambda *_, **__: FausseReponseHttp({"limits": {"tpm": 100000}})
     )
-    donnees = executer_sonde(FauxClient(), _settings())  # type: ignore[arg-type]
+    client = FauxClient()
+    donnees = executer_sonde(client, _settings())  # type: ignore[arg-type]
 
     assert all(etape["statut"] == "ok" for etape in donnees["etapes"].values())
     assert donnees["etapes"]["embeddings"]["dimension"] == 1024
     assert donnees["etapes"]["chat"]["reponse"] == "OK"
+    # Albert ne supporte pas le base64 par défaut du SDK (500 constaté sur pod).
+    assert client.embeddings_appels[0]["encoding_format"] == "float"
 
     rapport = generer_rapport(donnees, "2026-07-02 00:00 UTC")
     assert "openweight-large" in rapport
