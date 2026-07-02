@@ -23,6 +23,8 @@
 - Branche `main` créée et poussée (accord utilisateur) ; bascule en branche par défaut à faire côté GitHub.
 - Cadrage : audit de cohérence des 4 documents (15 findings, dont 4 majeurs : référent, prompts absents, benchmark sans porteur, gold inatteignable par les seules silver), état des 11 prérequis externes, plan d'exécution S1.1/S1.2 (3 plans concurrents → jury → 12 corrections adversariales) livré au référent.
 - Dépôt des 3 prompts SAFe fournis par le référent dans `/api/prompts/` (prompt-1 Epic, prompt-2 Features, prompt-3 Stories) — S1.10 partiellement débloquée (restent : templates structurés, validateur, gold).
+- Cible fonctionnelle v2 arbitrée (9 arbitrages A1–A9) versionnée dans `docs/backlog-fonctionnel.md` + amendements induits (note §4, CLAUDE.md, backlog sprint 1) — PR #1 passée en revue.
+- **S1.1 livrée** (branche `feature/s1.1-init-repo`, plan validé « ok go ») : workspace uv (`pyproject.toml` racine, `.python-version` 3.12, `uv.lock`), `Makefile` (help/install/lint/fmt/test), `.gitignore`, `.editorconfig`, `.pre-commit-config.yaml` (ruff v0.15.20 aligné lock + hooks génériques + uv-lock), README, `tests/test_sanity.py`, `.gitkeep` (ingestion, web, infra, evals/gold). **Validation observée** : `make lint` vert (ruff check + format) et `make test` vert (2 tests, Python 3.12.3) dans le conteneur de session. Limite d'environnement : `pre-commit run --all-files` impossible en session (proxy git limité au repo du projet, 403 sur les dépôts de hooks) → à rejouer sur poste de dev ; hooks bien installés (`pre-commit install` OK), config validée (`validate-config`).
 
 **Validation stack-live** : sans objet (aucun code livré — documentation uniquement).
 

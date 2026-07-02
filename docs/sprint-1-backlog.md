@@ -13,9 +13,11 @@
 En tant que référent technique, je veux un repo initialisé avec l'arborescence cible pour que toute contribution parte d'un socle propre.
 
 Critères d'acceptation :
-- [ ] Arborescence `/ingestion /api /web /infra /evals /docs` créée, CLAUDE.md à la racine, note de cadrage dans `/docs`
-- [ ] `.gitignore` (env, caches, dérivés), README minimal, pre-commit avec ruff
-- [ ] `make lint` passe sur le repo vide
+- [x] Arborescence `/ingestion /api /web /infra /evals /docs` créée, CLAUDE.md à la racine, note de cadrage dans `/docs`
+- [x] `.gitignore` (env, caches, dérivés), README minimal, pre-commit avec ruff
+- [x] `make lint` passe sur le repo vide
+
+*Livrée le 02/07/2026 (branche `feature/s1.1-init-repo`) — `make lint` et `make test` verts (Python 3.12.3, ruff 0.15.20, pytest 9.1.1). `pre-commit run --all-files` à rejouer sur le poste de dev : le proxy git de la session Claude Code n'autorise que le repo du projet.*
 
 ## S1.2 — Environnement de dev conteneurisé
 

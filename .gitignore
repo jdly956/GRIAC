@@ -1,0 +1,21 @@
+# Environnements & secrets — jamais dans le repo (CLAUDE.md)
+.env
+.env.*
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+dist/
+*.egg-info/
+
+# Dérivés d'ingestion (S1.8) — stockés hors repo
+derived/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
