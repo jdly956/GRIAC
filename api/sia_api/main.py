@@ -1,8 +1,8 @@
-"""Point d'entrée de l'API SIA PO (S1.2, config S1.4).
+"""Point d'entrée de l'API SIA PO (S1.2, config S1.4, projets S1.11).
 
-Périmètre actuel : le seul endpoint /health, consommé par le healthcheck du
-compose (infra/compose.yaml) puis par les probes Kubernetes (S1.6). Les routes
-métier (RAG, génération, feedback, export) arrivent avec les epics E2-E5.
+Périmètre actuel : /health (healthcheck compose puis probes Kubernetes S1.6)
+et le CRUD projets/NFR (S1.11). Les routes métier RAG/génération/feedback/
+export arrivent avec les epics E2-E5.
 """
 
 from collections.abc import AsyncIterator
@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from sia_api.config import charger_settings
+from sia_api.projets import router as router_projets
 
 
 @asynccontextmanager
@@ -23,6 +24,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="SIA PO — API", lifespan=lifespan)
+app.include_router(router_projets)
 
 
 @app.get("/health")
