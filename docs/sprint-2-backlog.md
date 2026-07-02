@@ -39,3 +39,5 @@ Critères d'acceptation :
 - [ ] Rerank des candidats via `openweight-rerank` (bge-reranker-v2-m3)
 - [ ] Assemblage : 8–15 chunks, budget total ≤ 20 000 tokens (gabarit + few-shot + chunks + brief)
 - [ ] Traçabilité : chaque chunk retenu porte document + section (citations obligatoires) ; signalement si aucune source récupérable
+
+*Code livré le 02/07/2026 : `POST /contexte` (recherche hybride → rerank `/v1/rerank` — schéma albert-api en HYPOTHÈSE, étape 0 du plan le vérifie par curl — → assemblage cité). **Repli sûr** : rerank indisponible ⇒ ordre RRF conservé + `rerank_applique: false` + avertissement (jamais d'échec silencieux). Budget chunks : 6 000 tokens (part du ≤ 20k global, gabarit/few-shot/brief à part), 15 candidats max, le 1er chunk toujours servi même hors budget (tableau géant S2.1). 9 TU (112 au total). CA à cocher via `docs/plans-test/s2.4-rerank-contexte.md`.*
