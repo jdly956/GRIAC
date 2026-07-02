@@ -4,7 +4,7 @@
 
 ## État stratégique
 
-**Voie active** : sprint 1 — **S1.1, S1.2, S1.4, S1.5 et S1.3 livrées et mergées** (PRs #1–#6). S1.5 : **verdict no-go n°1 GO** (fenêtre gpt-oss-120b 131 072 ≫ budget 20k ; tpm 128k, **tpd 2,46 M = contrainte à surveiller** ; gotchas Albert consignés : max_tokens/raisonnement, **`encoding_format="float"` sur les embeddings SDK**). S1.3 : CI GitHub Actions démontrée verte sur la PR #6 ; **CA2 (protection de branche) = action référent en attente**. **S1.7 → S1.9 et S1.11 mergées (PRs #7–#10 — réserve commune : plans base réelle à jouer)** ; **S1.6 en cours de livraison (PR #11)** : chart Helm `sia-po` (postgres+pgvector, hook migrations, api consommant le Secret `sia-albert` S1.4, web, Ingress lab, zéro GPU) + job CI `helm-chart` (lint + template — helm indisponible en session) + `docs/deploy-onyxia.md`. **Plans S1.7 → S1.11 enchaînables sur la même base réelle** ; déploiement lab S1.6 = plan dédié (exige des images poussées en registre). Reste au sprint : S1.10 (templates + validateur). **Découverte pod : `ALBERT_API_KEY` est injectée dans l'environnement du pod et prime sur le `.env`** (ALBERT_BASE_URL vient du `.env`). **NB : `make dev` exige un `.env` renseigné** (comportement voulu S1.4). Règle de méthode active : « TU + TNR + plan de test avant toute livraison » (CLAUDE.md). Réserve S1.2 (compose complet) inchangée — étape 7 des plans de test, au plus tard S1.6. Pod de dev : prendre un service `vscode-python` **sans GPU** ; checklist premier login (maxima CPU/RAM, MinIO — action n°7) toujours à consigner. Bascule de la branche par défaut sur `main` : à vérifier dans les settings GitHub.
+**Voie active** : sprint 1 — **S1.1, S1.2, S1.4, S1.5 et S1.3 livrées et mergées** (PRs #1–#6). S1.5 : **verdict no-go n°1 GO** (fenêtre gpt-oss-120b 131 072 ≫ budget 20k ; tpm 128k, **tpd 2,46 M = contrainte à surveiller** ; gotchas Albert consignés : max_tokens/raisonnement, **`encoding_format="float"` sur les embeddings SDK**). S1.3 : CI GitHub Actions démontrée verte sur la PR #6 ; **CA2 (protection de branche) = action référent en attente**. **S1.7 → S1.9, S1.11 et S1.6 mergées (PRs #7–#11)** — S1.6 avec job CI `helm-chart` vert (helm lint + template) dès le premier run. **Il ne reste au sprint 1 que S1.10** (templates structurés + validateur de conformité US). **En attente côté référent** : (1) validations pod enchaînées — plans `docs/plans-test/` S1.7 (scan), S1.8 (parsing, dont PDF réel avec téléchargement des modèles docling), S1.9 (qualification), S1.11 (CRUD + boucle A6), rendu helm S1.6 — un seul pod + service PostgreSQL Onyxia suffit, commandes consolidées transmises en session ; (2) déploiement lab S1.6 (prérequis : images poussées en registre) ; (3) CA2 S1.3 — protection de branche sur `main` (checks désormais sélectionnables) ; (4) réserve compose S1.2 (mode A sur hôte Docker). Les CA non cochés des stories mergées se cochent au fil de ces validations. **Découverte pod : `ALBERT_API_KEY` est injectée dans l'environnement du pod et prime sur le `.env`** (ALBERT_BASE_URL vient du `.env`). **NB : `make dev` exige un `.env` renseigné** (comportement voulu S1.4). Règle de méthode active : « TU + TNR + plan de test avant toute livraison » (CLAUDE.md). Réserve S1.2 (compose complet) inchangée — étape 7 des plans de test, au plus tard S1.6. Pod de dev : prendre un service `vscode-python` **sans GPU** ; checklist premier login (maxima CPU/RAM, MinIO — action n°7) toujours à consigner. Bascule de la branche par défaut sur `main` : à vérifier dans les settings GitHub.
 
 **Réserves / dettes actées** : validation compose réelle (S1.2, voir ci-dessus) ; `pre-commit run --all-files` jamais exécuté de bout en bout (proxy des sessions Claude Code restreint ; hooks installés, config validée) — à jouer une fois sur le pod ; benchmark E6 et stories gold : statu quo (arbitrage du 02/07).
 
@@ -25,12 +25,14 @@
 - Plan de test `docs/plans-test/s1.6-helm.md`.
 - TU : sans objet (YAML) ; TNR : `make lint` + `make test` (59 verts) inchangés.
 
-**Validation** : rendu `helm lint`/`helm template` à observer **sur le job CI de la PR** ; déploiement réel sur le lab = plan de test (référent — exige des images poussées dans un registre).
+**Validation** : **job CI `helm-chart` VERT sur la PR #11 dès le premier run** (helm lint + helm template, run 28617979086) — CA « helm template valide » démontré, « aucun GPU » vérifiable dans les manifestes rendus. Déploiement réel sur le lab = plan de test (référent — exige des images poussées dans un registre).
+
+**Clôture de session (instruction référent : « clôture session et PR »)** : PR #11 mergée sur instruction après CI 4/4 verte ; commandes de validation pod consolidées transmises au référent (enchaînement des plans S1.7 → S1.11 + rendu helm S1.6 sur une seule session pod avec service PostgreSQL Onyxia).
 
 **Mini-récap** :
-- ✅ Fait : chart complet + job CI helm + procédure de déploiement
-- ⏳ En cours : CI de la PR (dont le nouveau job `helm-chart`) ; déploiement lab côté référent
-- ⏳ À venir : S1.10 (templates + validateur de conformité US) — dernière story du sprint
+- ✅ Fait : chart complet + job CI helm vert (CA2/CA3 ✅) + procédure de déploiement ; PR #11 mergée
+- ⏳ En cours : côté référent — validations pod (plans S1.7 → S1.11, rendu helm, déploiement lab), CA2 S1.3 (protection de branche)
+- ⏳ À venir : S1.10 (templates + validateur de conformité US) — dernière story du sprint 1
 
 ---
 
