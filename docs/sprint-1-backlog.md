@@ -86,6 +86,7 @@ En tant que PO, je veux que le système distingue documents de référence, brou
 
 Critères d'acceptation :
 - [ ] Métadonnées inférées : projet (1er niveau du chemin), date (mtime + date dans le nom si présente), version (motifs `v\d+`, `VF`, `final`), statut brouillon (`draft`, `brouillon`, `WIP`)
+- [ ] L'inférence du champ `projet` est enregistrée comme **suggestion** : l'association faisant foi est celle confirmée par le PO via S1.11 (arbitrage A6, `docs/backlog-fonctionnel.md`)
 - [ ] Doublons détectés par hash ; versions regroupées par similarité de nom, la plus récente taguée `référence`
 - [ ] Jeu de fixtures piégé (spec_v1, spec_v2_final_VF3, copie conforme) correctement qualifié, couvert par tests unitaires
 
@@ -107,7 +108,7 @@ En tant que PO, je veux créer un projet portant son contexte et ses NFR pour qu
 Critères d'acceptation :
 - [ ] Tables `projects` (nom, contexte libre) et `project_nfrs` (type parmi : performance, volumétrie, SSI, RGPD, accessibilité RGAA, disponibilité, auditabilité ; formulation vérifiable ; valeur cible optionnelle)
 - [ ] API CRUD minimale (création, lecture, mise à jour) couverte par tests — l'écran DSFR arrive avec E4
-- [ ] Le champ `projet` des documents ingérés (S1.9) est rattachable à un projet existant
+- [ ] Association explicite projet ↔ dossiers documentaires : table dédiée, éditable ; la suggestion inférée par S1.9 est proposée puis confirmée ou corrigée par le PO (arbitrage A6 — le champ `projet` des documents ingérés est rattachable à un projet existant via cette table)
 
 ---
 

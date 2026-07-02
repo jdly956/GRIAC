@@ -2,7 +2,7 @@
 
 ## Contexte
 
-Application interne pour Product Owners de l'administration française : génération de user stories conformes au gabarit interne, ancrées sur la documentation projet par RAG avec citations obligatoires, et mode Q&A documentaire. Le cadrage complet et le journal des 19 décisions (D1–D19) sont dans `/docs/note-cadrage-sia-po.md` : le lire avant toute tâche.
+Application interne pour Product Owners de l'administration française : génération de user stories conformes au gabarit interne, ancrées sur la documentation projet par RAG avec citations obligatoires, et question documentaire libre dans le fil de la rédaction (réponses sourcées). Principe directeur (arbitrage A1) : le PO n'interroge pas la documentation, c'est le LLM qui la mobilise via le RAG pour accompagner la rédaction. Le cadrage complet et le journal des 19 décisions (D1–D19) sont dans `/docs/note-cadrage-sia-po.md`, la cible fonctionnelle arbitrée (A1–A9) dans `/docs/backlog-fonctionnel.md` : les lire avant toute tâche.
 
 ## Contraintes non négociables
 
@@ -43,12 +43,12 @@ Python 3.12, FastAPI, docling (parsing Word/PDF), PostgreSQL 16 + pgvector, fron
 - **E0 Socle** : repo, CI, compose, Helm minimal, healthchecks.
 - **E1 Ingestion & qualification** : DAG de jobs conteneurisés idempotents (nœuds A→H, annexe A de la note) — lecture S3/MinIO, parsing docling + OCR Albert, métadonnées inférées (chemin, nom, dates, version), détection doublons/versions, chunking par sections de titres (500–800 tokens, chevauchement, tableaux jamais coupés), embeddings bge-m3 par lots, pgvector, rescan complet avec reprise sur hash (seuls les fichiers modifiés re-vectorisés ; embeddings de nuit si les quotas l'imposent), rapport de couverture.
 - **E2 RAG** : recherche hybride BM25 + vecteurs, filtres métadonnées (statut = référence), reranker bge-reranker-v2-m3, assemblage du contexte avec traçabilité des sources.
-- **E3 Moteur de rédaction (workflow prompt 3)** : machine à états (étapes 0→5 du prompt), interview, registre des [HYPOTHÈSE À VALIDER], génération des US au format exact, contrôle DoR automatisé, citations ; consomme le contexte et les NFR du projet (E8).
-- **E4 UI & feedback** : sélection du projet, conversation du workflow (étape courante, hypothèses en attente de validation), affichage sources, édition, note 1–5 + commentaire par story, télémétrie d'usage (actifs hebdo, % stories conservées, taux d'édition).
-- **E5 Export** : CSV compatible import Jira ; copier-coller formaté.
+- **E3 Moteur de rédaction (workflow prompt 3)** : machine à états (étapes 0→5 du prompt), interview, registre des [HYPOTHÈSE À VALIDER], génération des US au format exact, contrôle DoR automatisé, citations ; consomme le contexte et les NFR du projet (E8). Arbitrages A2/A3/A8/A9 : RAG mobilisé à chaque étape ; marquage d'origine de chaque élément (corpus cité / déclaré PO / hypothèse modèle) ; question libre dans le fil (même moteur, pas d'écran dédié) ; détection des divergences corpus↔PO signalées avec source, arbitrées par le PO ; récapitulatif des hypothèses non levées transmis à l'export.
+- **E4 UI & feedback** : sélection du projet, conversation du workflow (étape courante, hypothèses en attente de validation), affichage sources, édition, note 1–5 + commentaire par story, télémétrie d'usage (actifs hebdo, % stories conservées, taux d'édition). Arbitrages A3/A5/A6/A7 : panneau « sources mobilisées » avec extrait exact consultable ; écran « mes documents » (statuts : indexé, référence, obsolète, échec) + alerte conversationnelle de couverture faible ; écran projet avec sélection des dossiers documentaires ; instance partagée sans comptes au MVP.
+- **E5 Export** : CSV compatible import Jira ; copier-coller formaté. Arbitrage A8 : export autorisé avec hypothèses non levées, mais avec avertissement + récapitulatif joint.
 - **E6 Évals** : harnais de benchmark des modèles de chat (`openweight-large` = gpt-oss-120b vs `openweight-medium` = Mistral-Small-3.2 ; Mistral Medium propriétaire si accès ALLiaNCE), grille 3 axes (gabarit, exactitude, complétude), démarrage sur `/evals/silver/` puis recalibrage sur `/evals/gold/` dès fourniture + test de fenêtre de contexte effective et de débit d'embeddings sous quotas.
 - **E7 Prod (post go)** : agent connecteur Jira interne en flux sortant, auth ProConnect, charts prod.
-- **E8 Projets — contexte & NFR (prérequis d'E3)** : entité Projet (nom, contexte libre, NFR typées : performance, volumétrie, SSI, RGPD, accessibilité RGAA, disponibilité, auditabilité, avec valeur cible optionnelle), CRUD API + écran DSFR, injection dans le prompt système et pré-remplissage des blocs NFR de l'interview ; filtre du corpus par projet (métadonnée D7).
+- **E8 Projets — contexte & NFR (prérequis d'E3)** : entité Projet (nom, contexte libre, NFR typées : performance, volumétrie, SSI, RGPD, accessibilité RGAA, disponibilité, auditabilité, avec valeur cible optionnelle), CRUD API + écran DSFR, injection dans le prompt système et pré-remplissage des blocs NFR de l'interview ; filtre du corpus par projet. Arbitrage A6 : association projet ↔ dossiers documentaires explicite et éditable, sélectionnée par le PO ; l'inférence par chemin (S1.9/D7) n'est qu'une suggestion à confirmer.
 
 ## Environnement et outils
 
@@ -161,6 +161,7 @@ Une session n'est **close** que quand la documentation reflète l'état réel du
 ## Documents annexes
 
 - `docs/note-cadrage-sia-po.md` : note de cadrage (décisions D1–D19, architecture, annexe capacitaire)
+- `docs/backlog-fonctionnel.md` : cible fonctionnelle arbitrée (Epic, Features Bleu/Rouge, journal des arbitrages A1–A9)
 - `docs/sprint-1-backlog.md` : backlog opérationnel du sprint en cours (S1.1 → S1.11)
 - `SESSIONS.md` : état stratégique + journal détaillé des sessions (livrables, validations, découvertes)
 - `evals/silver/stories-silver-candidates.md` : candidates silver — fixtures S1.10 et few-shot provisoire
