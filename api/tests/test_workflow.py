@@ -205,3 +205,18 @@ def test_synthese_recapitule_les_hypotheses_non_levees(brancher) -> None:
 def test_session_inconnue_404(brancher) -> None:
     brancher([None])
     assert client.get("/workflows/99").status_code == 404
+
+
+def test_lecture_du_fil(brancher) -> None:
+    brancher(
+        [
+            (7, "interview", None),  # _lire_session (contrôle d'existence)
+            [],
+            [("po", "recuperation_feature", "Ma feature"), ("assistant", "interview", "Q1 ?")],
+        ]
+    )
+    reponse = client.get("/workflows/7/messages")
+    assert reponse.status_code == 200
+    fil = reponse.json()
+    assert [message["role"] for message in fil] == ["po", "assistant"]
+    assert fil[1]["contenu"] == "Q1 ?"

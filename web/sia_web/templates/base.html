@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr" data-fr-scheme="system">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titre %}SIA PO{% endblock %} — assistant de rédaction de user stories</title>
+  <!-- DSFR par CDN au MVP (à vendorer pour la prod, E7) ; styles de repli locaux ci-dessous. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12/dist/dsfr.min.css">
+  <style>
+    body { font-family: Marianne, arial, sans-serif; margin: 0; }
+    .conteneur { max-width: 60rem; margin: 0 auto; padding: 1rem; }
+    .fil-message { border: 1px solid #ddd; border-radius: .25rem; padding: .75rem; margin: .5rem 0; white-space: pre-wrap; }
+    .fil-po { background: #f5f5fe; }
+    .fil-assistant { background: #fff; }
+    .panneau { border: 1px solid #ccc; border-radius: .25rem; padding: .75rem; margin: 1rem 0; }
+    textarea { width: 100%; }
+  </style>
+</head>
+<body>
+  <header role="banner" class="fr-header">
+    <div class="conteneur">
+      <p><a href="/" title="Accueil">🏛️ <strong>SIA PO</strong></a> — assistant de rédaction de user stories</p>
+      <div class="fr-alert fr-alert--warning" role="alert">
+        <p><strong>⚠️ Ne collez pas de données personnelles.</strong> Données publiques ou internes non sensibles uniquement.</p>
+      </div>
+    </div>
+  </header>
+  <main role="main" class="conteneur">
+    {% block contenu %}{% endblock %}
+  </main>
+</body>
+</html>

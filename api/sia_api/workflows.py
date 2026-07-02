@@ -114,6 +114,29 @@ def lire_session(session_id: int, connexion: Connexion) -> EtatSession:
     return etat
 
 
+class MessageFil(BaseModel):
+    role: Literal["po", "assistant"]
+    etape: str
+    contenu: str
+
+
+@router.get("/workflows/{session_id}/messages")
+def lire_messages(session_id: int, connexion: Connexion) -> list[MessageFil]:
+    """Le fil de la conversation — consommé par l'écran E4."""
+    with connexion.cursor() as curseur:
+        if _lire_session(curseur, session_id) is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
+        curseur.execute(
+            "SELECT role, etape, contenu FROM workflow_messages "
+            "WHERE session_id = %(id)s ORDER BY id",
+            {"id": session_id},
+        )
+        return [
+            MessageFil(role=ligne[0], etape=ligne[1], contenu=ligne[2])
+            for ligne in curseur.fetchall()
+        ]
+
+
 @router.post("/workflows/{session_id}/avancer")
 def valider_etape(session_id: int, entree: ValidationEntree, connexion: Connexion) -> EtatSession:
     """Validation Oui/Non de l'étape (règle 5). Ne lève AUCUNE hypothèse (A8)."""

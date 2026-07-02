@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block titre %}Session {{ etat.id }}{% endblock %}
+{% block contenu %}
+<h1>Session {{ etat.id }} <span class="fr-badge fr-badge--info">{{ libelle_etape }}</span></h1>
+
+{% if erreur %}
+<div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
+{% endif %}
+
+<div class="panneau">
+  <h2>Hypothèses à valider ({{ etat.nb_en_attente }} en attente)</h2>
+  <p>Chaque hypothèse se lève <strong>individuellement</strong> — une validation d'étape ne lève rien (A8).</p>
+  {% if etat.hypotheses %}
+  <ul>
+    {% for hypothese in etat.hypotheses %}
+    <li>
+      <em>[{{ hypothese.origine }}]</em> {{ hypothese.texte }} — <strong>{{ hypothese.statut }}</strong>
+      {% if hypothese.statut == "en_attente" %}
+      <form method="post" action="/sessions/{{ etat.id }}/hypotheses/{{ hypothese.id }}" style="display:inline">
+        <button class="fr-btn fr-btn--sm" name="statut" value="confirmee">Confirmer</button>
+        <button class="fr-btn fr-btn--sm fr-btn--secondary" name="statut" value="rejetee">Rejeter</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Aucune hypothèse enregistrée pour l'instant.</p>
+  {% endif %}
+</div>
+
+<h2>Fil de la conversation</h2>
+{% for message in messages %}
+<div class="fil-message {{ 'fil-po' if message.role == 'po' else 'fil-assistant' }}">
+  <p><strong>{{ "PO" if message.role == "po" else "Assistant" }}</strong> <em>({{ message.etape }})</em></p>
+  <div>{{ message.contenu }}</div>
+</div>
+{% endfor %}
+
+{% if dernier_resultat %}
+<div class="panneau">
+  <h3>Dernier échange — traçabilité</h3>
+  {% if dernier_resultat.sources %}
+  <p><strong>Sources mobilisées (A3)</strong> :</p>
+  <ul>
+    {% for source in dernier_resultat.sources %}
+    <li>{{ source.nom }} — {{ source.section }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% for divergence in dernier_resultat.divergences %}
+  <div class="fr-alert fr-alert--warning" role="alert"><p>{{ divergence }} — c'est vous qui arbitrez (A9).</p></div>
+  {% endfor %}
+  {% for avertissement in dernier_resultat.avertissements %}
+  <div class="fr-alert fr-alert--info" role="alert"><p>{{ avertissement }}</p></div>
+  {% endfor %}
+  {% if dernier_resultat.hypotheses_ajoutees %}
+  <p><strong>{{ dernier_resultat.hypotheses_ajoutees | length }} hypothèse(s) ajoutée(s) au registre</strong> (à valider ci-dessus).</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<form method="post" action="/sessions/{{ etat.id }}/message" class="panneau">
+  <h2>Votre message</h2>
+  <p>Réponse d'interview, correction, ou <strong>question documentaire libre</strong> — même fil (A2).</p>
+  <textarea class="fr-input" name="message" rows="4" required></textarea>
+  <button class="fr-btn" type="submit">Envoyer</button>
+</form>
+
+<form method="post" action="/sessions/{{ etat.id }}/valider" class="panneau">
+  <h2>Valider l'étape ? (règle 5)</h2>
+  <label class="fr-label" for="commentaire">Commentaire (obligatoire si « Non »)</label>
+  <input class="fr-input" id="commentaire" name="commentaire" placeholder="précisez ce qu'il faut changer">
+  <button class="fr-btn" name="valide" value="oui">Oui — étape suivante</button>
+  <button class="fr-btn fr-btn--secondary" name="valide" value="non">Non — itérer</button>
+</form>
+
+<div class="panneau">
+  <h2>Export (E5)</h2>
+  <p>
+    <a class="fr-btn fr-btn--secondary" href="/sessions/{{ etat.id }}/export/csv">CSV Jira</a>
+    <a class="fr-btn fr-btn--secondary" href="/sessions/{{ etat.id }}/export/markdown">Copier-coller (markdown)</a>
+  </p>
+  <p>Export autorisé même avec des hypothèses non levées — le récapitulatif les accompagne (A8).</p>
+</div>
+{% endblock %}

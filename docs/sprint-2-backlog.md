@@ -70,3 +70,13 @@ Critères d'acceptation :
 - [ ] Aucune story rédigée → 409 explicite ; pas d'appel API Jira (D10 : Jira injoignable du dev)
 
 *Code livré le 02/07/2026 : `sia_api/export.py`, 8 TU (146 au total). Le CSV porte aussi l'en-tête `X-Hypotheses-Non-Levees`. CA à cocher via `docs/plans-test/s2.7-export.md` (après une session S2.6 réelle ayant produit des US).*
+
+## S2.8 — E4.1 : écran de conversation du workflow (web DSFR)
+
+Critères d'acceptation :
+- [ ] Accueil : sélection du projet + Feature collée → création de session (A6 : le projet porte ses dossiers confirmés)
+- [ ] Écran session : étape courante affichée (A5), fil de conversation, envoi de message (question libre comprise — A2), panneau **sources mobilisées** du dernier échange (A3), divergences A9 en alerte, avertissements affichés
+- [ ] Hypothèses : liste avec origine et statut, **décision individuelle Confirmer/Rejeter** (A8 rappelé à l'écran) ; validation d'étape Oui/Non (règle 5)
+- [ ] Exports E5 accessibles (proxy web → api) ; bandeau D15 sur toutes les pages ; **aucun JavaScript requis** (formulaires HTML) ; api injoignable → page/alerte lisible, jamais de traceback
+
+*Code livré le 02/07/2026 : `sia_web/api_client.py` (SIA_API_URL, timeout 120 s, erreurs 599 lisibles), routes + gabarits Jinja (base DSFR CDN + styles de repli, index, session, erreur), endpoint api `GET /workflows/{id}/messages` ajouté pour le fil. v1 assumée : sources/avertissements affichés dans la réponse du POST (non persistés côté UI). 9 TU web + 1 TU api (156 au total). Restent pour E4 : écran projet complet (E4.2), écran « mes documents » + alerte couverture (E4.3, A5), note 1–5 + télémétrie (E4.4). CA à cocher via `docs/plans-test/s2.8-ui-conversation.md`.*
