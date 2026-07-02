@@ -24,11 +24,11 @@
 - README : badge CI.
 - TU : sans objet (aucune fonction métier — workflow YAML) ; TNR : `make lint` + `make test` (24 verts) avant push.
 
-**Validation stack-live** : la CI ne se démontre que sur GitHub — checks de la PR de la story à observer verts (CA1), résultat à consigner ici. Protection de branche (CA2) : action référent.
+**Validation stack-live** : **CA1 démontré sur la PR #6 elle-même — 3 checks verts** (`lint-tests` en 11 s, `build-images (web)` en 13 s, `build-images (api)` en 19 s ; run GitHub Actions 28614129420 du 02/07/2026 18:52 UTC). CA2 (merge bloqué) : action référent — protection de branche, les 3 checks sont désormais sélectionnables ; limite plan Free documentée dans le plan de test.
 
 **Mini-récap** :
-- ✅ Fait : workflow CI + plan de test + badge ; TNR verte
-- ⏳ En cours : premiers runs de la CI sur la PR de la story ; activation de la protection de branche (référent)
+- ✅ Fait : workflow CI livré et démontré vert sur la PR #6 (CA1) ; plan de test + badge ; TNR verte
+- ⏳ En cours : CA2 — activation de la protection de branche par le référent (Settings → Branches)
 - ⏳ À venir : S1.7 (ingestion : scan & inventaire) selon l'ordre du backlog
 
 ---
