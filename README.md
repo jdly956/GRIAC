@@ -26,7 +26,27 @@ make test           # pytest (obligatoire avant toute PR)
 make fmt            # correction/formatage automatique
 ```
 
-`make dev` (stack docker compose), `make ingest` et `make eval` arrivent avec les stories S1.2, S1.7 et E6.
+`make ingest` et `make eval` arrivent avec S1.7 et E6.
+
+## Lancer la stack locale (S1.2)
+
+Prérequis : Docker avec daemon actif (poste local, ou pod avec docker — voir
+[`docs/init-pod-onyxia.md`](docs/init-pod-onyxia.md) pour le mode sans daemon).
+
+```bash
+make dev            # build + démarrage : postgres+pgvector -> migrate -> api -> web (attend l'état sain)
+make dev-validate   # preuves : /health api (8000) et web (8080), extension pgvector en base
+make dev-logs       # suivre les logs
+make dev-down       # arrêt (données conservées) ; make dev-reset pour repartir de zéro
+```
+
+- **api** : http://localhost:8000 — `/health`, doc interactive sur `/docs`
+- **web** : http://localhost:8080 — page placeholder (bandeau « Ne collez pas de données personnelles »)
+- **postgres** : localhost:5432 (identifiants de dev substituables `sia`/`sia_dev`/`sia`, cf. `infra/compose.yaml`)
+
+Cycle de dev : le code `api/sia_api/` et `web/sia_web/` est bind-monté avec hot-reload (< 1 s).
+Nouvelle dépendance ⇒ relancer `make dev` (rebuild). Hôtes sans inotify fiable :
+exporter `WATCHFILES_FORCE_POLLING=true`. Migrations : `make migrate` ; accès SQL : `make psql`.
 
 ## Structure du repo
 

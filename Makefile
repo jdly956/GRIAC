@@ -1,5 +1,7 @@
 .DEFAULT_GOAL := help
 
+COMPOSE := docker compose -f infra/compose.yaml --project-directory .
+
 help: ## Affiche les cibles disponibles
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
@@ -18,4 +20,27 @@ fmt: ## Corrige et formate le code (ruff)
 test: ## Lance les tests (pytest, tous les membres du workspace)
 	uv run --all-packages pytest
 
-.PHONY: help install lint fmt test
+dev: ## Lance la stack locale (postgres+pgvector, migrate, api, web) et attend qu'elle soit saine
+	$(COMPOSE) up -d --build --wait
+
+dev-down: ## Arrête la stack locale (conserve les données)
+	$(COMPOSE) down
+
+dev-logs: ## Suit les logs de la stack locale
+	$(COMPOSE) logs -f
+
+dev-reset: ## Arrête la stack et supprime les volumes (base réinitialisée)
+	$(COMPOSE) down -v
+
+migrate: ## (Re)joue les migrations Alembic dans la stack locale
+	$(COMPOSE) run --rm migrate
+
+psql: ## Ouvre psql dans le conteneur postgres
+	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-sia} -d $${POSTGRES_DB:-sia}
+
+dev-validate: ## Preuves stack-live : /health api+web, extension pgvector (à consigner dans SESSIONS.md)
+	curl -fsS http://localhost:8000/health && echo
+	curl -fsS http://localhost:8080/health && echo
+	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-sia} -d $${POSTGRES_DB:-sia} -c "select extname from pg_extension where extname = 'vector'"
+
+.PHONY: help install lint fmt test dev dev-down dev-logs dev-reset migrate psql dev-validate

@@ -24,9 +24,11 @@ Critères d'acceptation :
 En tant que développeur, je veux `make dev` pour lancer toute la stack localement.
 
 Critères d'acceptation :
-- [ ] docker-compose : PostgreSQL 16 + pgvector, api FastAPI (hot-reload), web
-- [ ] Migration initiale activant l'extension pgvector
-- [ ] `GET /health` répond 200 ; `make dev` documenté dans le README
+- [x] docker-compose : PostgreSQL 16 + pgvector, api FastAPI (hot-reload), web — *fichiers livrés et validés par `docker compose config` ; exécution réelle non démontrée, voir réserve*
+- [x] Migration initiale activant l'extension pgvector — *validée en mode offline (SQL généré, échec propre sans `DATABASE_URL`) ; application en base réelle non démontrée, voir réserve*
+- [x] `GET /health` répond 200 ; `make dev` documenté dans le README — *démontré en réel sur pod Onyxia : api 8000 et web 8081 → 200*
+
+*Livrée le 02/07/2026 (branche `feature/s1.2-dev-env`, mergée sur décision du référent). Validation stack-live sur pod Onyxia réel : `make install`/`lint`/`test` verts (5 tests), `GET /health` api et web = 200, bandeau D15 servi. **Réserve explicite acceptée par le référent** : la stack compose complète (`make dev` + `make dev-validate` — postgres+pgvector réel, conteneur migrate, hot-reload) reste à démontrer sur un hôte avec daemon Docker (absent du pod et de la session) ; à jouer à la première occasion ou au plus tard avec S1.6 (Helm). Procédure : `docs/init-pod-onyxia.md`.*
 
 ## S1.3 — CI minimale
 
