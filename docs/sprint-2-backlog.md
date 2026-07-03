@@ -90,3 +90,13 @@ Critères d'acceptation :
 - [ ] Écran « mes documents » (A5) : état du corpus, inventaire avec statuts libellés (indexé/échec/OCR requis/en attente), **alerte « couverture faible » si couverture < 0,8** ; api injoignable → page lisible
 
 *Code livré le 02/07/2026 : `sia_api/documents.py` (2 endpoints lecture seule sur la table `documents` de S1.7–S1.9), routes web `/projets`, `/projets/{id}`, `/projets/{id}/dossiers`, `/documents` + 3 gabarits Jinja + navigation dans `base.html`. Le volet conversationnel de l'alerte couverture (A5) est déjà porté par l'avertissement « aucune source récupérable » du moteur S2.6. 3 TU api + 7 TU web (166 au total). Reste pour E4 : note 1–5 + commentaire et télémétrie (E4.4). CA à cocher via `docs/plans-test/s2.9-ecrans-projet-documents.md`.*
+
+## S2.10 — E4.4 : feedback par story (note 1–5) + télémétrie d'usage
+
+Critères d'acceptation :
+- [ ] `POST /workflows/{id}/feedback` : note 1–5 (bornes contrôlées, 422 sinon) + commentaire par story ; `GET /workflows/{id}/stories` : titres des US produites (liste vide sans 409 tant que rien n'est rédigé)
+- [ ] Chaque validation Oui/Non d'étape est journalisée (`workflow_validations`) — matière première du taux d'édition
+- [ ] `GET /telemetrie` : les 3 indicateurs de CLAUDE.md en proxys v0 **assumés et affichés comme tels** (sans comptes A7 ni Jira D10) : actifs hebdo → sessions/semaine ; % stories conservées → part des notes ≥ 4 ; taux d'édition → part des « Non » (règle 5) ; aucune division par zéro sur base vide
+- [ ] Écran session : panneau « Noter les stories » (masqué sans US) ; écran « Télémétrie » ; navigation mise à jour
+
+*Code livré le 02/07/2026 : migration 0009 (`story_feedbacks`, `workflow_validations`), `sia_api/feedback.py`, journalisation ajoutée à `/avancer`, panneau de notation + écran télémétrie côté web. 8 TU api + 1 TU journalisation + 5 TU web (180 au total). CA à cocher via `docs/plans-test/s2.10-feedback-telemetrie.md`.*

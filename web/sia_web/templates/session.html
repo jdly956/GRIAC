@@ -75,6 +75,27 @@
   <button class="fr-btn fr-btn--secondary" name="valide" value="non">Non — itérer</button>
 </form>
 
+{% if stories %}
+<div class="panneau">
+  <h2>Noter les stories (E4.4)</h2>
+  <p>Note 1–5 + commentaire par story — alimente la télémétrie d'usage.</p>
+  {% for titre in stories %}
+  <form method="post" action="/sessions/{{ etat.id }}/feedback">
+    <input type="hidden" name="story_titre" value="{{ titre }}">
+    <p><strong>{{ titre }}</strong></p>
+    <select class="fr-select" name="note" aria-label="Note de « {{ titre }} »">
+      {% for note in [5, 4, 3, 2, 1] %}
+      <option value="{{ note }}">{{ note }}</option>
+      {% endfor %}
+    </select>
+    <input class="fr-input" name="commentaire" placeholder="Commentaire (optionnel)"
+      aria-label="Commentaire sur « {{ titre }} »">
+    <button class="fr-btn fr-btn--sm" type="submit">Noter</button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="panneau">
   <h2>Export (E5)</h2>
   <p>

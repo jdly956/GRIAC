@@ -149,6 +149,18 @@ def valider_etape(session_id: int, entree: ValidationEntree, connexion: Connexio
             "UPDATE workflow_sessions SET etape = %(etape)s, modifie_le = now() WHERE id = %(id)s",
             {"id": session_id, "etape": nouvelle_etape},
         )
+        # Journal des Oui/Non (S2.10) : la part des « Non » sert de proxy v0
+        # au taux d'édition de la télémétrie E4.4.
+        curseur.execute(
+            "INSERT INTO workflow_validations (session_id, etape, valide, commentaire) "
+            "VALUES (%(id)s, %(etape)s, %(valide)s, %(commentaire)s)",
+            {
+                "id": session_id,
+                "etape": etat.etape,
+                "valide": entree.valide,
+                "commentaire": entree.commentaire,
+            },
+        )
         if entree.commentaire:
             curseur.execute(
                 "INSERT INTO workflow_messages (session_id, role, etape, contenu) "
