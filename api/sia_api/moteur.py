@@ -18,6 +18,7 @@ moteur, pas d'écran dédié). À chaque message, le moteur :
    (règle 1, budget, aucune source, repli rerank) — jamais d'échec silencieux.
 """
 
+import re
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -26,7 +27,7 @@ from pydantic import BaseModel, Field
 
 from sia_api.config import Settings
 from sia_api.db import get_connexion
-from sia_api.gabarit import extraire_stories_us
+from sia_api.gabarit import extraire_stories_us, valider_dor, valider_us
 from sia_api.recherche import (
     RechercheEntree,
     SourceCitee,
@@ -54,6 +55,61 @@ def estimer_tokens(texte: str) -> int:
 def extraire_divergences(texte: str) -> list[str]:
     """Lignes [DIVERGENCE] corpus↔PO — signalées avec source, arbitrées par le PO (A9)."""
     return [ligne.strip() for ligne in texte.splitlines() if MARQUEUR_DIVERGENCE in ligne]
+
+
+ETAPES_AVEC_STORIES = ("redaction", "controle_dor", "synthese")
+
+
+def _titre_us(story: str) -> str:
+    correspondance = re.search(r"\*\*US — (.+?)\*\*", story)
+    return correspondance.group(1) if correspondance else "(sans titre)"
+
+
+def _extraire_tableau_dor(contenu: str) -> str:
+    """Isole le tableau DoR : un message d'étape 4 contient aussi des tableaux de CA."""
+    lignes = contenu.splitlines()
+    debut = next(
+        (
+            i
+            for i, ligne in enumerate(lignes)
+            if ligne.strip().startswith("|") and "critère dor" in ligne.lower()
+        ),
+        None,
+    )
+    if debut is None:
+        return ""
+    fin = debut
+    while fin < len(lignes) and lignes[fin].strip().startswith("|"):
+        fin += 1
+    return "\n".join(lignes[debut:fin])
+
+
+def controler_conformite(etape: str, contenu: str) -> list[str]:
+    """Contrôle automatisé S1.10 en sortie des étapes de production (E3, DoR auto).
+
+    - étapes rédaction/contrôle DoR/synthèse : chaque US extraite passe par
+      `valider_us` (le modèle s'auto-contrôle mal — le validateur tranche) ;
+    - étape contrôle DoR : le tableau DoR (isolé des tableaux de CA) passe par
+      `valider_dor` (10 critères, statuts, « estimée en refinement » toujours 🔵).
+    Signalé au PO dans les avertissements, jamais bloquant : c'est lui qui
+    valide ou itère (règle 5).
+    """
+    rapports: list[str] = []
+    if etape in ETAPES_AVEC_STORIES:
+        for story in extraire_stories_us(contenu):
+            rapport = valider_us(story)
+            if not rapport.conforme:
+                rapports.append(
+                    f"Contrôle gabarit (S1.10) — US « {_titre_us(story)} » non conforme : "
+                    + " ; ".join(rapport.violations)
+                )
+    if etape == "controle_dor":
+        rapport_dor = valider_dor(_extraire_tableau_dor(contenu))
+        if not rapport_dor.conforme:
+            rapports.append(
+                "Contrôle DoR automatisé (étape 4) : " + " ; ".join(rapport_dor.violations)
+            )
+    return rapports
 
 
 def charger_few_shot() -> tuple[str, str] | None:
@@ -229,6 +285,9 @@ def message_route(
         # Règle 1 : signalée, jamais bloquée silencieusement.
         if etape == "interview":
             avertissements += verifier_lot_interview(contenu_reponse)
+
+        # Contrôle DoR/gabarit automatisé (E3) : signalé, le PO arbitre (règle 5).
+        avertissements += controler_conformite(etape, contenu_reponse)
 
         curseur.execute(
             "INSERT INTO workflow_messages (session_id, role, etape, contenu) "

@@ -9,10 +9,12 @@ from fastapi.testclient import TestClient
 import sia_api.moteur as moteur
 from sia_api.config import Settings
 from sia_api.db import get_connexion
+from sia_api.gabarit import CRITERE_DOR_REFINEMENT, CRITERES_DOR
 from sia_api.main import app
 from sia_api.moteur import (
     charger_few_shot,
     construire_prompt_systeme,
+    controler_conformite,
     extraire_divergences,
 )
 from sia_api.recherche import ContexteResultat, SourceCitee, get_albert
@@ -244,3 +246,69 @@ def test_reponse_vide_erreur_explicite(brancher) -> None:
 def test_session_inconnue_404(brancher) -> None:
     brancher([None], "peu importe")
     assert client_http.post("/workflows/99/message", json={"message": "?"}).status_code == 404
+
+
+# --- contrôle DoR/gabarit automatisé (S2.12, pur) ---
+
+FICHIER_SILVER = moteur.FICHIER_SILVER
+
+
+def _story_conforme() -> str:
+    from sia_api.gabarit import extraire_stories_us
+
+    return extraire_stories_us(FICHIER_SILVER.read_text(encoding="utf-8"))[0]
+
+
+def _tableau_dor_conforme() -> str:
+    lignes = ["| Critère DoR | Statut | Justification |", "|---|---|---|"]
+    for critere in CRITERES_DOR:
+        statut = "🔵" if critere == CRITERE_DOR_REFINEMENT else "✅"
+        lignes.append(f"| {critere} | {statut} | vérifié en session |")
+    return "\n".join(lignes)
+
+
+def test_controle_conformite_silencieux_quand_tout_est_conforme() -> None:
+    contenu = f"---\n{_story_conforme()}\n---\n\n{_tableau_dor_conforme()}"
+    assert controler_conformite("controle_dor", contenu) == []
+
+
+def test_controle_gabarit_signale_une_story_bancale() -> None:
+    contenu = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    rapports = controler_conformite("redaction", contenu)
+    assert len(rapports) == 1
+    assert "Story bancale" in rapports[0] and "Contrôle gabarit" in rapports[0]
+
+
+def test_controle_dor_signale_le_tableau_absent() -> None:
+    contenu = f"---\n{_story_conforme()}\n---"  # le tableau de CA ne fait pas illusion
+    rapports = controler_conformite("controle_dor", contenu)
+    assert len(rapports) == 1
+    assert "Contrôle DoR automatisé" in rapports[0] and "absent" in rapports[0]
+
+
+def test_controle_dor_refinement_doit_rester_bleu() -> None:
+    tableau = _tableau_dor_conforme().replace(
+        f"| {CRITERE_DOR_REFINEMENT} | 🔵 |", f"| {CRITERE_DOR_REFINEMENT} | ✅ |"
+    )
+    rapports = controler_conformite("controle_dor", tableau)
+    assert any("🔵" in r for r in rapports)
+
+
+def test_pas_de_controle_hors_etapes_de_production() -> None:
+    contenu = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    assert controler_conformite("interview", contenu) == []
+
+
+def test_route_remonte_les_controles_en_avertissements(brancher) -> None:
+    script = [
+        ("controle_dor", None, "Ma Feature"),  # session à l'étape 4
+        [("po", "Ma Feature")],  # historique
+        [],  # hypothèses connues
+    ]
+    reponse = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    brancher(script, reponse)
+    http = client_http.post("/workflows/7/message", json={"message": "contrôle la DoR"})
+    assert http.status_code == 200
+    avertissements = http.json()["avertissements"]
+    assert any("Contrôle gabarit" in a and "Story bancale" in a for a in avertissements)
+    assert any("Contrôle DoR automatisé" in a for a in avertissements)
