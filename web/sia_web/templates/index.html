@@ -7,7 +7,7 @@
 <div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
 {% endif %}
 
-<form method="post" action="/sessions" class="panneau">
+<form method="post" action="{{ racine }}/sessions" class="panneau">
   <h2>Nouvelle session (workflow prompt 3)</h2>
   <label class="fr-label" for="projet_id">Projet (contexte &amp; NFR injectés dans la génération — E8)</label>
   <select class="fr-select" id="projet_id" name="projet_id">
@@ -32,7 +32,7 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p>Aucun projet — <a href="/projets">créez-en un sur l'écran projets</a>.</p>
+  <p>Aucun projet — <a href="{{ racine }}/projets">créez-en un sur l'écran projets</a>.</p>
   {% endif %}
 </div>
 {% endblock %}

@@ -7,6 +7,14 @@ au MVP (à vendorer pour la prod, E7) avec des styles de repli locaux : la page
 reste utilisable hors ligne. v1 assumée : les sources/avertissements du dernier
 échange sont affichés dans la réponse du POST (non persistés côté UI) — au
 rechargement, seul le fil (persisté par l'api) demeure.
+
+Préfixe de chemin : liens et redirections portent le `root_path` ASGI
+(`{{ racine }}` dans les templates), pour servir l'app derrière un proxy à
+préfixe — cas constaté sur pod Onyxia (03/07/2026) : le port 8081 n'est pas
+exposable (RBAC), l'UI passe par le proxy code-server `/proxy/8081/` où les
+chemins absolus cassaient la navigation. Lancement : `uvicorn --root-path
+/proxy/8081 …` ; à la racine (prod Helm, dev compose), root_path vide = liens
+inchangés.
 """
 
 from pathlib import Path
@@ -19,7 +27,25 @@ from fastapi.templating import Jinja2Templates
 from sia_web import api_client
 
 app = FastAPI(title="SIA PO — Web")
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+
+def _contexte_racine(request: Request) -> dict[str, str]:
+    """`{{ racine }}` : root_path ASGI sans slash final ("" à la racine)."""
+    return {"racine": request.scope.get("root_path", "").rstrip("/")}
+
+
+templates = Jinja2Templates(
+    directory=str(Path(__file__).parent / "templates"),
+    context_processors=[_contexte_racine],
+)
+
+
+def _rediriger(request: Request, chemin: str) -> RedirectResponse:
+    """Redirection 303 qui conserve le préfixe root_path (proxy code-server)."""
+    return RedirectResponse(
+        request.scope.get("root_path", "").rstrip("/") + chemin, status_code=303
+    )
+
 
 ETAPES_LIBELLES = {
     "recuperation_feature": "0 — Récupération de la Feature",
@@ -107,13 +133,13 @@ def index(request: Request) -> HTMLResponse:
 
 @app.post("/sessions")
 def creer_session(
-    feature: Annotated[str, Form()], projet_id: Annotated[str, Form()] = ""
+    request: Request, feature: Annotated[str, Form()], projet_id: Annotated[str, Form()] = ""
 ) -> RedirectResponse:
     corps = {"feature": feature, "projet_id": int(projet_id) if projet_id else None}
     statut, session = api_client.appeler("POST", "/workflows", json=corps)
     if statut != 201:
-        return RedirectResponse("/", status_code=303)
-    return RedirectResponse(f"/sessions/{session['id']}", status_code=303)
+        return _rediriger(request, "/")
+    return _rediriger(request, f"/sessions/{session['id']}")
 
 
 @app.get("/sessions/{session_id}", response_class=HTMLResponse)
@@ -135,6 +161,7 @@ def envoyer_message(
 
 @app.post("/sessions/{session_id}/valider")
 def valider_etape(
+    request: Request,
     session_id: int,
     valide: Annotated[str, Form()],
     commentaire: Annotated[str, Form()] = "",
@@ -144,23 +171,24 @@ def valider_etape(
         f"/workflows/{session_id}/avancer",
         json={"valide": valide == "oui", "commentaire": commentaire},
     )
-    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+    return _rediriger(request, f"/sessions/{session_id}")
 
 
 @app.post("/sessions/{session_id}/hypotheses/{hypothese_id}")
 def decider_hypothese(
-    session_id: int, hypothese_id: int, statut: Annotated[str, Form()]
+    request: Request, session_id: int, hypothese_id: int, statut: Annotated[str, Form()]
 ) -> RedirectResponse:
     api_client.appeler(
         "POST",
         f"/workflows/{session_id}/hypotheses/{hypothese_id}",
         json={"statut": statut},
     )
-    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+    return _rediriger(request, f"/sessions/{session_id}")
 
 
 @app.post("/sessions/{session_id}/feedback")
 def noter_story(
+    request: Request,
     session_id: int,
     story_titre: Annotated[str, Form()],
     note: Annotated[int, Form()],
@@ -172,7 +200,7 @@ def noter_story(
         f"/workflows/{session_id}/feedback",
         json={"story_titre": story_titre, "note": note, "commentaire": commentaire},
     )
-    return RedirectResponse(f"/sessions/{session_id}", status_code=303)
+    return _rediriger(request, f"/sessions/{session_id}")
 
 
 @app.get("/telemetrie", response_class=HTMLResponse)
@@ -236,7 +264,7 @@ def creer_projet(
     statut, projet = api_client.appeler("POST", "/projects", json=corps)
     if statut != 201:
         return _page_projets(request, erreur=projet.get("detail", "création impossible"))
-    return RedirectResponse(f"/projets/{projet['id']}", status_code=303)
+    return _rediriger(request, f"/projets/{projet['id']}")
 
 
 @app.get("/projets/{projet_id}", response_class=HTMLResponse)
@@ -295,7 +323,7 @@ def associer_dossiers(
         ],
     }
     api_client.appeler("PUT", f"/projects/{projet_id}", json=corps)
-    return RedirectResponse(f"/projets/{projet_id}", status_code=303)
+    return _rediriger(request, f"/projets/{projet_id}")
 
 
 # --- Écran « mes documents » (E4.3, S2.9, arbitrage A5) ---

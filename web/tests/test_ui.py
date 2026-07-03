@@ -79,6 +79,21 @@ def test_creation_de_session_redirige_vers_le_fil(api) -> None:
     assert api.appels[0][2] == {"feature": "Ma feature", "projet_id": 1}
 
 
+def test_prefixe_root_path_porte_liens_et_redirections(api) -> None:
+    # Proxy à préfixe (code-server /proxy/8081/ sur pod Onyxia, 03/07/2026) :
+    # liens des templates et Location des redirections doivent porter le root_path.
+    client_prefixe = TestClient(app, root_path="/proxy/8081")
+    api.brancher("GET", "/projects", 200, [])
+    reponse = client_prefixe.get("/")
+    assert 'href="/proxy/8081/projets"' in reponse.text
+    assert 'action="/proxy/8081/sessions"' in reponse.text
+    api.brancher("POST", "/workflows", 201, {"id": 7})
+    redirection = client_prefixe.post(
+        "/sessions", data={"feature": "Ma feature"}, follow_redirects=False
+    )
+    assert redirection.headers["location"] == "/proxy/8081/sessions/7"
+
+
 def test_ecran_session_affiche_fil_etape_et_hypotheses(api) -> None:
     api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
     api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)

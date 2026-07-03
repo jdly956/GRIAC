@@ -12,7 +12,7 @@
   {% if projets %}
   <ul>
     {% for projet in projets %}
-    <li><a href="/projets/{{ projet.id }}"><strong>{{ projet.nom }}</strong></a> —
+    <li><a href="{{ racine }}/projets/{{ projet.id }}"><strong>{{ projet.nom }}</strong></a> —
       {{ projet.contexte or "sans contexte" }}
       ({{ projet.nfrs | length }} NFR, dossiers :
       {{ projet.dossiers | map(attribute="dossier") | join(", ") or "aucun" }})</li>
@@ -23,7 +23,7 @@
   {% endif %}
 </div>
 
-<form method="post" action="/projets" class="panneau">
+<form method="post" action="{{ racine }}/projets" class="panneau">
   <h2>Nouveau projet</h2>
   <p>Le contexte et les NFR sont injectés dans le prompt système et pré-remplissent
     les blocs NFR de l'interview (E8).</p>

@@ -16,7 +16,7 @@
     <li>
       <em>[{{ hypothese.origine }}]</em> {{ hypothese.texte }} — <strong>{{ hypothese.statut }}</strong>
       {% if hypothese.statut == "en_attente" %}
-      <form method="post" action="/sessions/{{ etat.id }}/hypotheses/{{ hypothese.id }}" style="display:inline">
+      <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/{{ hypothese.id }}" style="display:inline">
         <button class="fr-btn fr-btn--sm" name="statut" value="confirmee">Confirmer</button>
         <button class="fr-btn fr-btn--sm fr-btn--secondary" name="statut" value="rejetee">Rejeter</button>
       </form>
@@ -60,14 +60,14 @@
 </div>
 {% endif %}
 
-<form method="post" action="/sessions/{{ etat.id }}/message" class="panneau">
+<form method="post" action="{{ racine }}/sessions/{{ etat.id }}/message" class="panneau">
   <h2>Votre message</h2>
   <p>Réponse d'interview, correction, ou <strong>question documentaire libre</strong> — même fil (A2).</p>
   <textarea class="fr-input" name="message" rows="4" required></textarea>
   <button class="fr-btn" type="submit">Envoyer</button>
 </form>
 
-<form method="post" action="/sessions/{{ etat.id }}/valider" class="panneau">
+<form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="panneau">
   <h2>Valider l'étape ? (règle 5)</h2>
   <label class="fr-label" for="commentaire">Commentaire (obligatoire si « Non »)</label>
   <input class="fr-input" id="commentaire" name="commentaire" placeholder="précisez ce qu'il faut changer">
@@ -80,7 +80,7 @@
   <h2>Noter les stories (E4.4)</h2>
   <p>Note 1–5 + commentaire par story — alimente la télémétrie d'usage.</p>
   {% for titre in stories %}
-  <form method="post" action="/sessions/{{ etat.id }}/feedback">
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/feedback">
     <input type="hidden" name="story_titre" value="{{ titre }}">
     <p><strong>{{ titre }}</strong></p>
     <select class="fr-select" name="note" aria-label="Note de « {{ titre }} »">
@@ -99,8 +99,8 @@
 <div class="panneau">
   <h2>Export (E5)</h2>
   <p>
-    <a class="fr-btn fr-btn--secondary" href="/sessions/{{ etat.id }}/export/csv">CSV Jira</a>
-    <a class="fr-btn fr-btn--secondary" href="/sessions/{{ etat.id }}/export/markdown">Copier-coller (markdown)</a>
+    <a class="fr-btn fr-btn--secondary" href="{{ racine }}/sessions/{{ etat.id }}/export/csv">CSV Jira</a>
+    <a class="fr-btn fr-btn--secondary" href="{{ racine }}/sessions/{{ etat.id }}/export/markdown">Copier-coller (markdown)</a>
   </p>
   <p>Export autorisé même avec des hypothèses non levées — le récapitulatif les accompagne (A8).</p>
 </div>
