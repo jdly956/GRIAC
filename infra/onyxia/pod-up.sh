@@ -46,10 +46,13 @@ sleep 1
 export SIA_API_URL="http://localhost:8000"
 nohup uv run --package sia-api uvicorn sia_api.main:app \
     --host 0.0.0.0 --port 8000 > /tmp/api.log 2>&1 &
-# --root-path : l'UI est consultée via le proxy code-server /proxy/8081/
-# (le port n'est pas exposable directement — RBAC, session du 03/07/2026).
+# --root-path : par défaut l'UI est consultée via le proxy code-server
+# /proxy/8081/ (port non exposable par le SA du pod — RBAC, 03/07/2026).
+# Si le service Onyxia expose 8081 directement (port custom de l'onglet
+# Réseau), mettre SIA_WEB_ROOT_PATH="" dans ~/work/.sia-db.env : app à la
+# racine, aucun préfixe (`${VAR-…}` sans deux-points : vide explicite ≠ absent).
 nohup uv run --package sia-web uvicorn sia_web.main:app \
-    --host 0.0.0.0 --port 8081 --root-path "${SIA_WEB_ROOT_PATH:-/proxy/8081}" \
+    --host 0.0.0.0 --port 8081 --root-path "${SIA_WEB_ROOT_PATH-/proxy/8081}" \
     > /tmp/web.log 2>&1 &
 
 # 5. Santé — on ne rend pas la main sur une stack à moitié levée
