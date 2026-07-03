@@ -110,3 +110,12 @@ Critères d'acceptation :
 - [ ] TU sans appel réseau (client injecté) ; recalibrage automatique sur gold dès fourniture
 
 *Code livré le 02/07/2026 : `sia_api/evaluation.py` (CLI `--modeles/--max-cas/--sortie`), cible `make eval`, `evals/grille-notation.md`, README à jour. 17 TU (197 au total). Reste E6 : exécution réelle du banc (verdict comparatif) via `docs/plans-test/s2.11-harnais-evals.md` ; test de fenêtre de contexte effective déjà couvert par la sonde S1.5.*
+
+## S2.12 — E3 : contrôle DoR/gabarit automatisé en sortie d'étape
+
+Critères d'acceptation :
+- [ ] En sortie des étapes de production (rédaction, contrôle DoR, synthèse), chaque US extraite de la réponse passe par `valider_us` (S1.10) ; toute non-conformité est signalée en avertissement avec le titre de l'US
+- [ ] À l'étape 4, le **tableau DoR est isolé des tableaux de CA** puis passe par `valider_dor` : 10 critères présents, statuts valides, justifications remplies, « estimée et revue en backlog refinement » toujours 🔵 (l'estimation relève de l'équipe, jamais de l'IA)
+- [ ] Le contrôle **signale, ne bloque jamais** (règle 5 : le PO arbitre) ; aucun contrôle aux étapes 0–2 ; TU purs + TU route (Albert/RAG mockés)
+
+*Code livré le 03/07/2026 : `controler_conformite` + `_extraire_tableau_dor` dans `sia_api/moteur.py`, branchés sur `POST /workflows/{id}/message` (canal avertissements existant — affiché par l'UI S2.8 sans modification). 6 TU (203 au total). CA à cocher via `docs/plans-test/s2.12-controle-dor-auto.md` (dans la foulée du plan S2.6). **Le backlog macro côté code est complet** (E0→E6 + E8 ; E7 = post-go).*
