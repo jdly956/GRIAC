@@ -14,6 +14,34 @@
 
 ---
 
+## Session 03/07/2026 (26) — LA session Onyxia : déroulé réel du runbook s0 (phases 0→2 validées, phase 3 en cours)
+
+**Contexte** : accompagnement pas-à-pas du référent sur le pod (`vscode-python-gpu`, écart : GPU inutile — préférer un pod CPU), branche `claude/new-session-v6ftye` (PR #29 draft, collecte les correctifs au fil du déroulé). **Entrée à compléter à la clôture** (fin de phase 3, banc E6, CA cochés).
+
+**Phase 0 — validée** : TNR à froid **203 verts** sur pod ; service PostgreSQL du catalogue lancé — chart CNPG, **PostgreSQL 18.3 + pgvector actif** (⚠️ écart stack cible PG 16 : le 1er lancement sans `extension.pgvector: true` ne donnait pas l'extension, le tag 16 n'a pas été appliqué par le chart — à trancher pour la prod) ; migrations **0001→0009 sans erreur** ; `make probe` **4/4 ok**, quotas identiques au relevé S1.5 (tpm 128k, tpd 2,46 M).
+
+**Phase 1 — validée** : scan **6 fichiers** (le runbook disait 7 — corrigé) ; **libGL absente de l'image pod** → `ImportError: libGL.so.1` sur PDF natif, réglé par `libgl1`+`libglib2.0-0` (prérequis documenté) ; parse `1 parsé, 3 inchangés (reprise D9), 1 ocr_requis, 0 échec` après fix ; qualify : `v2_final_VF3` référence, copie byte-identique doublon ; chunk 4/4, embed 4/4 **dimension 1024**, **2e run = 0 re-vectorisé (contre-épreuve D9 ✅)** ; recoupes SQL conformes.
+
+**Phase 2 — validée, deux découvertes produit** :
+1. **Schéma `/v1/rerank` réel ≠ hypothèse s2.4** (422 constaté) : `{model, query, documents}` → `results[{index, relevance_score}]` (relevé : 0,73 vs 1,6e-05). Le repli RRF signalé avait fonctionné comme conçu. Corrigé (`d19d326`) ; validé stack-live : `rerank_applique: true`.
+2. **Trou anti-invention** : sans seuil de distance, le volet vectoriel « répond » à tout (quotas de pêche en Baltique → spec d'authentification). Distances mesurées en réel (bge-m3, fixtures) : pertinent ≤ 0,431, hors corpus ≥ 0,698 → **`RECHERCHE_SEUIL_DISTANCE` = 0,55** (configurable, à recalibrer sur corpus réel). Validé stack-live : Baltique → « Aucune source récupérable », question légitime → guide en tête (pas de sur-filtrage).
+
+**Phase 3 — en cours** ; découvertes d'environnement et correctifs :
+- Port 8081 **non exposable** (RBAC du SA pod : pas de création Service/Ingress) → UI via le proxy code-server `/proxy/8081/`.
+- **Liens à chemins absolus cassés sous préfixe** → `{{ racine }}` = root_path sur les 15 liens/actions (`6d13b57`), audit exhaustif 15 routes sans fuite.
+- **code-server réécrit les `Location`** (pré-ajoute `/proxy/8081` — doublement prouvé en navigation privée) → redirections **sans** préfixe, asymétrie documentée (`b4aa9d4`) ; création de projet validée au navigateur ✅.
+- **Chutes de pod à répétition** (seul `~/work` survit) → `make pod-up` : remise en route une commande (libGL, env, api+web nohup, healthchecks) (`93a257d`, `4f9acd2`) ; secrets déplacés dans `~/work/.sia-db.env`.
+- Robustesse S2.8 constatée de fait : API coupée → alerte DSFR « API injoignable » propre, zéro traceback ✅.
+
+**Livré (PR #29, draft)** : correctifs runbook + `d19d326` + `6d13b57` + `93a257d` + `4f9acd2` + `b4aa9d4` — **205 tests verts** (203 + TU seuil + TU préfixe).
+
+**Mini-récap** :
+- ✅ Fait : phases 0→2 validées stack-live ; 3 bugs produit corrigés sur preuve réelle ; pod-up
+- ⏳ En cours : phase 3 (A6, documents, première génération réelle, A8, DoR, exports, feedback, robustesse)
+- ⏳ À venir : phase 4 (banc E6 sous quota tpd), clôture (CA backlogs, en-tête stratégique, revue PR #29)
+
+---
+
 ## Session 03/07/2026 (25) — clôture : runbook Onyxia en version exécutable (docs, aucun code)
 
 **Contexte** : « documente le plan de test à jouer sur onyxia puis clôture session » — dernière action de la séquence, le backlog macro étant code-complet (203 tests, PRs #1–#27 mergées).
