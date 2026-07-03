@@ -8,13 +8,14 @@ reste utilisable hors ligne. v1 assumée : les sources/avertissements du dernier
 échange sont affichés dans la réponse du POST (non persistés côté UI) — au
 rechargement, seul le fil (persisté par l'api) demeure.
 
-Préfixe de chemin : liens et redirections portent le `root_path` ASGI
-(`{{ racine }}` dans les templates), pour servir l'app derrière un proxy à
-préfixe — cas constaté sur pod Onyxia (03/07/2026) : le port 8081 n'est pas
-exposable (RBAC), l'UI passe par le proxy code-server `/proxy/8081/` où les
-chemins absolus cassaient la navigation. Lancement : `uvicorn --root-path
-/proxy/8081 …` ; à la racine (prod Helm, dev compose), root_path vide = liens
-inchangés.
+Préfixe de chemin : les LIENS portent le `root_path` ASGI (`{{ racine }}`
+dans les templates), pour servir l'app derrière un proxy à préfixe — cas
+constaté sur pod Onyxia (03/07/2026) : le port 8081 n'est pas exposable
+(RBAC), l'UI passe par le proxy code-server `/proxy/8081/` où les chemins
+absolus cassaient la navigation. Les REDIRECTIONS, elles, partent sans
+préfixe : code-server réécrit les Location en pré-ajoutant /proxy/8081
+(voir `_rediriger`). Lancement : `uvicorn --root-path /proxy/8081 …` ; à la
+racine (prod Helm, dev compose), root_path vide = comportement inchangé.
 """
 
 from pathlib import Path
@@ -41,10 +42,17 @@ templates = Jinja2Templates(
 
 
 def _rediriger(request: Request, chemin: str) -> RedirectResponse:
-    """Redirection 303 qui conserve le préfixe root_path (proxy code-server)."""
-    return RedirectResponse(
-        request.scope.get("root_path", "").rstrip("/") + chemin, status_code=303
-    )
+    """Redirection 303 SANS préfixe root_path — asymétrie voulue avec les liens.
+
+    Constaté sur pod Onyxia (03/07/2026, navigation privée à l'appui) : le
+    proxy code-server réécrit les en-têtes Location en pré-ajoutant
+    /proxy/8081 — un Location déjà préfixé ressort doublé
+    (/proxy/8081/proxy/8081/…). Les corps HTML ne sont PAS réécrits, d'où
+    les liens qui gardent {{ racine }}. À la racine (prod Helm, compose),
+    un Location sans préfixe est déjà correct.
+    """
+    del request  # signature homogène avec les autres helpers ; préfixe volontairement omis
+    return RedirectResponse(chemin, status_code=303)
 
 
 ETAPES_LIBELLES = {

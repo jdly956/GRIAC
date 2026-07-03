@@ -79,9 +79,11 @@ def test_creation_de_session_redirige_vers_le_fil(api) -> None:
     assert api.appels[0][2] == {"feature": "Ma feature", "projet_id": 1}
 
 
-def test_prefixe_root_path_porte_liens_et_redirections(api) -> None:
+def test_prefixe_root_path_porte_liens_mais_pas_les_redirections(api) -> None:
     # Proxy à préfixe (code-server /proxy/8081/ sur pod Onyxia, 03/07/2026) :
-    # liens des templates et Location des redirections doivent porter le root_path.
+    # les liens des templates portent le root_path (les corps HTML ne sont pas
+    # réécrits par le proxy), mais les Location partent SANS préfixe — le proxy
+    # les réécrit en pré-ajoutant /proxy/8081 (doublement constaté sinon).
     client_prefixe = TestClient(app, root_path="/proxy/8081")
     api.brancher("GET", "/projects", 200, [])
     reponse = client_prefixe.get("/")
@@ -91,7 +93,7 @@ def test_prefixe_root_path_porte_liens_et_redirections(api) -> None:
     redirection = client_prefixe.post(
         "/sessions", data={"feature": "Ma feature"}, follow_redirects=False
     )
-    assert redirection.headers["location"] == "/proxy/8081/sessions/7"
+    assert redirection.headers["location"] == "/sessions/7"
 
 
 def test_ecran_session_affiche_fil_etape_et_hypotheses(api) -> None:
