@@ -50,10 +50,13 @@ make probe          # sonde Albert (S1.5) : modèles + quotas -> docs/albert-lim
 make ingest-scan CORPUS=<dossier>   # scan du corpus (S1.7) -> table documents + derived/inventaire.csv (DATABASE_URL requise)
 make ingest-parse CORPUS=<dossier>  # parsing docling (S1.8) -> derived/md/<sha256>.md + statuts en base
 make ingest-qualify                 # qualification v0 (S1.9) : métadonnées, doublons, versions, référence
+make ingest-chunk                   # chunking par sections (S2.1) -> table chunks
+make ingest-embed                   # embeddings bge-m3 (S2.2) -> pgvector (clé Albert requise)
+make eval                           # benchmark génération E6 (grille 3 axes, gold sinon silver — clé requise)
 uv run --package sia-api python -m sia_api.gabarit <fichier.md>   # validateur de conformité US (S1.10)
 ```
 
-`make ingest` et `make eval` arrivent avec S1.7 et E6.
+`make eval` accepte `MODELES=alias1,alias2` et `SORTIE=<rapport.md>` ; grille : `evals/grille-notation.md`.
 
 ## Lancer la stack locale (S1.2)
 
