@@ -41,6 +41,9 @@ ingest-embed: ## Embeddings bge-m3 (E1, nœud E) : chunks -> pgvector (DATABASE_
 eval: ## Benchmark génération E6 (grille 3 axes) sur evals/gold/ (repli silver) — clé Albert requise
 	uv run --package sia-api python -m sia_api.evaluation $(if $(MODELES),--modeles $(MODELES),) $(if $(SORTIE),--sortie $(SORTIE),)
 
+pod-up: ## Remet la stack en route sur un pod Onyxia (libGL, env, api+web nohup, healthchecks) — idempotent
+	bash infra/onyxia/pod-up.sh
+
 dev: ## Lance la stack locale (postgres+pgvector, migrate, api, web) et attend qu'elle soit saine
 	$(COMPOSE) up -d --build --wait
 
@@ -64,4 +67,4 @@ dev-validate: ## Preuves stack-live : /health api+web, extension pgvector (à co
 	curl -fsS http://localhost:8080/health && echo
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-sia} -d $${POSTGRES_DB:-sia} -c "select extname from pg_extension where extname = 'vector'"
 
-.PHONY: help install lint fmt test probe ingest-scan ingest-parse ingest-qualify ingest-chunk ingest-embed eval dev dev-down dev-logs dev-reset migrate psql dev-validate
+.PHONY: help install lint fmt test probe ingest-scan ingest-parse ingest-qualify ingest-chunk ingest-embed eval pod-up dev dev-down dev-logs dev-reset migrate psql dev-validate
