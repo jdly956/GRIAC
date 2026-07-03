@@ -39,7 +39,8 @@ def _chunk(nom: str, nb_tokens: int = 100) -> ChunkTrouve:
 
 
 class FauxHttp:
-    """Simule httpx.post sur /v1/rerank ; peut échouer (404, réseau)."""
+    """Simule httpx.post sur /v1/rerank — schéma réel Albert (confirmé pod 03/07/2026) :
+    {model, query, documents} -> results[{index, relevance_score}]."""
 
     def __init__(self, scores: list[float] | None = None, echoue: bool = False) -> None:
         self.scores = scores or []
@@ -53,7 +54,9 @@ class FauxHttp:
         return SimpleNamespace(
             raise_for_status=lambda: None,
             json=lambda: {
-                "data": [{"index": i, "score": score} for i, score in enumerate(self.scores)]
+                "results": [
+                    {"index": i, "relevance_score": score} for i, score in enumerate(self.scores)
+                ]
             },
         )
 
@@ -65,7 +68,8 @@ def test_reranker_ordonne_par_score_decroissant() -> None:
     appel = http.appels[0]
     assert appel["url"].endswith("/rerank")
     assert appel["json"]["model"] == "openweight-rerank"
-    assert appel["json"]["prompt"] == "question"
+    assert appel["json"]["query"] == "question"
+    assert appel["json"]["documents"] == ["a", "b", "c"]
     assert appel["timeout"] == 30.0
 
 

@@ -9,8 +9,12 @@ BM25 approché par ts_rank) et similarité cosinus pgvector (question vectorisé
 via Albert, `encoding_format="float"` — gotcha S1.5), fusionnés par **RRF**
 (Reciprocal Rank Fusion, k=60). Filtres : `est_reference` par défaut (statut
 = référence, S1.9) et périmètre projet via les dossiers confirmés par le PO
-(S1.11, arbitrage A6). Aucun résultat → avertissement explicite (anti-invention :
-une génération sans source récupérable doit le signaler).
+(S1.11, arbitrage A6). Le volet vectoriel applique un SEUIL de distance cosinus
+(`RECHERCHE_SEUIL_DISTANCE`) : sans lui, les K plus proches voisins « répondent »
+à n'importe quelle question dès que le corpus est non vide, et l'avertissement
+anti-invention ne peut jamais se déclencher (constaté sur pod, 03/07/2026).
+Aucun résultat → avertissement explicite (anti-invention : une génération sans
+source récupérable doit le signaler).
 """
 
 from typing import Annotated, Any
@@ -55,6 +59,7 @@ REQUETE_VECTEUR = f"""
     FROM chunks c
     JOIN documents d ON d.chemin = c.document_chemin
     WHERE c.embedding IS NOT NULL
+      AND (c.embedding <=> %(vecteur)s::vector) <= %(seuil)s
       {FILTRES_COMMUNS}
     ORDER BY c.embedding <=> %(vecteur)s::vector
     LIMIT %(limite)s
@@ -124,7 +129,10 @@ def rechercher(connexion, client, settings: Settings, entree: RechercheEntree) -
         classement_bm25 = [ligne[0] for ligne in curseur.fetchall()]
 
         vecteur = _vectoriser_question(client, settings, entree.question)
-        curseur.execute(REQUETE_VECTEUR, {**parametres, "vecteur": vecteur})
+        curseur.execute(
+            REQUETE_VECTEUR,
+            {**parametres, "vecteur": vecteur, "seuil": settings.recherche_seuil_distance},
+        )
         classement_vecteur = [ligne[0] for ligne in curseur.fetchall()]
 
         fusion = fusion_rrf([classement_bm25, classement_vecteur])[: entree.nb]
@@ -159,10 +167,11 @@ def reranker(
 ) -> list[int] | None:
     """Ordre des candidats selon `/v1/rerank` d'Albert (bge-reranker-v2-m3).
 
-    L'endpoint est HORS périmètre du SDK OpenAI ; le schéma implémenté est celui
-    d'albert-api ({model, prompt, input} -> data[{index, score}]) — HYPOTHÈSE à
-    confirmer par curl sur le pod (plan S2.4). Toute erreur => None : l'appelant
-    conserve l'ordre RRF et le SIGNALE (jamais d'échec silencieux).
+    L'endpoint est HORS périmètre du SDK OpenAI ; schéma CONFIRMÉ par curl sur
+    le pod Onyxia (03/07/2026, étape 0 du runbook s0) :
+    {model, query, documents} -> results[{index, relevance_score}].
+    Toute erreur => None : l'appelant conserve l'ordre RRF et le SIGNALE
+    (jamais d'échec silencieux).
     """
     if http_post is None:  # résolu à l'appel : monkeypatchable, jamais de réseau en TU
         http_post = httpx.post
@@ -172,15 +181,16 @@ def reranker(
             headers={"Authorization": f"Bearer {settings.albert_api_key.get_secret_value()}"},
             json={
                 "model": settings.albert_model_rerank,
-                "prompt": question,
-                "input": contenus,
+                "query": question,
+                "documents": contenus,
             },
             timeout=settings.albert_timeout_s,
         )
         reponse.raise_for_status()
-        scores = reponse.json()["data"]
+        scores = reponse.json()["results"]
         return [
-            element["index"] for element in sorted(scores, key=lambda element: -element["score"])
+            element["index"]
+            for element in sorted(scores, key=lambda element: -element["relevance_score"])
         ]
     except Exception:  # 404/422/réseau : repli RRF signalé par l'appelant
         return None

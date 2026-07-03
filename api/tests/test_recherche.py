@@ -119,6 +119,17 @@ def test_recherche_filtre_par_projet_a6() -> None:
     assert len(resultat.resultats) == 1
 
 
+def test_seuil_distance_applique_au_volet_vectoriel() -> None:
+    # Sans seuil, les K plus proches voisins « répondent » à n'importe quelle
+    # question dès que le corpus est non vide : l'avertissement anti-invention
+    # ne pourrait jamais se déclencher (constaté sur pod, 03/07/2026).
+    connexion = FausseConnexion([[(1,)], [(1,)], DETAILS[:1]])
+    rechercher(connexion, FauxAlbert(), _settings(), RechercheEntree(question="délai"))
+    requete_vecteur, parametres = connexion.curseur.requetes[1]
+    assert "<= %(seuil)s" in requete_vecteur
+    assert parametres["seuil"] == 0.55  # défaut calibré fixtures — RECHERCHE_SEUIL_DISTANCE
+
+
 def test_aucune_source_recuperable_signalee() -> None:
     connexion = FausseConnexion([[], []])
     resultat = rechercher(

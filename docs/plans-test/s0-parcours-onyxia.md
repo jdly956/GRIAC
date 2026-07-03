@@ -60,16 +60,16 @@ Recoupes SQL (psql du service, ou `python3 -c` avec psycopg) : `select count(*) 
 
 ## Phase 2 — RAG (~20 min)
 
-**Étape 0 impérative — schéma `/v1/rerank` (HYPOTHÈSE documentée, plan s2.4)** :
+**Étape 0 — schéma `/v1/rerank` (CONFIRMÉ pod 03/07/2026, plan s2.4)** :
 
 ```bash
 cd ~/work/GRIAC/
 BASE=$(grep '^ALBERT_BASE_URL=' .env | cut -d= -f2-)
 curl -sS -o /tmp/rerank.json -w "HTTP %{http_code}\n" "$BASE/rerank" \
   -H "Authorization: Bearer $ALBERT_API_KEY" -H "Content-Type: application/json" \
-  -d '{"model":"openweight-rerank","prompt":"délai de traitement","input":["Le délai d'\''instruction est de 15 jours.","La couleur du logo est bleue."]}'
+  -d '{"model":"openweight-rerank","query":"délai de traitement","documents":["Le délai d'\''instruction est de 15 jours.","La couleur du logo est bleue."]}'
 head -c 400 /tmp/rerank.json ; echo
-# attendu : HTTP 200 et data[{index,score}] — sinon consigner le schéma réel (le repli RRF est signalé, jamais silencieux)
+# attendu : HTTP 200 et results[{index,relevance_score}] — en cas d'écart, le repli RRF est signalé, jamais silencieux
 ```
 
 Lancer l'api puis tester recherche et contexte :
