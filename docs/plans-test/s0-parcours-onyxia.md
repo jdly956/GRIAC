@@ -44,10 +44,12 @@ make probe
 
 ## Phase 1 — Ingestion sur `evals/fixtures/` (~30 min, 1er run parse = téléchargement docling)
 
+Prérequis pod : `libGL` (chaîne docling/OpenCV) — `sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0` (constaté session Onyxia : absent de l'image `vscode-python`, sinon échec `ImportError: libGL.so.1` sur les PDF natifs).
+
 ```bash
 cd ~/work/GRIAC/ && source .venv/bin/activate
-make ingest-scan CORPUS=evals/fixtures       # attendu : 7 fichiers inventoriés, derived/inventaire.csv
-make ingest-parse CORPUS=evals/fixtures      # attendu : docx/pdf parsés, scan-courrier -> ocr_requis, derived/rapport-parsing.csv
+make ingest-scan CORPUS=evals/fixtures       # attendu : 6 fichiers inventoriés (plan s1.7), derived/inventaire.csv
+make ingest-parse CORPUS=evals/fixtures      # attendu : 3 parsés, 1 inchangé (copie = même sha), scan-courrier -> ocr_requis, txt hors périmètre (reste a_parser), derived/rapport-parsing.csv
 make ingest-qualify                          # attendu : v2_final_VF3 = référence, copie byte-identique = doublon
 make ingest-chunk                            # attendu : chunks créés, tableaux jamais coupés
 make ingest-embed                            # attendu : embeddings 1024 par lots de 32, 0 échec
