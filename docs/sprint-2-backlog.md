@@ -100,3 +100,13 @@ Critères d'acceptation :
 - [ ] Écran session : panneau « Noter les stories » (masqué sans US) ; écran « Télémétrie » ; navigation mise à jour
 
 *Code livré le 02/07/2026 : migration 0009 (`story_feedbacks`, `workflow_validations`), `sia_api/feedback.py`, journalisation ajoutée à `/avancer`, panneau de notation + écran télémétrie côté web. 8 TU api + 1 TU journalisation + 5 TU web (180 au total). CA à cocher via `docs/plans-test/s2.10-feedback-telemetrie.md`.*
+
+## S2.11 — E6 : harnais d'évals `make eval` (grille 3 axes)
+
+Critères d'acceptation :
+- [ ] `make eval` : benchmark de génération sur `/evals/gold/` (repli `/evals/silver/` **affiché comme non validé** dans le rapport), modèles par défaut `openweight-large` vs `openweight-medium` (surchargables `MODELES=`), rapport markdown scoré (`SORTIE=` optionnel)
+- [ ] Grille 3 axes documentée (`evals/grille-notation.md`) avec proxys v0 automatiques : gabarit = validateur S1.10 (−0,2/violation) ; exactitude = règles métier du brief retrouvées + anti-invention (nombre non issu du brief hors ligne [HYPOTHÈSE À VALIDER] pénalisé) ; complétude = blocs remplis + ratio de CA vs référence
+- [ ] Brief reconstitué depuis la référence (récit, pré-requis, règles, attendus — jamais les CA) ; un modèle en échec ou une réponse vide n'arrête pas le banc (erreur portée au rapport) ; relevés latence/tokens par appel (préparation test de débit sous quotas)
+- [ ] TU sans appel réseau (client injecté) ; recalibrage automatique sur gold dès fourniture
+
+*Code livré le 02/07/2026 : `sia_api/evaluation.py` (CLI `--modeles/--max-cas/--sortie`), cible `make eval`, `evals/grille-notation.md`, README à jour. 17 TU (197 au total). Reste E6 : exécution réelle du banc (verdict comparatif) via `docs/plans-test/s2.11-harnais-evals.md` ; test de fenêtre de contexte effective déjà couvert par la sonde S1.5.*
