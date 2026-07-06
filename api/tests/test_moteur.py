@@ -42,6 +42,11 @@ def test_prompt_systeme_contient_le_prompt3_et_les_consignes() -> None:
     # La validation passe par les boutons Oui/Non de l'UI (règle 5) — le modèle
     # ne doit plus la demander dans le texte (redondance constatée, 06/07/2026).
     assert "Ne demande JAMAIS de validation dans le texte" in prompt
+    # Anti-invention durci (S2.15, constats sessions 9-11) : marqueur exact,
+    # valeurs chiffrées inventées marquées, alternatives A/B/C non marquées.
+    assert "EXACTEMENT le marqueur" in prompt
+    assert "VALEUR CHIFFRÉE" in prompt
+    assert "ALTERNATIVES" in prompt
 
 
 def test_prompt_systeme_injecte_projet_et_nfr() -> None:
@@ -228,6 +233,24 @@ def test_hypothese_deja_connue_non_dupliquee(brancher) -> None:
     # Même ligne exacte que celle du registre : la dédup v0 est textuelle.
     connexion, _ = brancher(script, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]")
     corps = client_http.post("/workflows/7/message", json={"message": "ok ?"}).json()
+    assert corps["hypotheses_ajoutees"] == []
+    assert not any("INSERT INTO workflow_hypotheses" in r for r, _ in connexion.curseur.requetes)
+
+
+def test_reformulation_du_registre_non_dupliquee(brancher) -> None:
+    # S2.15 : un récapitulatif qui re-liste une hypothèse déjà au registre sous
+    # d'autres mots ne crée pas d'entrée (bruit session 11 : 18 « en attente »).
+    script = [
+        ("interview", None, "Ma Feature"),
+        [],
+        [(3, "- Taille maximale d'une pièce jointe : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],
+    ]
+    reponse = (
+        "- **#3** : Taille maximale de la pièce jointe = 10 Mo, comme indiqué "
+        "dans les critères d'acceptation de la Feature [HYPOTHÈSE À VALIDER]."
+    )
+    connexion, _ = brancher(script, reponse)
+    corps = client_http.post("/workflows/7/message", json={"message": "récapitule"}).json()
     assert corps["hypotheses_ajoutees"] == []
     assert not any("INSERT INTO workflow_hypotheses" in r for r, _ in connexion.curseur.requetes)
 

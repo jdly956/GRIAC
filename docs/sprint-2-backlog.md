@@ -153,8 +153,18 @@ Session complète (Feature « prioriser les actes > seuils commande publique »,
 - [x] **Levée proposée (S2.13) non suivie par le modèle** (premier cas réel raté) → consigne déplacée en dernière position du prompt + exemple explicite ; contre-épreuve = plan s2.13 §3 bis
 
 Suites au backlog (non couvertes ici) :
-- [ ] **Anti-invention incomplet** : le modèle marque ses hypothèses à SON format (`[HYPOTHÈSE 1 A]`, `[HYPOTHÈSE À VALIDER 1]`, étape 0) et affirme des valeurs inventées sans marqueur (rétentions, horaires de job, volumétries) — durcir la consigne de marquage + extraction tolérante aux variantes ; story dédiée à cadrer
+- [x] **Anti-invention incomplet** + **bruit du registre par reformulation** → traités par **S2.15** ci-dessous
 - [ ] **Sémantique du « Oui »** : utilisé comme « continuer/story suivante », il désynchronise la machine à états (badge étape trompeur — A5) — arbitrage produit : bouton « story suivante » vs étapes linéaires 0→5
-- [ ] **Bruit du registre par reformulation** (session 11 : 18 en attente dont récapitulatifs re-listant des hypothèses déjà enregistrées sous d'autres mots) — la dédup par clé ne rapproche pas les reformulations ; à traiter avec la story anti-invention
 
 **Rejeu session 11 (06/07/2026, branche à jour — 225 tests)** : **S2.13 validée stack-live** (voir CA cochés ci-dessus) ; deux défauts supplémentaires corrigés dans la foulée : le **rappel de titre au-dessus des tableaux DoR** (`**US — Titre**` + DoR, zéro bloc) était extrait comme story et **écrasait la vraie story dans les exports** (dédup par titre) → un segment n'est une story que s'il porte aussi `**En tant que**` ; un **titre de section citant le marqueur** entrait au registre → entêtes markdown écartées de l'extraction.
+
+## S2.15 — anti-invention v2 : consigne de marquage durcie + dédup sémantique du registre
+
+> Constats des sessions réelles 9/10/11 : registre à 18 « en attente » (récapitulatifs re-listant les hypothèses sous d'autres mots), variantes de marqueur perdues (`[HYPOTHÈSE 1 A]`, `[HYPOTHÈSE À VALIDER 1]`), valeurs chiffrées inventées affirmées sans marqueur.
+
+Critères d'acceptation :
+- [ ] **Dédup sémantique du registre** : une hypothèse re-formulée (recouvrement des termes porteurs de sens de la formulation la plus courte ≥ 0,8 — `est_doublon_hypothese`, seuil calibré sur les paires réelles session 11) n'entre pas deux fois au registre ; **une hypothèse réellement distincte n'est JAMAIS avalée** (TU dédiée — une perte serait contraire à A8)
+- [ ] **Consigne de marquage durcie** (prompt système) : marqueur EXACT (les variantes se perdent), toute VALEUR CHIFFRÉE inventée marquée sur sa ligne, alternatives A/B/C au choix du PO non marquées (seule l'option retenue l'est), pas de re-liste des hypothèses déjà au registre
+- [ ] TU purs (paires réelles session 11) + TU route (récapitulatif reformulé → zéro INSERT) + TU prompt
+
+*Code livré le 06/07/2026 : `est_doublon_hypothese` + `_tokens_hypothese` (`sia_api/workflow.py`), dédup à deux étages branchée sur l'insertion du moteur, consignes de traçabilité enrichies (`construire_prompt_systeme`). 229 tests verts. CA à cocher via `docs/plans-test/s2.15-anti-invention.md` (rejeu du récapitulatif session 11, garde-fou de non-perte).*

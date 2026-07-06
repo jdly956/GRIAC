@@ -12,6 +12,7 @@ from sia_api.workflow import (
     LeveeProposee,
     avancer,
     cle_hypothese,
+    est_doublon_hypothese,
     est_terminale,
     extraire_hypotheses,
     extraire_levees_proposees,
@@ -89,6 +90,41 @@ def test_lot_interview_limite_a_3_questions() -> None:
     assert verifier_lot_interview("Q1 ? Q2 ? Q3 ?") == []
     violations = verifier_lot_interview("Q1 ? Q2 ? Q3 ? Q4 ?")
     assert violations and "règle 1" in violations[0]
+
+
+# --- dédup sémantique du registre (S2.15, paires réelles session 11) ---
+
+
+def test_reformulation_de_recapitulatif_est_un_doublon() -> None:
+    # Paires observées session 11 (06/07/2026) : les récapitulatifs re-listent
+    # les hypothèses déjà enregistrées sous d'autres mots (18 « en attente »).
+    existants = ["- Taille maximale d'une pièce jointe : 10 Mo [HYPOTHÈSE À VALIDER]"]
+    recapitulatif = (
+        "- **#3** : Taille maximale de la pièce jointe = 10 Mo, comme indiqué "
+        "dans les critères d'acceptation de la Feature [HYPOTHÈSE À VALIDER]."
+    )
+    assert est_doublon_hypothese(recapitulatif, existants)
+
+
+def test_ligne_de_tableau_reformulee_est_un_doublon() -> None:
+    existants = [
+        "Proposition : [HYPOTHÈSE À VALIDER] Création d'un jeu de 20 dossiers "
+        "(10 avec email valide, 10 sans email)."
+    ]
+    recapitulatif = (
+        "- **#1** : *Jeu de données* – 20 dossiers (10 avec email valide, 10 sans) "
+        "[HYPOTHÈSE À VALIDER]."
+    )
+    assert est_doublon_hypothese(recapitulatif, existants)
+
+
+def test_hypothese_distincte_jamais_avalee() -> None:
+    # La dédup ne doit JAMAIS absorber une hypothèse réellement nouvelle :
+    # ce serait une perte, contraire à A8.
+    existants = ["- Taille maximale d'une pièce jointe : 10 Mo [HYPOTHÈSE À VALIDER]"]
+    nouvelle = "- Notification par courriel à chaque changement de statut [HYPOTHÈSE À VALIDER]"
+    assert not est_doublon_hypothese(nouvelle, existants)
+    assert not est_doublon_hypothese("texte sans termes", [])
 
 
 # --- levées proposées (rapprochement décision d'interview ↔ registre, A8) ---

@@ -98,6 +98,43 @@ def cle_hypothese(texte: str) -> str:
     return texte.lower()
 
 
+def _tokens_hypothese(texte: str) -> frozenset[str]:
+    """Termes porteurs de sens d'une hypothèse (mots > 3 lettres + nombres)."""
+    return frozenset(
+        mot for mot in re.findall(r"[\w']+", cle_hypothese(texte)) if len(mot) > 3 or mot.isdigit()
+    )
+
+
+# Sous ce seuil, deux formulations sont considérées distinctes : la dédup ne
+# doit JAMAIS avaler une hypothèse réellement nouvelle (ce serait une perte —
+# contraire à A8). 0,8 calibré sur les paires réelles de la session 11.
+SEUIL_RECOUVREMENT_DOUBLON = 0.8
+
+
+def est_doublon_hypothese(texte: str, existants: list[str]) -> bool:
+    """La MÊME hypothèse RE-FORMULÉE ne rentre pas deux fois au registre (A8).
+
+    Bruit constaté session 11 (06/07/2026, 18 « en attente ») : les
+    récapitulatifs du modèle re-listent les hypothèses déjà enregistrées sous
+    d'autres mots (« - #3 : Taille maximale de la pièce jointe = 10 Mo, comme
+    indiqué dans les CA » vs « Taille maximale d'une pièce jointe : 10 Mo ») —
+    la clé normalisée ne les rapproche pas. Doublon si les termes porteurs de
+    sens de la formulation la plus courte sont recouverts à ≥ 80 % par l'autre.
+    C'est une dédup de la même hypothèse, jamais une levée.
+    """
+    tokens = _tokens_hypothese(texte)
+    if not tokens:
+        return False
+    for existant in existants:
+        tokens_existant = _tokens_hypothese(existant)
+        if not tokens_existant:
+            continue
+        petit, grand = sorted((tokens, tokens_existant), key=len)
+        if len(petit & grand) / len(petit) >= SEUIL_RECOUVREMENT_DOUBLON:
+            return True
+    return False
+
+
 # Rapprochement décision d'interview ↔ registre (A8, S2.13) : le moteur émet ce
 # marqueur quand un message du PO (ou un extrait cité) tranche une hypothèse déjà
 # au registre. Ce n'est qu'une PROPOSITION : la levée reste la décision

@@ -42,6 +42,7 @@ from sia_api.recherche import (
 )
 from sia_api.workflow import (
     cle_hypothese,
+    est_doublon_hypothese,
     extraire_hypotheses,
     extraire_levees_proposees,
     verifier_lot_interview,
@@ -181,7 +182,17 @@ def construire_prompt_systeme(
         "- Toute affirmation issue des extraits cite sa source : "
         "« [Source : nom — section] » (A3).\n"
         "- Toute information ne venant ni des extraits ni du PO est marquée "
-        "[HYPOTHÈSE À VALIDER].\n"
+        "[HYPOTHÈSE À VALIDER]. En particulier toute VALEUR CHIFFRÉE inventée "
+        "(délai, seuil, volumétrie, durée de rétention, horaire de job, "
+        "performance) porte le marqueur sur sa ligne.\n"
+        "- Utilise EXACTEMENT le marqueur [HYPOTHÈSE À VALIDER] — jamais de "
+        "variante ([HYPOTHÈSE 1 A], [HYPOTHÈSE À VALIDER 1], « Hypothèse A1 »…) : "
+        "les variantes n'entrent pas au registre et se perdent.\n"
+        "- Quand tu proposes des ALTERNATIVES au choix du PO (option A / B / C), "
+        "ne les marque pas : seule l'option retenue par le PO deviendra, si "
+        "besoin, une [HYPOTHÈSE À VALIDER].\n"
+        "- Ne re-liste pas dans tes récapitulatifs les hypothèses déjà "
+        "enregistrées au registre — elles y sont, le PO les voit.\n"
         "- Si une affirmation du PO contredit un extrait cité, signale-le sur une ligne "
         f"commençant par {MARQUEUR_DIVERGENCE} avec la source — c'est le PO qui arbitre (A9)."
     )
@@ -356,20 +367,24 @@ def message_route(
             {"id": session_id, "etape": etape, "contenu": contenu_reponse},
         )
 
-        # Déduplication par clé normalisée (et non texte exact) : une hypothèse
-        # reformulée avec une autre décoration markdown ne rentre pas deux fois.
-        deja_connues = {cle_hypothese(h[1]) for h in registre}
+        # Déduplication à deux étages : clé normalisée (décoration markdown)
+        # puis rapprochement sémantique (S2.15) — les récapitulatifs du modèle
+        # re-listent les hypothèses sous d'autres mots (session 11).
+        textes_connus = [h[1] for h in registre]
+        deja_connues = {cle_hypothese(t) for t in textes_connus}
         hypotheses_ajoutees = []
         for texte in extraire_hypotheses(contenu_reponse):
             cle = cle_hypothese(texte)
-            if cle not in deja_connues:
-                curseur.execute(
-                    "INSERT INTO workflow_hypotheses (session_id, texte, origine) "
-                    "VALUES (%(id)s, %(texte)s, 'modele')",
-                    {"id": session_id, "texte": texte},
-                )
-                hypotheses_ajoutees.append(texte)
-                deja_connues.add(cle)
+            if cle in deja_connues or est_doublon_hypothese(texte, textes_connus):
+                continue
+            curseur.execute(
+                "INSERT INTO workflow_hypotheses (session_id, texte, origine) "
+                "VALUES (%(id)s, %(texte)s, 'modele')",
+                {"id": session_id, "texte": texte},
+            )
+            hypotheses_ajoutees.append(texte)
+            deja_connues.add(cle)
+            textes_connus.append(texte)
 
         # Rapprochement interview↔registre (A8) : la proposition est persistée
         # sur ses colonnes dédiées — le statut n'est JAMAIS modifié ici, la
