@@ -398,6 +398,37 @@ def message_route(
             {"id": session_id, "etape": etape, "contenu": contenu_reponse},
         )
 
+        # S3.9 (A3 complet) : sources (avec extrait exact), avertissements et
+        # divergences persistés sur le message assistant — plus de « v1
+        # assumée » S2.8 où tout disparaissait au rechargement. La sous-requête
+        # cible le message tout juste inséré (aucun RETURNING nécessaire).
+        cible = (
+            "(SELECT max(id) FROM workflow_messages "
+            "WHERE session_id = %(id)s AND role = 'assistant')"
+        )
+        for source in contexte.sources:
+            curseur.execute(
+                "INSERT INTO message_traces (message_id, type, nom, section, extrait) "
+                f"VALUES ({cible}, 'source', %(nom)s, %(section)s, %(extrait)s)",
+                {
+                    "id": session_id,
+                    "nom": source.nom,
+                    "section": source.section,
+                    "extrait": source.extrait,
+                },
+            )
+        divergences = extraire_divergences(contenu_reponse)
+        for type_trace, contenus_trace in (
+            ("avertissement", avertissements),
+            ("divergence", divergences),
+        ):
+            for contenu_trace in contenus_trace:
+                curseur.execute(
+                    "INSERT INTO message_traces (message_id, type, contenu) "
+                    f"VALUES ({cible}, %(type)s, %(contenu)s)",
+                    {"id": session_id, "type": type_trace, "contenu": contenu_trace},
+                )
+
         # Déduplication à deux étages : clé normalisée (décoration markdown)
         # puis rapprochement sémantique (S2.15) — les récapitulatifs du modèle
         # re-listent les hypothèses sous d'autres mots (session 11).
@@ -442,6 +473,7 @@ def message_route(
         etape=etape,
         sources=contexte.sources,
         hypotheses_ajoutees=hypotheses_ajoutees,
+        divergences=divergences,
         levees_proposees=[
             LeveeProposeeSortie(
                 hypothese_id=levee.hypothese_id,
@@ -450,6 +482,5 @@ def message_route(
             )
             for levee in levees
         ],
-        divergences=extraire_divergences(contenu_reponse),
         avertissements=avertissements,
     )

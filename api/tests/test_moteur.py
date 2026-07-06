@@ -180,7 +180,12 @@ class FauxChat:
 CONTEXTE_CANNE = ContexteResultat(
     contexte="[Source : spec_v2.docx — Spec > CA]\ncontenu",
     sources=[
-        SourceCitee(document="projet-alpha/spec_v2.docx", nom="spec_v2.docx", section="Spec > CA")
+        SourceCitee(
+            document="projet-alpha/spec_v2.docx",
+            nom="spec_v2.docx",
+            section="Spec > CA",
+            extrait="contenu exact du chunk cité",
+        )
     ],
     nb_tokens=120,
     rerank_applique=True,
@@ -355,6 +360,24 @@ def test_surcharge_modele_ui_appliquee_a_l_appel(brancher) -> None:
     _, faux_client = brancher(script, "Réponse.")
     assert client_http.post("/workflows/7/message", json={"message": "ok"}).status_code == 200
     assert faux_client.appels[0]["model"] == "openweight-large"
+
+
+def test_traces_persistees_sur_le_message(brancher) -> None:
+    # S3.9 (A3 complet) : sources (avec extrait exact), avertissements et
+    # divergences entrent dans message_traces — le fil les restitue au
+    # rechargement, fin de la « v1 assumée » S2.8.
+    reponse = "Réponse.\n[DIVERGENCE] 15 vs 30 jours [Source : spec_v2.docx].\nQ1 ? Q2 ? Q3 ? Q4 ?"
+    connexion, _ = brancher(list(SCRIPT_NOMINAL), reponse)
+    client_http.post("/workflows/7/message", json={"message": "délai ?"})
+    traces = [p for r, p in connexion.curseur.requetes if "INSERT INTO message_traces" in r]
+    assert {
+        "nom": "spec_v2.docx",
+        "section": "Spec > CA",
+        "extrait": "contenu exact du chunk cité",
+        "id": 7,
+    } in traces  # la source + extrait
+    assert any(p.get("type") == "avertissement" for p in traces)  # règle 1 (4 questions)
+    assert any(p.get("type") == "divergence" for p in traces)
 
 
 def test_usage_verse_au_registre_de_conso(brancher) -> None:

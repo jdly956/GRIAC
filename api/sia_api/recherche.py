@@ -200,6 +200,9 @@ class SourceCitee(BaseModel):
     document: str
     nom: str
     section: str
+    # S3.9 : l'extrait EXACT du chunk cité — la promesse de l'arbitrage A3
+    # (« panneau sources avec extrait exact consultable »).
+    extrait: str = ""
 
 
 class ContexteResultat(BaseModel):
@@ -255,7 +258,12 @@ def construire_contexte(
     return ContexteResultat(
         contexte=contexte,
         sources=[
-            SourceCitee(document=chunk.document, nom=chunk.nom, section=chunk.section)
+            SourceCitee(
+                document=chunk.document,
+                nom=chunk.nom,
+                section=chunk.section,
+                extrait=chunk.contenu,
+            )
             for chunk in retenus
         ],
         nb_tokens=total,

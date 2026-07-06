@@ -452,6 +452,29 @@ def test_depot_et_indexation_depuis_mes_documents(api, monkeypatch: pytest.Monke
     assert any(a[:2] == ("POST", "/ingestion/lancer") for a in api.appels)
 
 
+def test_traces_du_fil_avec_extrait_exact(api) -> None:
+    # S3.9 : au rechargement, chaque message assistant garde ses sources —
+    # l'extrait exact du chunk est consultable (la promesse A3).
+    messages = [
+        {
+            "role": "assistant",
+            "etape": "interview",
+            "contenu": "Réponse sourcée",
+            "sources": [
+                {"nom": "spec_v2.docx", "section": "Spec > CA", "extrait": "délai de 30 jours"}
+            ],
+            "avertissements": ["Budget dépassé"],
+            "divergences": [],
+        }
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, messages)
+    texte = client.get("/sessions/1").text
+    assert "Sources mobilisées (1)" in texte
+    assert "extrait exact" in texte and "délai de 30 jours" in texte
+    assert "Budget dépassé" in texte
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")

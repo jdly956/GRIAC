@@ -162,26 +162,60 @@ def lire_session(session_id: int, connexion: Connexion) -> EtatSession:
     return etat
 
 
+class TraceSource(BaseModel):
+    nom: str
+    section: str
+    extrait: str  # l'extrait EXACT du chunk cité (A3, S3.9)
+
+
 class MessageFil(BaseModel):
     role: Literal["po", "assistant"]
     etape: str
     contenu: str
+    sources: list[TraceSource] = []
+    avertissements: list[str] = []
+    divergences: list[str] = []
 
 
 @router.get("/workflows/{session_id}/messages")
 def lire_messages(session_id: int, connexion: Connexion) -> list[MessageFil]:
-    """Le fil de la conversation — consommé par l'écran E4."""
+    """Le fil de la conversation, avec sa traçabilité persistée (S3.9/A3)."""
     with connexion.cursor() as curseur:
         if _lire_session(curseur, session_id) is None:
             raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
         curseur.execute(
-            "SELECT role, etape, contenu FROM workflow_messages "
+            "SELECT id, role, etape, contenu FROM workflow_messages "
             "WHERE session_id = %(id)s ORDER BY id",
             {"id": session_id},
         )
+        lignes = curseur.fetchall()
+        curseur.execute(
+            "SELECT t.message_id, t.type, t.nom, t.section, t.extrait, t.contenu "
+            "FROM message_traces t JOIN workflow_messages m ON m.id = t.message_id "
+            "WHERE m.session_id = %(id)s ORDER BY t.id",
+            {"id": session_id},
+        )
+        traces: dict[int, dict[str, list]] = {}
+        for message_id, type_trace, nom, section, extrait, contenu in curseur.fetchall():
+            par_message = traces.setdefault(
+                message_id, {"sources": [], "avertissements": [], "divergences": []}
+            )
+            if type_trace == "source":
+                par_message["sources"].append(
+                    TraceSource(nom=nom or "", section=section or "", extrait=extrait or "")
+                )
+            elif type_trace == "avertissement":
+                par_message["avertissements"].append(contenu or "")
+            else:
+                par_message["divergences"].append(contenu or "")
         return [
-            MessageFil(role=ligne[0], etape=ligne[1], contenu=ligne[2])
-            for ligne in curseur.fetchall()
+            MessageFil(
+                role=ligne[1],
+                etape=ligne[2],
+                contenu=ligne[3],
+                **traces.get(ligne[0], {}),
+            )
+            for ligne in lignes
         ]
 
 

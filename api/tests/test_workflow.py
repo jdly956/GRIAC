@@ -362,7 +362,11 @@ def test_lecture_du_fil(brancher) -> None:
         [
             (7, "interview", None),  # _lire_session (contrôle d'existence)
             [],
-            [("po", "recuperation_feature", "Ma feature"), ("assistant", "interview", "Q1 ?")],
+            [
+                (1, "po", "recuperation_feature", "Ma feature"),
+                (2, "assistant", "interview", "Q1 ?"),
+            ],
+            [],  # aucune trace persistée (S3.9)
         ]
     )
     reponse = client.get("/workflows/7/messages")
@@ -370,3 +374,27 @@ def test_lecture_du_fil(brancher) -> None:
     fil = reponse.json()
     assert [message["role"] for message in fil] == ["po", "assistant"]
     assert fil[1]["contenu"] == "Q1 ?"
+
+
+def test_lecture_du_fil_avec_traces_persistees(brancher) -> None:
+    # S3.9 (A3 complet) : sources — avec l'extrait exact — avertissements et
+    # divergences reviennent avec le fil au rechargement (fin de la v1 S2.8).
+    brancher(
+        [
+            (7, "interview", None),
+            [],
+            [(2, "assistant", "interview", "Réponse sourcée")],
+            [
+                (2, "source", "spec_v2.docx", "Spec > CA", "le délai est de 30 jours", None),
+                (2, "avertissement", None, None, None, "Budget dépassé"),
+                (2, "divergence", None, None, None, "[DIVERGENCE] 15 vs 30 jours [Source : spec]"),
+            ],
+        ]
+    )
+    fil = client.get("/workflows/7/messages").json()
+    message = fil[0]
+    assert message["sources"] == [
+        {"nom": "spec_v2.docx", "section": "Spec > CA", "extrait": "le délai est de 30 jours"}
+    ]
+    assert message["avertissements"] == ["Budget dépassé"]
+    assert len(message["divergences"]) == 1

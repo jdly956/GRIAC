@@ -77,6 +77,8 @@ Critères d'acceptation :
 - [ ] Panneau sources : **extrait exact consultable** (le texte du chunk cité, replié par défaut) — la promesse de l'arbitrage A3
 - [ ] TU api (persistance) + écran
 
+*Code livré le 06/07/2026 : migration 0014 (`message_traces` : source/avertissement/divergence par message, index) ; `SourceCitee.extrait` porte le contenu exact du chunk depuis l'assemblage E2 ; le moteur persiste les traces sur le message assistant (sous-requête `max(id)` — aucun RETURNING) ; `GET /workflows/{id}/messages` restitue la traçabilité par message ; fil web : « Sources mobilisées (N) » + « extrait exact » dépliables, alertes A9/avertissements persistants ; panneau « Dernière réponse » : extrait consultable. 4 TU — 268 tests. Plan `docs/plans-test/s3.9-tracabilite-a3.md`.*
+
 ### S3.10 — Corpus depuis l'UI : upload + pipeline + suivi
 
 - [ ] « Mes documents » : **dépôt de fichiers** (multipart → dossier corpus du pod, taille/format contrôlés, statut « en attente d'indexation »)

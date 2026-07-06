@@ -24,7 +24,11 @@
   <p><strong>Sources mobilisées (A3)</strong> :</p>
   <ul>
     {% for source in dernier_resultat.sources %}
-    <li>{{ source.nom }} — {{ source.section }}</li>
+    <li>{{ source.nom }} — {{ source.section }}
+      {% if source.extrait %}
+      <details><summary>extrait exact</summary><blockquote>{{ source.extrait }}</blockquote></details>
+      {% endif %}
+    </li>
     {% endfor %}
   </ul>
   {% endif %}
