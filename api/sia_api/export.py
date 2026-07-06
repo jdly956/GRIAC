@@ -94,6 +94,14 @@ def _charger_session(curseur, session_id: int) -> tuple[list[str], list[str]]:
             detail="Aucune story rédigée à exporter — la session doit avoir produit des US "
             "au format interne (étape rédaction).",
         )
+    # S3.13 : la version ÉDITÉE par le PO gagne à l'export (clé = titre).
+    curseur.execute(
+        "SELECT titre, contenu FROM story_editions WHERE session_id = %(id)s",
+        {"id": session_id},
+    )
+    editions = {ligne[0]: ligne[1] for ligne in curseur.fetchall()}
+    if editions:
+        stories = [editions.get(_titre(story), story) for story in stories]
     curseur.execute(
         "SELECT texte FROM workflow_hypotheses "
         "WHERE session_id = %(id)s AND statut = 'en_attente' ORDER BY id",

@@ -35,10 +35,17 @@
 
 **S3.8 — dynamisme htmx** (PR #32/S3.7 mergée dans la foulée) : **htmx 2.0.4 vendoré** (`static/htmx.min.js` via le registre npm — les CDN unpkg/jsdelivr sont bloqués par la politique réseau de l'environnement, ce qui valide le choix du vendoring) + montage `StaticFiles` ; `hx-boost` sur les 3 formulaires longs (message / story suivante / valider) : envoi AJAX + remplacement de page **sans écran blanc**, **zéro route fragment** (le rendu serveur reste unique) ; **indicateur « ⏳ Génération en cours… »** par formulaire + **boutons désactivés pendant l'appel** (anti double-envoi — le défaut qui guettait sur les générations de 7-30 s) ; sans JavaScript, les POST classiques restent intacts (progressive enhancement). 2 TU — **239 tests verts**. Plan `docs/plans-test/s3.8-htmx.md` (test central : indicateur + boutons désactivés pendant une vraie génération, repli JS désactivé).
 
+**Fin du lot pré-pilote — S3.11 → S3.13 enchaînées sur une PR unique** (« go mais enchaîne les story stp » : le référent a demandé le stacking, une story = un commit) :
+- **S3.11 tokens** (`45d1aee`) : migration 0011 — registre unique `conso_tokens` (chat rattaché à la session, embeddings par lot), endpoints `GET /workflows/{id}/conso` + `GET /telemetrie/tokens` (jauge du jour vs tpd 2,46 M, `ALBERT_TPD_QUOTA`), conso affichée sur session + panneau Télémétrie avec jauge ;
+- **S3.12 modèle UI** (`99c0c9e`) : migration 0012 (table `parametres`), surcharge lue à CHAQUE appel (UI > env > défaut code, **sans relance**), écran Paramètres (select + alias libre + retour défaut), modèle actif affiché sur session ;
+- **S3.10 corpus UI** (`0711bca`) : migration 0013 (`ingestion_runs`), orchestrateur `sia_ingestion/pipeline.py` (scan→embed, code 2 = arrêt, code 1 = `echec_partiel` et poursuite — D9), upload multipart sécurisé, `POST /ingestion/lancer` en sous-processus détaché (un seul run à la fois, log par run, déblocage manuel), écran Mes documents : dépôt + « Indexer maintenant » + **suivi nœud par nœud auto-rafraîchi**. ⚠️ Limite documentée : déploiement par images → E7 (pilote = pod, arbitré) ;
+- **S3.9 traçabilité A3 complète** (`d1e8db0`) : migration 0014 (`message_traces`), `SourceCitee.extrait` = contenu exact du chunk, traces persistées par message (sous-requête max(id) — zéro churn), le fil restitue sources/extraits/avertissements/divergences au rechargement — **fin de la « v1 assumée » S2.8** ;
+- **S3.13 confort PO** : migration 0015 (`story_editions` + titre/archivee), **édition des stories** (promesse E4 enfin livrée — la version éditée GAGNE à l'export), renommer/archiver les sessions (masque, ne détruit jamais), copier une story. Reste mineur : compteur télémétrique des stories éditées.
+
 **Mini-récap** :
-- ✅ Fait : S3.6 mergée (PR #31) ; S3.7 mergée (PR #32) ; S3.8 livrée — **le trio « première impression » est complet**
-- ⏳ En cours : lot pré-pilote, suite de l'ordre validé : S3.11 (tokens) → S3.12 (modèle) → S3.10 (upload/pipeline) → S3.9/S3.13
-- ⏳ Référent : revue/merge PR S3.8 ; plans s2.15 + s3.2 + s3.6→s3.8 sur pod (une seule session de contrôle suffit)
+- ✅ Fait : **LE LOT PRÉ-PILOTE EST COMPLET** — S3.6/S3.7 mergées (PRs #31/#32), S3.8 + S3.11 + S3.12 + S3.10 + S3.9 + S3.13 sur la PR en cours ; migrations 0011→0015 ; **275 tests verts** (239 → 275)
+- ⏳ Référent : revue/merge de la PR du lot ; sur pod : migrations 0011→0015 puis plans s3.8→s3.13 (une session de contrôle couvre tout) ; `export SIA_CORPUS_DIR=~/work/corpus` avant `make pod-up`
+- ⏳ Ensuite : dépendances externes §7 (snapshot corpus → S3.1/S3.3, gold → S3.4, panel → S3.5) — le code n'attend plus qu'elles
 
 ---
 

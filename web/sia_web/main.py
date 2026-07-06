@@ -133,6 +133,9 @@ def _page_session(
     _, stories = api_client.appeler("GET", f"/workflows/{session_id}/stories")
     statut_conso, conso = api_client.appeler("GET", f"/workflows/{session_id}/conso")
     statut_parametres, parametres = api_client.appeler("GET", "/parametres")
+    statut_contenus, stories_contenus = api_client.appeler(
+        "GET", f"/workflows/{session_id}/stories/contenus"
+    )
     # S3.7 : le registre replié ne se déplie tout seul que si une levée
     # proposée (S2.13) attend la décision du PO.
     nb_levees_a_decider = sum(
@@ -155,6 +158,8 @@ def _page_session(
             "conso": conso if statut_conso == 200 else None,
             # S3.12 : le PO sait quel modèle écrit.
             "modele_actif": parametres.get("modele_actif") if statut_parametres == 200 else None,
+            # S3.13 : édition/copie des stories (version éditée gagnante à l'export).
+            "stories_contenus": stories_contenus if statut_contenus == 200 else [],
             "erreur": erreur,
         },
     )
@@ -257,6 +262,37 @@ def story_suivante(request: Request, session_id: int) -> HTMLResponse:
     if statut != 200:
         return _page_session(request, session_id, erreur=resultat.get("detail"))
     return _page_session(request, session_id, dernier_resultat=resultat)
+
+
+@app.post("/sessions/{session_id}/stories/edition")
+def editer_story_web(
+    request: Request,
+    session_id: int,
+    titre: Annotated[str, Form()],
+    contenu: Annotated[str, Form()],
+) -> RedirectResponse:
+    """S3.13 : la version éditée est stockée et gagne à l'export."""
+    api_client.appeler(
+        "PUT",
+        f"/workflows/{session_id}/stories/edition",
+        json={"titre": titre, "contenu": contenu},
+    )
+    return _rediriger(request, f"/sessions/{session_id}")
+
+
+@app.post("/sessions/{session_id}/gerer")
+def gerer_session_web(
+    request: Request,
+    session_id: int,
+    titre: Annotated[str, Form()] = "",
+    archiver: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    """S3.13 : renommer / archiver (l'archivage masque de l'accueil, sans détruire)."""
+    if archiver:
+        api_client.appeler("PATCH", f"/workflows/{session_id}", json={"archivee": True})
+        return _rediriger(request, "/")
+    api_client.appeler("PATCH", f"/workflows/{session_id}", json={"titre": titre})
+    return _rediriger(request, f"/sessions/{session_id}")
 
 
 @app.post("/sessions/{session_id}/hypotheses/{hypothese_id}")

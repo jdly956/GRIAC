@@ -475,6 +475,40 @@ def test_traces_du_fil_avec_extrait_exact(api) -> None:
     assert "Budget dépassé" in texte
 
 
+def test_edition_et_gestion_de_session(api) -> None:
+    # S3.13 : panneau d'édition (version éditée gagnante à l'export), copie,
+    # renommage et archivage (masque sans détruire).
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher(
+        "GET",
+        "/workflows/1/stories/contenus",
+        200,
+        [{"titre": "Consulter mon dossier", "contenu": "**US — …**", "editee": True}],
+    )
+    texte = client.get("/sessions/1").text
+    assert "Stories — éditer / copier (1)" in texte
+    assert "éditée — cette version part à l'export" in texte
+    assert "navigator.clipboard.writeText" in texte  # bouton copier (dégradé sans JS : textarea)
+    assert "Gérer la session" in texte
+
+    api.brancher("PUT", "/workflows/1/stories/edition", 200, {})
+    reponse = client.post(
+        "/sessions/1/stories/edition",
+        data={"titre": "Consulter mon dossier", "contenu": "édité"},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    appel = next(a for a in api.appels if a[0] == "PUT" and "edition" in a[1])
+    assert appel[2] == {"titre": "Consulter mon dossier", "contenu": "édité"}
+
+    api.brancher("PATCH", "/workflows/1", 200, {})
+    archive = client.post("/sessions/1/gerer", data={"archiver": "1"}, follow_redirects=False)
+    assert archive.headers["location"] == "/"  # retour à l'accueil après archivage
+    patch = next(a for a in api.appels if a[0] == "PATCH")
+    assert patch[2] == {"archivee": True}
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")

@@ -128,6 +128,7 @@ class SessionResume(BaseModel):
     etape: str
     projet_id: int | None
     apercu_feature: str
+    titre: str | None = None  # nom libre (S3.13) — sinon l'aperçu de la Feature
 
 
 @router.get("/workflows")
@@ -135,12 +136,13 @@ def lister_sessions(connexion: Connexion) -> list[SessionResume]:
     """Liste des sessions — l'accueil E4 permet de RETROUVER une session en cours.
 
     Constaté en session de validation (06/07/2026) : sans liste, une session
-    perdue de vue ne se retrouve que par URL devinée.
+    perdue de vue ne se retrouve que par URL devinée. Les sessions archivées
+    (S3.13) sont masquées — jamais supprimées.
     """
     with connexion.cursor() as curseur:
         curseur.execute(
-            "SELECT id, etape, projet_id, feature FROM workflow_sessions "
-            "ORDER BY modifie_le DESC, id DESC"
+            "SELECT id, etape, projet_id, feature, titre FROM workflow_sessions "
+            "WHERE NOT archivee ORDER BY modifie_le DESC, id DESC"
         )
         return [
             SessionResume(
@@ -148,9 +150,41 @@ def lister_sessions(connexion: Connexion) -> list[SessionResume]:
                 etape=ligne[1],
                 projet_id=ligne[2],
                 apercu_feature=(ligne[3][:120] + "…") if len(ligne[3]) > 120 else ligne[3],
+                titre=ligne[4],
             )
             for ligne in curseur.fetchall()
         ]
+
+
+class SessionMaj(BaseModel):
+    titre: str | None = None
+    archivee: bool | None = None
+
+
+@router.patch("/workflows/{session_id}")
+def gerer_session(session_id: int, entree: SessionMaj, connexion: Connexion) -> dict:
+    """Renommer / archiver (S3.13) — l'archivage masque, ne détruit jamais."""
+    champs = []
+    parametres: dict = {"id": session_id}
+    if entree.titre is not None:
+        champs.append("titre = %(titre)s")
+        parametres["titre"] = entree.titre.strip() or None
+    if entree.archivee is not None:
+        champs.append("archivee = %(archivee)s")
+        parametres["archivee"] = entree.archivee
+    if not champs:
+        raise HTTPException(status_code=422, detail="Rien à modifier (titre ou archivee).")
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            f"UPDATE workflow_sessions SET {', '.join(champs)} "
+            "WHERE id = %(id)s RETURNING id, titre, archivee",
+            parametres,
+        )
+        ligne = curseur.fetchone()
+        if ligne is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
+    connexion.commit()
+    return {"id": ligne[0], "titre": ligne[1], "archivee": ligne[2]}
 
 
 @router.get("/workflows/{session_id}")

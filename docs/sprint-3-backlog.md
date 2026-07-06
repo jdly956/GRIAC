@@ -111,6 +111,8 @@ Critères d'acceptation :
 - [ ] **Copier une story** : bouton par story (clipboard, dégradé acceptable sans JS : zone sélectionnable)
 - [ ] TU api + écran
 
+*Code livré le 06/07/2026 : migration 0015 (`story_editions` UNIQUE(session, titre) + `workflow_sessions.titre/archivee`), `sia_api/stories.py` (`GET /workflows/{id}/stories/contenus` — version éditée prioritaire — et `PUT …/stories/edition` en upsert), **l'édition gagne à l'export** (surcouche dans `_charger_session` E5), `PATCH /workflows/{id}` (renommer/archiver — l'accueil masque les archivées, rien n'est détruit), panneaux web « Stories — éditer / copier » (badge + bouton copier clipboard) et « Gérer la session ». Le rattachement télémétrique du taux d'édition réel reste à câbler (comptage `story_editions` — mineur). 10 TU — 275 tests. Plan `docs/plans-test/s3.13-confort-po.md`.*
+
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 
 Critères d'acceptation :
