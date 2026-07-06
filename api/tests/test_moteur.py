@@ -206,7 +206,7 @@ def test_message_nominal_alimente_fil_et_registre(brancher) -> None:
     assert connexion.commits == 1
 
     appel = faux_client.appels[0]
-    assert appel["model"] == "openweight-large"
+    assert appel["model"] == "openweight-medium"  # défaut à l'essai (verdict E6 v0)
     assert appel["max_tokens"] == 4096
     assert appel["messages"][0]["role"] == "system"
     assert "PROMPT 3" in appel["messages"][0]["content"]

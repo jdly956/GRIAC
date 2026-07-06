@@ -9,8 +9,9 @@ moteur, pas d'écran dédié). À chaque message, le moteur :
    + étape courante + contexte/NFR du projet (E8, S1.11) + extraits cités
    + few-shot (gold si fourni, sinon repli silver JAMAIS présenté comme
    validé — CLAUDE.md) + consignes A3 (citation/origine) et A9 (divergences) ;
-3. appelle Albert (`openweight-large`, max_tokens généreux — modèle à
-   raisonnement, gotcha S1.5 ; réponse vide = erreur explicite) ;
+3. appelle Albert (modèle `ALBERT_MODEL_CHAT` — défaut `openweight-medium`,
+   verdict E6 v0 ; max_tokens généreux — gotcha raisonnement S1.5, toujours
+   valable si retour à `openweight-large` ; réponse vide = erreur explicite) ;
 4. verse le message PO et la réponse dans `workflow_messages`, extrait les
    [HYPOTHÈSE À VALIDER] nouvelles vers le registre (origine `modele`, A8) ;
    quand un message du PO tranche une hypothèse déjà en attente, le moteur

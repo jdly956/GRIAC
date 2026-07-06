@@ -131,3 +131,14 @@ Critères d'acceptation :
 - [ ] TU purs (extraction du marqueur) + TU route (Albert/RAG mockés, invariant A8) + TU écran
 
 *Code livré le 06/07/2026 : `extraire_levees_proposees` (pure, `sia_api/workflow.py`), registre en attente injecté au prompt + persistance des propositions (`sia_api/moteur.py`, `levees_proposees` dans la réponse), exposition dans `EtatSession` (`sia_api/workflows.py`), badge écran session. Migration 0010. 8 TU (220 au total). CA à cocher via `docs/plans-test/s2.13-rapprochement-a8.md` (exige clé + base — pod).*
+
+## S2.14 — bascule du modèle de chat par défaut vers `openweight-medium` (à l'essai)
+
+> Verdict E6 v0 (06/07/2026, `docs/eval-onyxia.md`) : `openweight-medium` **0,806** > `openweight-large` **0,498** — dérive de format de large corroborée en session réelle 8. Bascule **à l'essai** validée par le référent (« go pour la suite ») ; décision définitive au recalibrage gold.
+
+Critères d'acceptation :
+- [ ] `ALBERT_MODEL_CHAT` par défaut = `openweight-medium` partout où le défaut vit (`config.py`, `.env.example`, compose, exemple de Secret k8s, README) — **jamais en dur dans le code métier** (le moteur lit toujours `settings.albert_model_chat`)
+- [ ] Réversibilité prouvée par TU : la surcharge `ALBERT_MODEL_CHAT=openweight-large` ramène large sans changement de code
+- [ ] Le banc E6 (`make eval`) continue de comparer large vs medium par défaut — l'instrument de la décision définitive reste en place
+
+*Code livré le 06/07/2026 : défaut basculé sur les 5 surfaces, TU du défaut recalées + TU de surcharge réorientée vers le chemin de retour (large). 220 tests verts. CA à cocher via `docs/plans-test/s2.14-modele-chat-medium.md` (probe + génération réelle + contre-épreuve de réversibilité — pod).*

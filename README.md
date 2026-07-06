@@ -33,7 +33,7 @@ cp .env.example .env   # .env est ignoré par git ; renseigner ALBERT_API_KEY
   `docker compose logs api` dans la stack) : les variables en cause sont nommées,
   leur valeur n'est jamais affichée.
 - La clé est portée par un `SecretStr` : masquée dans les repr/str, jamais dans les logs.
-- Alias de modèles Albert par défaut : `openweight-large` (chat), `openweight-embeddings`,
+- Alias de modèles Albert par défaut : `openweight-medium` (chat — à l'essai, verdict E6 v0, cf. `docs/eval-onyxia.md`), `openweight-embeddings`,
   `openweight-rerank` — surchargeables par `ALBERT_MODEL_*` (cf. `.env.example`).
 - Déploiement Kubernetes : les variables viennent d'un Secret — template versionné
   dans [`infra/k8s/secret-albert.example.yaml`](infra/k8s/secret-albert.example.yaml)
