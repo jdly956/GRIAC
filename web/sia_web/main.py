@@ -170,19 +170,39 @@ def envoyer_message(
     return _page_session(request, session_id, dernier_resultat=resultat)
 
 
-@app.post("/sessions/{session_id}/valider")
+@app.post("/sessions/{session_id}/valider", response_class=HTMLResponse)
 def valider_etape(
     request: Request,
     session_id: int,
     valide: Annotated[str, Form()],
     commentaire: Annotated[str, Form()] = "",
-) -> RedirectResponse:
-    api_client.appeler(
+) -> HTMLResponse:
+    """Règle 5 bouclée : la décision avance la machine à états PUIS est transmise
+    au moteur, qui produit l'entrée de l'étape suivante (Oui) ou l'itération (Non).
+
+    Constaté en session de validation (06/07/2026) : sans ce second appel, le
+    bouton changeait l'état sans aucune interaction LLM — la machine à états
+    filait à « synthèse » pendant que la conversation restait à la rédaction,
+    et le PO validait en double (bouton + « oui » tapé dans le fil).
+    """
+    statut, resultat = api_client.appeler(
         "POST",
         f"/workflows/{session_id}/avancer",
         json={"valide": valide == "oui", "commentaire": commentaire},
     )
-    return _rediriger(request, f"/sessions/{session_id}")
+    if statut != 200:
+        return _page_session(request, session_id, erreur=resultat.get("detail"))
+    message = (
+        "Étape validée (Oui) — poursuis le workflow sur l'étape courante."
+        if valide == "oui"
+        else f"Étape non validée (Non) — itère sur cette étape en tenant compte de : {commentaire}"
+    )
+    statut_moteur, reponse_moteur = api_client.appeler(
+        "POST", f"/workflows/{session_id}/message", json={"message": message}
+    )
+    if statut_moteur != 200:
+        return _page_session(request, session_id, erreur=reponse_moteur.get("detail"))
+    return _page_session(request, session_id, dernier_resultat=reponse_moteur)
 
 
 @app.post("/sessions/{session_id}/hypotheses/{hypothese_id}")

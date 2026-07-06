@@ -152,13 +152,43 @@ def test_envoi_message_affiche_sources_et_avertissements(api) -> None:
     assert "règle 1" in reponse.text  # avertissement
 
 
-def test_validation_etape_oui_et_redirection(api) -> None:
+def test_validation_etape_oui_declenche_le_moteur(api) -> None:
+    # Règle 5 bouclée (bug constaté 06/07/2026) : le bouton « Oui » ne se
+    # contente plus d'avancer l'état — la décision est transmise au moteur,
+    # qui produit l'entrée de l'étape suivante dans le même aller-retour.
     api.brancher("POST", "/workflows/1/avancer", 200, {})
-    reponse = client.post(
-        "/sessions/1/valider", data={"valide": "oui", "commentaire": ""}, follow_redirects=False
+    api.brancher(
+        "POST",
+        "/workflows/1/message",
+        200,
+        {"reponse": "Étape suivante…", "etape": "interview", "sources": [], "avertissements": []},
     )
-    assert reponse.status_code == 303
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
+    reponse = client.post("/sessions/1/valider", data={"valide": "oui", "commentaire": ""})
+    assert reponse.status_code == 200
     assert api.appels[0][2] == {"valide": True, "commentaire": ""}
+    methode, chemin, corps = api.appels[1]
+    assert (methode, chemin) == ("POST", "/workflows/1/message")
+    assert "Étape validée (Oui)" in corps["message"]
+
+
+def test_validation_etape_non_transmet_le_commentaire_au_moteur(api) -> None:
+    api.brancher("POST", "/workflows/1/avancer", 200, {})
+    api.brancher(
+        "POST",
+        "/workflows/1/message",
+        200,
+        {"reponse": "J'itère…", "etape": "interview", "sources": [], "avertissements": []},
+    )
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
+    reponse = client.post(
+        "/sessions/1/valider", data={"valide": "non", "commentaire": "revoir le CA2"}
+    )
+    assert reponse.status_code == 200
+    assert api.appels[0][2] == {"valide": False, "commentaire": "revoir le CA2"}
+    assert "revoir le CA2" in api.appels[1][2]["message"]
 
 
 def test_decision_hypothese_et_redirection(api) -> None:
