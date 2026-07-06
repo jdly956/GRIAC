@@ -45,10 +45,12 @@
 
 **Les 3 arbitrages du cadrage sont rendus par le référent** : (a) « Oui » → **bouton « Story suivante »** ; (b) **PG 18.3 CNPG assumé** pour le pilote (alignement 16 = décision prod/E7) ; (c) **pilote sur pod** `make pod-up` (fragilité assumée — le déploiement Helm lab et le registre d'images glissent vers E7 et sortent du chemin critique). **S3.2 livrée dans la foulée** : route web `POST /sessions/{id}/story-suivante` (message dédié au moteur, aucun appel `/avancer` — badge A5 fidèle, invariants règle 5/A8 intacts), panneau « Story suivante » aux étapes de production + rappel sur « Valider l'étape », consigne moteur « UNE SEULE story à la fois » (anti-troncature session 8, candidates restantes annoncées). 3 TU — **232 tests verts**. Plan `docs/plans-test/s3.2-story-suivante.md` (le test A5 : badge stable au fil des stories).
 
+**Lot pré-pilote cadré avec le référent (fin de session)** : « améliorer le MVP avant de le présenter aux PO ». Analyse des manques du point de vue PO — aux 4 points du référent (UI statique/navigation, upload+pipeline absents de l'UI, modèle non changeable, aucune conso de tokens) s'ajoutent : **markdown brut à l'écran** (tableaux Gherkin illisibles — le choc visuel n°1), **A3 incomplet** (extrait exact non consultable, sources/avertissements perdus au rechargement — v1 assumée S2.8), **édition des stories jamais livrée** (promise par la cible E4), pas de gestion des sessions (renommer/archiver), pas de copie par story. **8 stories cadrées (S3.6→S3.13)** au backlog sprint 3 avec 4 arbitrages rendus : htmx léger (progressive enhancement, vendoré) ; upload → bouton « Indexer » manuel (maîtrise tpd) ; modèle = réglage global instance (écran Paramètres, précédence documentée) ; édition simple incluse (la version éditée gagne à l'export). Ordre : S3.6→S3.8 (première impression) → S3.11+S3.12 → S3.10 → S3.9/S3.13.
+
 **Mini-récap** :
-- ✅ Fait : analyse doc + plan de travail ; S2.13 livrée **et validée stack-live** ; S2.14 livrée (corroborée) ; correctifs sessions 9+11 ; S2.15 anti-invention v2 ; **sprint 3 cadré (3 arbitrages rendus) + S3.2 « Story suivante » livrée** ; TNR 232 verts ; PR #30 draft
-- ⏳ Référent : revue/merge PR #30 ; S3.0 externes (snapshot corpus → S3.1/S3.3, gold → S3.4, panel → S3.5, protection de branche) ; plans s2.15 + s3.2 sur pod
-- ⏳ Backlog code (gated externes) : S3.1 lecture S3/MinIO ; S3.3 ingestion réelle + recalibrages ; S3.4 verdict modèle au gold ; S3.5 charte d'usage + embarquement
+- ✅ Fait : analyse doc + plan de travail ; S2.13 livrée **et validée stack-live** ; S2.14 livrée (corroborée) ; correctifs sessions 9+11 ; S2.15 anti-invention v2 ; sprint 3 cadré (3 arbitrages) + S3.2 livrée ; **lot pré-pilote S3.6→S3.13 cadré (4 arbitrages)** ; TNR 232 verts ; PR #30 draft
+- ⏳ Référent : revue/merge PR #30 ; S3.0 externes (snapshot corpus, gold, panel, protection de branche) ; plans s2.15 + s3.2 sur pod
+- ⏳ Backlog code : **lot pré-pilote S3.6→S3.13 (prêt à démarrer, ordre validé)** ; puis gated externes : S3.1 lecture S3/MinIO, S3.3/S3.4 recalibrages, S3.5 embarquement pilote
 
 ---
 

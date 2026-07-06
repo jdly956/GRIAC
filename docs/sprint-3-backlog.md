@@ -45,6 +45,58 @@ Critères d'acceptation :
 - [ ] `make eval` sur `/evals/gold/` (bascule automatique déjà codée) : verdict `openweight-large` vs `openweight-medium` (vs Mistral Medium si accès ALLiaNCE) documenté dans `docs/`
 - [ ] Décision `ALBERT_MODEL_CHAT` définitive (l'essai medium S2.14 est confirmé ou annulé) ; few-shot gold en production
 
+## Lot pré-pilote (S3.6 → S3.13) — améliorer le MVP avant de le présenter aux PO
+
+> Cadré le 06/07/2026 avec le référent (« UI à revoir, beaucoup de blocs, rien n'est dynamique, navigation difficile ; pas d'ajout de documents ni de suivi du pipeline depuis l'UI ; pas de changement de modèle ni de conso de tokens »). **Arbitrages rendus** : htmx léger (autorisé par CLAUDE.md) ; upload → bouton « Indexer » manuel (maîtrise du quota tpd) ; modèle = réglage **global instance** (écran Paramètres) ; **édition des stories incluse** (version simple). Ordre recommandé : S3.6→S3.8 (première impression), puis S3.11+S3.12, puis S3.10, puis S3.9/S3.13.
+
+### S3.6 — Rendu markdown des messages (le choc visuel)
+
+- [ ] Les messages assistant du fil sont rendus en HTML (gras, titres, listes, **tableaux Gherkin lisibles**) — rendu serveur (lib markdown Python), HTML échappé (le contenu vient du LLM), styles DSFR sur les tableaux
+- [ ] Les messages PO restent en texte brut échappé ; TU rendu (tableau, gras, échappement d'un `<script>`)
+
+### S3.7 — Écran session réorganisé (navigation)
+
+- [ ] Registre des hypothèses **replié par défaut** (`<details>`/accordéon DSFR, compteur visible), déplié s'il y a des levées proposées à décider
+- [ ] Fil replié : seuls les N derniers échanges ouverts, les précédents en `<details>` ; ancre `#dernier-echange` après chaque envoi (plus de retour en haut de page)
+- [ ] Panneaux d'action (message, story suivante, valider) regroupés et accessibles sans scroll long ; TU écran
+
+### S3.8 — Dynamisme htmx (envoi sans rechargement)
+
+- [ ] Envoi de message et « Story suivante » via htmx : la réponse s'insère dans le fil sans rechargement complet ; **indicateur « génération en cours »** pendant l'appel ; bouton désactivé (anti double-envoi)
+- [ ] Repli sans JavaScript conservé (les formulaires classiques restent fonctionnels — progressive enhancement) ; htmx vendoré en statique (pas de CDN bloqué) ; TU des fragments
+
+### S3.9 — Traçabilité persistée + extrait exact (A3 complet)
+
+- [ ] Sources, avertissements et divergences **persistés par message** (migration) et affichés dans le fil au rechargement — plus de « v1 assumée » S2.8
+- [ ] Panneau sources : **extrait exact consultable** (le texte du chunk cité, replié par défaut) — la promesse de l'arbitrage A3
+- [ ] TU api (persistance) + écran
+
+### S3.10 — Corpus depuis l'UI : upload + pipeline + suivi
+
+- [ ] « Mes documents » : **dépôt de fichiers** (multipart → dossier corpus du pod, taille/format contrôlés, statut « en attente d'indexation »)
+- [ ] Bouton **« Indexer maintenant »** (arbitrage : manuel) : lance le pipeline complet en tâche de fond (scan→parse→qualify→chunk→embed) ; relance = reprise sur hash (D9)
+- [ ] **Écran de suivi** : run en cours et historique (début/fin, compteurs par nœud, échecs détaillés, tokens embeddings consommés) — table `ingestion_runs` (migration)
+- [ ] TU api (upload, déclenchement, statuts — pipeline mocké) + écran ; le plan de test réel mesure un run complet sur le pod
+
+### S3.11 — Comptabilité tokens (global / session / import)
+
+- [ ] Chaque appel chat capture `usage` (prompt + completion) → colonnes sur `workflow_messages` (migration) ; chaque lot d'embeddings capture ses tokens → rattaché au run S3.10
+- [ ] Télémétrie : conso **globale** (jour/semaine, jauge vs tpd 2,46 M), **par session** (affichée aussi sur l'écran session), **par import**
+- [ ] TU (usage simulé dans les fausses réponses Albert)
+
+### S3.12 — Changement de modèle depuis l'UI (global instance)
+
+- [ ] Écran **« Paramètres »** : modèle de chat actif (select `openweight-large`/`openweight-medium` + alias libre), stocké en base (table `parametres`, migration) — appliqué aux nouveaux appels sans relance
+- [ ] Précédence documentée : base (UI) > défaut du code ; la variable d'env reste le réglage d'infra prioritaire au démarrage
+- [ ] Le modèle actif est affiché sur l'écran session (le PO sait qui écrit) ; TU api + écran
+
+### S3.13 — Confort PO : édition des stories, gestion des sessions, copie
+
+- [ ] **Édition** (arbitrage : version simple) : chaque story extraite est éditable (textarea pré-remplie), la version éditée est stockée (migration) et **gagne à l'export** ; le « taux d'édition » de la télémétrie devient une mesure réelle (part des stories éditées)
+- [ ] Sessions : **renommer** (titre libre affiché à l'accueil) et **archiver** (masquée de l'accueil, conservée en base — pas de suppression destructive)
+- [ ] **Copier une story** : bouton par story (clipboard, dégradé acceptable sans JS : zone sélectionnable)
+- [ ] TU api + écran
+
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 
 Critères d'acceptation :
