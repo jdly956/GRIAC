@@ -53,6 +53,7 @@ make ingest-qualify                 # qualification v0 (S1.9) : métadonnées, d
 make ingest-chunk                   # chunking par sections (S2.1) -> table chunks
 make ingest-embed                   # embeddings bge-m3 (S2.2) -> pgvector (clé Albert requise)
 make eval                           # benchmark génération E6 (grille 3 axes, gold sinon silver — clé requise)
+make pod-up                         # pod Onyxia : remise en route complète (libGL, env, api+web, healthchecks)
 uv run --package sia-api python -m sia_api.gabarit <fichier.md>   # validateur de conformité US (S1.10)
 ```
 

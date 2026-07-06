@@ -78,9 +78,9 @@ Critères d'acceptation :
 En tant que PO, je veux un inventaire fiable de ce que le système connaît.
 
 Critères d'acceptation :
-- [ ] `make ingest-scan CORPUS=<chemin|s3://…>` : parcours récursif, hash sha256, taille, extension, dates
-- [ ] Table `documents` alimentée par upsert sur hash ; relance = zéro doublon (idempotence)
-- [ ] Fixtures synthétiques dans `/evals/fixtures` (docx, pdf natif, pdf scanné, doublons, versions) ; inventaire CSV exporté
+- [x] `make ingest-scan CORPUS=<chemin|s3://…>` : parcours récursif, hash sha256, taille, extension, dates
+- [ ] Table `documents` alimentée par upsert sur hash ; relance = zéro doublon (idempotence) — *alimentation validée pod 06/07/2026 ; la relance du scan (contre-épreuve idempotence, plan s1.7 étape 4) reste à rejouer*
+- [x] Fixtures synthétiques dans `/evals/fixtures` (docx, pdf natif, pdf scanné, doublons, versions) ; inventaire CSV exporté
 
 *Code livré le 02/07/2026 : membre workspace `ingestion` (`sia_ingestion/scan.py`), migration 0002 (table `documents`, chemin UNIQUE = clé d'idempotence, index sha256 pour doublons S1.9 et reprise D9), `make ingest-scan`, 6 fixtures synthétiques (versions v1/v2_final_VF3, copie byte-à-byte, PDF natif/scanné, txt), export CSV, 7 TU (31 au total, verts). Choix documenté : upsert sur le **chemin relatif** (un fichier = une ligne, relance = zéro doublon) ; les doublons de contenu (même sha256) restent des lignes distinctes détectées par S1.9. `s3://` refusé explicitement tant que le snapshot MinIO n'existe pas (prérequis §7). **CA à cocher après exécution du plan `docs/plans-test/s1.7-ingest-scan.md` sur une base réelle** (mode A compose — lèverait aussi la réserve S1.2 — ou service PostgreSQL Onyxia).*
 
@@ -89,10 +89,10 @@ Critères d'acceptation :
 En tant que système, je veux convertir docx et pdf en markdown structuré exploitable pour le chunking.
 
 Critères d'acceptation :
-- [ ] Conversion docx et pdf natifs : hiérarchie de titres préservée, tableaux jamais détruits — *docx démontré en session (docling réel : `##`/`###` + tableau markdown) ; pdf à démontrer sur pod (modèles docling téléchargés au 1er run, bloqués par le proxy de session)*
-- [ ] Dérivés `.md` stockés hors repo (dossier `derived/` ou S3) ; statut de parsing en base
-- [ ] Un document en échec n'interrompt pas le lot ; rapport d'échecs produit
-- [ ] PDF scannés détectés et marqués `ocr_requis` (traitement OCR = sprint 2)
+- [x] Conversion docx et pdf natifs : hiérarchie de titres préservée, tableaux jamais détruits — *docx et pdf natif démontrés (pod 06/07/2026, après installation libGL — prérequis documenté runbook s0)*
+- [x] Dérivés `.md` stockés hors repo (dossier `derived/` ou S3) ; statut de parsing en base
+- [x] Un document en échec n'interrompt pas le lot ; rapport d'échecs produit
+- [x] PDF scannés détectés et marqués `ocr_requis` (traitement OCR = sprint 2)
 
 *Code livré le 02/07/2026 : `sia_ingestion/parse.py` + `make ingest-parse` (nœud B du DAG), migration 0003 (statut_parsing/chemin_derive/erreur_parsing/date_parsing), dérivés `derived/md/<sha256>.md` (reprise sur hash D9 : dérivé existant = pas de reconversion ; couvre aussi les doublons byte-à-byte), détection PDF sans couche texte par pypdf → `ocr_requis` AVANT docling (OCR docling désactivé — cohérent sprint 2), échec isolé → statut `echec` + rapport `derived/rapport-parsing.csv`, 9 TU (40 au total, verts — docling jamais chargé par les TU). Fixtures régénérées : PDF conformes (xref) dont un réellement sans texte, docx avec titres stylés + tableau. **CA à cocher après le plan `docs/plans-test/s1.8-ingest-parse.md` sur base réelle.***
 
@@ -101,9 +101,9 @@ Critères d'acceptation :
 En tant que PO, je veux que le système distingue documents de référence, brouillons et versions obsolètes.
 
 Critères d'acceptation :
-- [ ] Métadonnées inférées : projet (1er niveau du chemin), date (mtime + date dans le nom si présente), version (motifs `v\d+`, `VF`, `final`), statut brouillon (`draft`, `brouillon`, `WIP`)
-- [ ] L'inférence du champ `projet` est enregistrée comme **suggestion** : l'association faisant foi est celle confirmée par le PO via S1.11 (arbitrage A6, `docs/backlog-fonctionnel.md`)
-- [ ] Doublons détectés par hash ; versions regroupées par similarité de nom, la plus récente taguée `référence`
+- [x] Métadonnées inférées : projet (1er niveau du chemin), date (mtime + date dans le nom si présente), version (motifs `v\d+`, `VF`, `final`), statut brouillon (`draft`, `brouillon`, `WIP`)
+- [x] L'inférence du champ `projet` est enregistrée comme **suggestion** : l'association faisant foi est celle confirmée par le PO via S1.11 (arbitrage A6, `docs/backlog-fonctionnel.md`)
+- [x] Doublons détectés par hash ; versions regroupées par similarité de nom, la plus récente taguée `référence`
 - [x] Jeu de fixtures piégé (spec_v1, spec_v2_final_VF3, copie conforme) correctement qualifié, couvert par tests unitaires — `test_jeu_piege_correctement_qualifie` (TU verts)
 
 *Code livré le 02/07/2026 : `sia_ingestion/qualify.py` + `make ingest-qualify` (nœud C du DAG, fonction pure sans accès fichier), migration 0004 (colonne `projet_suggere` — nommée « suggérée » pour porter l'arbitrage A6 —, date_nom, version_no, marque_finale, statut_brouillon, groupe_version, est_reference, doublon_de). Règle de référence documentée : non-brouillon > version_no > marque finale > date (nom sinon mtime) ; doublons (même sha256) rattachés à un canonique et jamais référence ; `est_reference` alimentera le filtre « statut = référence » du RAG (E2). 9 TU (49 au total, verts). **CA 1–3 à cocher après le plan `docs/plans-test/s1.9-ingest-qualify.md` sur base réelle.***
@@ -126,9 +126,9 @@ Critères d'acceptation :
 En tant que PO, je veux créer un projet portant son contexte et ses NFR pour que la génération en tienne compte (D19, prépare E8 puis E3).
 
 Critères d'acceptation :
-- [ ] Tables `projects` (nom, contexte libre) et `project_nfrs` (type parmi : performance, volumétrie, SSI, RGPD, accessibilité RGAA, disponibilité, auditabilité ; formulation vérifiable ; valeur cible optionnelle)
+- [x] Tables `projects` (nom, contexte libre) et `project_nfrs` (type parmi : performance, volumétrie, SSI, RGPD, accessibilité RGAA, disponibilité, auditabilité ; formulation vérifiable ; valeur cible optionnelle)
 - [x] API CRUD minimale (création, lecture, mise à jour) couverte par tests — l'écran DSFR arrive avec E4 — 10 TU verts (POST/GET/PUT, 404, 409 nom dupliqué, 422 type NFR, 503 sans DB)
-- [ ] Association explicite projet ↔ dossiers documentaires : table dédiée, éditable ; la suggestion inférée par S1.9 est proposée puis confirmée ou corrigée par le PO (arbitrage A6 — le champ `projet` des documents ingérés est rattachable à un projet existant via cette table)
+- [x] Association explicite projet ↔ dossiers documentaires : table dédiée, éditable ; la suggestion inférée par S1.9 est proposée puis confirmée ou corrigée par le PO (arbitrage A6 — le champ `projet` des documents ingérés est rattachable à un projet existant via cette table)
 
 *Code livré le 02/07/2026 : migration 0005 (projects, project_nfrs avec CHECK sur les 7 types, project_dossiers UNIQUE(project_id, dossier) + origine po/suggestion), routes FastAPI `POST/GET/PUT /projects` + `GET /dossiers/suggestions` (expose les `projet_suggere` de S1.9 avec compteur et drapeau deja_associe — boucle A6), connexion par dépendance (`sia_api/db.py`, 503 explicite sans DATABASE_URL, démontré en uvicorn réel), DATABASE_URL fournie au service api du compose. 10 TU (59 au total, verts). **CA 1 et 3 à cocher après le plan `docs/plans-test/s1.11-projets.md` sur base réelle.***
 
