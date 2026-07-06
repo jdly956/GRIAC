@@ -158,6 +158,17 @@ def construire_prompt_systeme(
         "convient-elle ? (Oui / Non) ») : l'interface fournit les boutons Oui/Non de la "
         "règle 5 — termine tes messages sur le contenu."
     )
+    if etape in ("redaction", "controle_dor"):
+        # Arbitrage S3.2 (06/07/2026) : le cycle réel est « une story = rédaction
+        # + contrôle DoR » — l'UI fournit un bouton « Story suivante ». Une story
+        # à la fois évite aussi la troncature à MAX_TOKENS (constat session 8).
+        blocs.append(
+            "Travaille UNE SEULE story à la fois : sa rédaction complète puis son "
+            "contrôle DoR. N'enchaîne JAMAIS spontanément sur la story suivante — "
+            "l'interface fournit un bouton « Story suivante ». Après chaque story, "
+            "indique combien de stories candidates restent à rédiger ; s'il n'en "
+            "reste aucune, dis-le explicitement (le PO validera l'étape)."
+        )
     if projet:
         blocs.append(f"Projet : {projet['nom']} — {projet['contexte']}")
         if projet["nfrs"]:

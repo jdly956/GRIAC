@@ -61,6 +61,15 @@ def test_prompt_systeme_injecte_projet_et_nfr() -> None:
     assert "bloc G" in prompt  # pré-remplissage NFR de l'interview (E8)
 
 
+def test_prompt_une_seule_story_a_la_fois_aux_etapes_de_production() -> None:
+    # Arbitrage S3.2 (06/07/2026) : le cycle réel est « une story = rédaction +
+    # DoR » — le moteur n'enchaîne pas spontanément, l'UI a son bouton.
+    prompt = construire_prompt_systeme("redaction", None, "", None)
+    assert "UNE SEULE story à la fois" in prompt
+    assert "Story suivante" in prompt
+    assert "UNE SEULE story" not in construire_prompt_systeme("interview", None, "", None)
+
+
 def test_prompt_systeme_sans_source_impose_le_signalement() -> None:
     prompt = construire_prompt_systeme("redaction", None, "", None)
     assert "AUCUNE source récupérable" in prompt

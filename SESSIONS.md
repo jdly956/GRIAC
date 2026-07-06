@@ -43,10 +43,12 @@
 
 **Cadrage de la suite (fin de session)** : analyse de l'ensemble des backlogs → **le code ne bloque plus rien** ; le chemin critique vers le pilote (D17/§6) passe par les dépendances externes du §7. Squelette **`docs/sprint-3-backlog.md`** versionné (à amender par le référent) : S3.0 préalables débloquants (merge PR #30, snapshot corpus, gold, panel, registre d'images, 3 arbitrages), S3.1 lecture S3/MinIO (dernier trou de code du DAG E1 — gated snapshot), S3.2 sémantique du « Oui » (gated arbitrage), S3.3 ingestion corpus réel + recalibrages (dont 2e test no-go §6 : débit embeddings sous quotas), S3.4 recalibrage E6 sur gold + verdict modèle définitif, S3.5 préparation pilote (Helm lab, charte d'usage, embarquement).
 
+**Les 3 arbitrages du cadrage sont rendus par le référent** : (a) « Oui » → **bouton « Story suivante »** ; (b) **PG 18.3 CNPG assumé** pour le pilote (alignement 16 = décision prod/E7) ; (c) **pilote sur pod** `make pod-up` (fragilité assumée — le déploiement Helm lab et le registre d'images glissent vers E7 et sortent du chemin critique). **S3.2 livrée dans la foulée** : route web `POST /sessions/{id}/story-suivante` (message dédié au moteur, aucun appel `/avancer` — badge A5 fidèle, invariants règle 5/A8 intacts), panneau « Story suivante » aux étapes de production + rappel sur « Valider l'étape », consigne moteur « UNE SEULE story à la fois » (anti-troncature session 8, candidates restantes annoncées). 3 TU — **232 tests verts**. Plan `docs/plans-test/s3.2-story-suivante.md` (le test A5 : badge stable au fil des stories).
+
 **Mini-récap** :
-- ✅ Fait : analyse doc + plan de travail ; S2.13 livrée (`8b35dec`) **et validée stack-live (session 11)** ; S2.14 livrée (`f35b538`, corroborée sessions 9/11) ; correctifs sessions 9+11 (`4ce5bd4`, `99b4ee4`) ; **S2.15 anti-invention v2 livrée** ; **sprint 3 cadré et squeletté** ; TNR 229 verts ; PR #30 draft
-- ⏳ Référent : revue/merge PR #30 ; S3.0 (snapshot corpus, gold, panel, registre, protection de branche) ; 3 arbitrages (« Oui », PG 16/18.3, hébergement pilote) ; plan s2.15 sur pod
-- ⏳ Backlog code (gated) : S3.1 lecture S3/MinIO ; S3.2 « Story suivante » ; S3.3/S3.4 recalibrages ; S3.5 préparation pilote
+- ✅ Fait : analyse doc + plan de travail ; S2.13 livrée **et validée stack-live** ; S2.14 livrée (corroborée) ; correctifs sessions 9+11 ; S2.15 anti-invention v2 ; **sprint 3 cadré (3 arbitrages rendus) + S3.2 « Story suivante » livrée** ; TNR 232 verts ; PR #30 draft
+- ⏳ Référent : revue/merge PR #30 ; S3.0 externes (snapshot corpus → S3.1/S3.3, gold → S3.4, panel → S3.5, protection de branche) ; plans s2.15 + s3.2 sur pod
+- ⏳ Backlog code (gated externes) : S3.1 lecture S3/MinIO ; S3.3 ingestion réelle + recalibrages ; S3.4 verdict modèle au gold ; S3.5 charte d'usage + embarquement
 
 ---
 

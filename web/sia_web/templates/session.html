@@ -75,8 +75,19 @@
   <button class="fr-btn" type="submit">Envoyer</button>
 </form>
 
+{% if etat.etape in ("redaction", "controle_dor") %}
+<form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante" class="panneau">
+  <h2>Story suivante</h2>
+  <p>Une story = rédaction + contrôle DoR. Ce bouton enchaîne sur la story suivante <strong>sans changer d'étape</strong>.</p>
+  <button class="fr-btn" type="submit">Story suivante</button>
+</form>
+{% endif %}
+
 <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="panneau">
   <h2>Valider l'étape ? (règle 5)</h2>
+  {% if etat.etape in ("redaction", "controle_dor") %}
+  <p>« Oui » quand <strong>toutes les stories candidates sont couvertes</strong> — sinon, préférez « Story suivante » ci-dessus.</p>
+  {% endif %}
   <label class="fr-label" for="commentaire">Commentaire (obligatoire si « Non »)</label>
   <input class="fr-input" id="commentaire" name="commentaire" placeholder="précisez ce qu'il faut changer">
   <button class="fr-btn" name="valide" value="oui">Oui — étape suivante</button>

@@ -150,6 +150,45 @@ def test_levee_proposee_affichee_sans_lever(api) -> None:
     assert "Confirmer" in reponse.text and "Rejeter" in reponse.text  # boutons intacts
 
 
+def test_bouton_story_suivante_aux_etapes_de_production(api) -> None:
+    # Arbitrage S3.2 : une story = rédaction + DoR — le bouton itère sans
+    # toucher la machine à états ; absent hors étapes de production.
+    etat = dict(ETAT_SESSION, etape="redaction", hypotheses=[], nb_en_attente=0)
+    api.brancher("GET", "/workflows/1", 200, etat)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    reponse = client.get("/sessions/1")
+    assert "Story suivante" in reponse.text
+    assert "sans changer d'étape" in reponse.text
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)  # étape interview
+    assert "Story suivante" not in client.get("/sessions/1").text
+
+
+def test_story_suivante_appelle_le_moteur_sans_avancer(api) -> None:
+    etat = dict(ETAT_SESSION, etape="redaction", hypotheses=[], nb_en_attente=0)
+    api.brancher("GET", "/workflows/1", 200, etat)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher(
+        "POST",
+        "/workflows/1/message",
+        200,
+        {
+            "reponse": "US suivante…",
+            "etape": "redaction",
+            "sources": [],
+            "hypotheses_ajoutees": [],
+            "levees_proposees": [],
+            "divergences": [],
+            "avertissements": [],
+        },
+    )
+    assert client.post("/sessions/1/story-suivante").status_code == 200
+    chemins = [(methode, chemin) for methode, chemin, _ in api.appels]
+    assert ("POST", "/workflows/1/message") in chemins
+    assert not any(chemin.endswith("/avancer") for _, chemin in chemins)  # A5 : état intact
+    corps = next(j for m, c, j in api.appels if (m, c) == ("POST", "/workflows/1/message"))
+    assert "STORY SUIVANTE" in corps["message"]
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")

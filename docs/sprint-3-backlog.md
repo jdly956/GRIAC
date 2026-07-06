@@ -9,8 +9,7 @@
 - [ ] **Snapshot du corpus réel** (PM) déposé sur l'espace MinIO → débloque S3.1 et S3.3, et l'axe « exactitude » du benchmark E6 (§6)
 - [ ] **Stories gold** (extraction Jira et/ou promotion des silver validée par les PO) → débloque S3.4 (verdict modèle définitif) et le few-shot définitif
 - [ ] **Panel de 2–3 PO pilotes** désigné + comptes SSP Cloud (D16) → débloque S3.5
-- [ ] Registre d'images accessible depuis Onyxia → débloque le déploiement Helm lab (S3.5)
-- [ ] **Arbitrages à rendre** : (a) sémantique du « Oui » (bouton « Story suivante » proposé — S3.2) ; (b) PostgreSQL 16 vs 18.3 CNPG pour le pilote/prod ; (c) hébergement du pilote : déploiement lab (Helm, recommandé — le pod chute) vs pod `make pod-up`
+- [x] **Arbitrages rendus (06/07/2026, référent)** : (a) sémantique du « Oui » → **bouton « Story suivante »** (S3.2 débloquée) ; (b) PostgreSQL → **18.3 CNPG assumé pour le pilote**, alignement 16 à trancher pour la prod (E7) ; (c) hébergement du pilote → **pod + `make pod-up`** (fragilité aux chutes assumée ; le déploiement Helm lab et le registre d'images glissent vers E7)
 - [ ] Validations résiduelles sprints 1–2 (pod) : plan s2.15 (récap → registre stable), relance-idempotence du scan (plan s1.7 étape 4), réserve compose S1.2 (hôte Docker), `pre-commit run --all-files`
 
 ## S3.1 — Lecture S3/MinIO (E1, nœud A) — *gated : snapshot corpus*
@@ -22,13 +21,16 @@ Critères d'acceptation :
 - [ ] Hash sha256 et reprise D9 inchangés (seuls les fichiers modifiés re-parcourent la chaîne) ; le reste du DAG (parse → embed) ne change pas
 - [ ] TU avec client S3 simulé (aucun réseau) ; plan de test sur l'espace MinIO du pod
 
-## S3.2 — Sémantique du « Oui » : bouton « Story suivante » — *gated : arbitrage (a)*
+## S3.2 — Bouton « Story suivante » aux étapes de production — *arbitrage rendu le 06/07/2026*
 
 Constat sessions 9/11 : le cycle réel est « une story = rédaction + DoR » ; le « Oui » actuel fait défiler les étapes → machine à `synthese` pendant que les stories continuent (badge A5 trompeur).
 
-Critères d'acceptation (à affiner post-arbitrage) :
-- [ ] Aux étapes de production, un contrôle « Story suivante » itère sur la story suivante **sans changer d'étape** ; l'étape ne passe à « synthèse » que quand les stories candidates sont couvertes (ou sur décision explicite du PO)
-- [ ] Badge d'étape fidèle (A5) ; invariants règle 5 (Oui/Non d'étape) et A8 intacts ; TU machine à états + écran
+Critères d'acceptation :
+- [ ] Aux étapes de production (rédaction, contrôle DoR), un bouton **« Story suivante »** enchaîne sur la story suivante (rédaction + contrôle DoR) **sans toucher la machine à états** ; le « Oui — étape suivante » reste le geste explicite du PO quand toutes les stories sont couvertes (règle 5 intacte)
+- [ ] Consigne moteur : UNE story à la fois (évite la troncature à MAX_TOKENS constatée session 8), nombre de stories candidates restantes annoncé après chaque story, pas d'enchaînement spontané
+- [ ] Badge d'étape fidèle (A5) ; invariants règle 5 et A8 intacts (aucun changement de `avancer`) ; TU écran + prompt
+
+*Code livré le 06/07/2026 : route web `POST /sessions/{id}/story-suivante` (message dédié au moteur, jamais d'appel `/avancer`), panneau « Story suivante » + rappel sur le panneau « Valider l'étape » (`session.html`), consigne « UNE SEULE story à la fois » injectée aux étapes rédaction/contrôle DoR (`construire_prompt_systeme`). 3 TU (2 écran + 1 prompt) — 232 tests. CA à cocher via `docs/plans-test/s3.2-story-suivante.md` (badge stable = le test A5).*
 
 ## S3.3 — Ingestion du corpus réel + recalibrages — *gated : snapshot corpus*
 
@@ -43,9 +45,9 @@ Critères d'acceptation :
 - [ ] `make eval` sur `/evals/gold/` (bascule automatique déjà codée) : verdict `openweight-large` vs `openweight-medium` (vs Mistral Medium si accès ALLiaNCE) documenté dans `docs/`
 - [ ] Décision `ALBERT_MODEL_CHAT` définitive (l'essai medium S2.14 est confirmé ou annulé) ; few-shot gold en production
 
-## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel + registre*
+## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 
 Critères d'acceptation :
-- [ ] Déploiement lab via Helm (images en registre) ; instance partagée sans comptes (A7) accessible aux pilotes
+- [ ] Instance pilote sur pod (`make pod-up`, arbitrage (c)) accessible aux 2–3 pilotes via le proxy ; procédure de remise en route documentée pour les chutes de pod (le référent la maîtrise déjà)
 - [ ] **Charte d'usage** rédigée et versionnée (`docs/charte-usage.md`) : D15 (pas de données personnelles), périmètre, bonnes pratiques de validation A8
 - [ ] Embarquement des 2–3 pilotes (session guidée sur le scénario `s2.13-scenario-rejeu-pod.md` adapté) ; plan de suivi hebdo : télémétrie E4.4 (actifs, % conservées, taux d'édition) + verbatims — les critères de go du §6
