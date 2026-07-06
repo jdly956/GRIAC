@@ -30,6 +30,22 @@ def appeler(methode: str, chemin: str, json: Any = None) -> tuple[int, Any]:
         return reponse.status_code, {"brut": reponse.text}
 
 
+def envoyer_fichier(chemin: str, nom: str, contenu: bytes, content_type: str) -> tuple[int, Any]:
+    """POST multipart (dépôt de document, S3.10) — même contrat que `appeler`."""
+    try:
+        reponse = httpx.post(
+            url_api() + chemin,
+            files={"fichier": (nom, contenu, content_type or "application/octet-stream")},
+            timeout=DELAI_S,
+        )
+    except httpx.HTTPError as erreur:
+        return 599, {"detail": f"API injoignable ({url_api()}) : {type(erreur).__name__}"}
+    try:
+        return reponse.status_code, reponse.json()
+    except ValueError:
+        return reponse.status_code, {"brut": reponse.text}
+
+
 def telecharger(chemin: str) -> tuple[int, str, str]:
     """(statut, contenu, content-type) — pour les exports E5 proxifiés."""
     try:

@@ -1,7 +1,55 @@
 {% extends "base.html" %}
 {% block titre %}Mes documents{% endblock %}
 {% block contenu %}
+{% if run_en_cours %}<meta http-equiv="refresh" content="5">{% endif %}
 <h1>Mes documents</h1>
+
+{% if erreur_ingestion %}
+<div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur_ingestion }}</p></div>
+{% endif %}
+
+{# S3.10 : dépôt + indexation MANUELLE (arbitrage 06/07 — maîtrise du quota
+   d'embeddings) + suivi du pipeline nœud par nœud. #}
+<div class="panneau">
+  <h2>Ajouter des documents</h2>
+  <form method="post" action="{{ racine }}/documents/upload" enctype="multipart/form-data">
+    <label class="fr-label" for="fichier">Déposer un document (docx, pdf, md, txt, odt — 50 Mo max)</label>
+    <input class="fr-input" type="file" id="fichier" name="fichier" required>
+    <button class="fr-btn" type="submit">Déposer</button>
+  </form>
+  <form method="post" action="{{ racine }}/documents/indexer" class="action-secondaire">
+    <p>Le dépôt ne suffit pas : l'indexation (scan → parsing → qualification → chunks →
+      embeddings) se lance <strong>manuellement</strong> — elle consomme le quota Albert.</p>
+    <button class="fr-btn" type="submit" {% if run_en_cours %}disabled{% endif %}>
+      {% if run_en_cours %}Indexation en cours…{% else %}Indexer maintenant{% endif %}
+    </button>
+  </form>
+</div>
+
+{% if runs %}
+<div class="panneau">
+  <h2>Suivi des indexations{% if run_en_cours %} — ⏳ run en cours (page rafraîchie toutes les 5 s){% endif %}</h2>
+  <table class="fr-table">
+    <thead><tr><th>Run</th><th>Statut</th><th>Avancement par nœud</th><th>Début</th><th>Fin</th><th></th></tr></thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td>#{{ run.id }}</td>
+        <td>{{ run.statut }}</td>
+        <td>{% for noeud, resultat in run.rapport.items() %}{{ noeud }} : {{ resultat }}<br>{% else %}démarrage…{% endfor %}</td>
+        <td>{{ run.demarre_le }}</td>
+        <td>{{ run.termine_le or "—" }}</td>
+        <td>{% if run.statut == "en_cours" %}
+          <form method="post" action="{{ racine }}/documents/runs/{{ run.id }}/echec">
+            <button class="fr-btn fr-btn--sm fr-btn--secondary" type="submit">Marquer en échec</button>
+          </form>
+        {% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 {% if alerte_couverture %}
 <div class="fr-alert fr-alert--warning" role="alert">

@@ -84,6 +84,8 @@ Critères d'acceptation :
 - [ ] **Écran de suivi** : run en cours et historique (début/fin, compteurs par nœud, échecs détaillés, tokens embeddings consommés) — table `ingestion_runs` (migration)
 - [ ] TU api (upload, déclenchement, statuts — pipeline mocké) + écran ; le plan de test réel mesure un run complet sur le pod
 
+*Code livré le 06/07/2026 : migration 0013 (`ingestion_runs`, rapport JSONB mis à jour nœud par nœud), `sia_ingestion/pipeline.py` (orchestrateur scan→embed, politique d'échec : code 2 = arrêt, code 1 = `echec_partiel` et poursuite — reprise sur hash D9), `sia_api/ingestion.py` (upload multipart sécurisé — nom neutralisé, extensions, 50 Mo —, `POST /ingestion/lancer` en sous-processus détaché avec log par run, un seul run à la fois + déblocage manuel), écran « Mes documents » enrichi (dépôt, bouton Indexer, suivi auto-rafraîchi 5 s). ⚠️ Limite : en déploiement par images, l'api n'embarque pas l'ingestion (pilote = pod, arbitré) — E7. 12 TU — 265 tests. Plan `docs/plans-test/s3.10-corpus-ui.md`.*
+
 ### S3.11 — Comptabilité tokens (global / session / import)
 
 - [ ] Chaque appel chat capture `usage` (prompt + completion) → colonnes sur `workflow_messages` (migration) ; chaque lot d'embeddings capture ses tokens → rattaché au run S3.10

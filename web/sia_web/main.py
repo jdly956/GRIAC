@@ -21,7 +21,7 @@ racine (prod Helm, dev compose), root_path vide = comportement inchangé.
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -459,6 +459,9 @@ def ecran_documents(request: Request) -> HTMLResponse:
     statut_stats, stats = api_client.appeler("GET", "/documents/stats")
     if statut_stats != 200:
         return _page_erreur(request, statut_stats, stats)
+    # S3.10 : suivi des runs d'ingestion — l'écran reste servi sans l'endpoint.
+    statut_runs, runs = api_client.appeler("GET", "/ingestion/runs")
+    runs = runs if statut_runs == 200 and isinstance(runs, list) else []
     return templates.TemplateResponse(
         request=request,
         name="documents.html",
@@ -468,8 +471,38 @@ def ecran_documents(request: Request) -> HTMLResponse:
             "libelles": STATUTS_PARSING_LIBELLES,
             "alerte_couverture": stats["couverture_parsing"] < SEUIL_COUVERTURE,
             "seuil": SEUIL_COUVERTURE,
+            "runs": runs,
+            "run_en_cours": any(r.get("statut") == "en_cours" for r in runs),
+            "erreur_ingestion": request.query_params.get("erreur"),
         },
     )
+
+
+@app.post("/documents/upload")
+async def deposer_document(request: Request, fichier: UploadFile) -> RedirectResponse:
+    """S3.10 : dépôt → dossier corpus (statut « en attente d'indexation »)."""
+    contenu = await fichier.read()
+    statut, corps = api_client.envoyer_fichier(
+        "/documents/upload", fichier.filename or "", contenu, fichier.content_type or ""
+    )
+    if statut != 201:
+        return _rediriger(request, f"/documents?erreur={corps.get('detail', 'dépôt refusé')}")
+    return _rediriger(request, "/documents")
+
+
+@app.post("/documents/indexer")
+def lancer_indexation(request: Request) -> RedirectResponse:
+    """S3.10 (arbitrage : manuel) : lance le pipeline complet en arrière-plan."""
+    statut, corps = api_client.appeler("POST", "/ingestion/lancer")
+    if statut not in (200, 202):
+        return _rediriger(request, f"/documents?erreur={corps.get('detail', 'lancement refusé')}")
+    return _rediriger(request, "/documents")
+
+
+@app.post("/documents/runs/{run_id}/echec")
+def debloquer_run(request: Request, run_id: int) -> RedirectResponse:
+    api_client.appeler("POST", f"/ingestion/runs/{run_id}/echec")
+    return _rediriger(request, "/documents")
 
 
 @app.get("/sessions/{session_id}/export/{format_export}")

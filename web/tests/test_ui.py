@@ -396,6 +396,62 @@ def test_modele_actif_affiche_sur_la_session(api) -> None:
     assert "Modèle : <strong>openweight-large</strong>" in client.get("/sessions/1").text
 
 
+DOCS_STATS = {
+    "total": 1,
+    "parsables": 1,
+    "parses": 1,
+    "echecs": 0,
+    "ocr_requis": 0,
+    "references": 1,
+    "couverture_parsing": 1.0,
+}
+
+
+def test_depot_et_indexation_depuis_mes_documents(api, monkeypatch: pytest.MonkeyPatch) -> None:
+    # S3.10 : formulaire de dépôt + bouton « Indexer maintenant » (manuel) +
+    # suivi des runs nœud par nœud, rafraîchi tant qu'un run tourne.
+    api.brancher("GET", "/documents", 200, [])
+    api.brancher("GET", "/documents/stats", 200, DOCS_STATS)
+    api.brancher(
+        "GET",
+        "/ingestion/runs",
+        200,
+        [
+            {
+                "id": 2,
+                "statut": "en_cours",
+                "corpus": "corpus",
+                "rapport": {"scan": "ok"},
+                "demarre_le": "2026-07-06 21:10",
+                "termine_le": None,
+            }
+        ],
+    )
+    texte = client.get("/documents").text
+    assert "Déposer un document" in texte
+    assert "Indexation en cours…" in texte  # bouton désactivé pendant un run
+    assert 'http-equiv="refresh"' in texte  # suivi en direct
+    assert "scan : ok" in texte
+
+    envois: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        api_client,
+        "envoyer_fichier",
+        lambda chemin, nom, contenu, ct: envois.append((chemin, nom)) or (201, {}),
+    )
+    reponse = client.post(
+        "/documents/upload",
+        files={"fichier": ("spec.docx", b"contenu", "application/msword")},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    assert envois == [("/documents/upload", "spec.docx")]
+
+    api.brancher("POST", "/ingestion/lancer", 202, {"id": 3})
+    assert client.post("/documents/indexer", follow_redirects=False).status_code == 303
+    assert any(a[:2] == ("POST", "/ingestion/lancer") for a in api.appels)
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")
