@@ -6,6 +6,9 @@
   <title>{% block titre %}SIA PO{% endblock %} — assistant de rédaction de user stories</title>
   <!-- DSFR par CDN au MVP (à vendorer pour la prod, E7) ; styles de repli locaux ci-dessous. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12/dist/dsfr.min.css">
+  <!-- S3.8 : htmx vendoré — progressive enhancement : sans JavaScript, les
+       formulaires classiques restent pleinement fonctionnels. -->
+  <script src="{{ racine }}/static/htmx.min.js" defer></script>
   <style>
     body { font-family: Marianne, arial, sans-serif; margin: 0; }
     .conteneur { max-width: 60rem; margin: 0 auto; padding: 1rem; }
@@ -26,6 +29,11 @@
     /* S3.7 : blocs repliables (registre, échanges précédents, notation). */
     details.panneau > summary { cursor: pointer; }
     .action-secondaire { border-top: 1px solid #ddd; margin-top: .75rem; padding-top: .75rem; }
+    /* S3.8 : indicateur de génération (htmx pilote .htmx-indicator via la
+       classe htmx-request posée sur le formulaire en cours d'appel). */
+    .htmx-indicator { display: none; font-weight: bold; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+    .htmx-request button[type], .htmx-request button { cursor: wait; }
   </style>
 </head>
 <body>
