@@ -16,6 +16,7 @@ from sia_api.documents import router as router_documents
 from sia_api.export import router as router_export
 from sia_api.feedback import router as router_feedback
 from sia_api.moteur import router as router_moteur
+from sia_api.parametres import router as router_parametres
 from sia_api.projets import router as router_projets
 from sia_api.recherche import router as router_recherche
 from sia_api.workflows import router as router_workflows
@@ -39,6 +40,7 @@ app.include_router(router_export)
 app.include_router(router_documents)
 app.include_router(router_feedback)
 app.include_router(router_conso)
+app.include_router(router_parametres)
 
 
 @app.get("/health")

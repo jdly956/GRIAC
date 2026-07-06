@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from sia_api.config import Settings
 from sia_api.db import get_connexion
 from sia_api.gabarit import extraire_stories_us, titre_us, valider_dor, valider_us
+from sia_api.parametres import lire_surcharge_modele
 from sia_api.recherche import (
     RechercheEntree,
     SourceCitee,
@@ -280,6 +281,10 @@ def message_route(
             raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
         etape, projet_id, feature = session
 
+        # S3.12 : le modèle de chat est surchargeable depuis l'écran Paramètres
+        # (table parametres) SANS relance — surcharge UI > env/défaut (S2.14).
+        modele_chat = lire_surcharge_modele(curseur) or settings.albert_model_chat
+
         projet = None
         if projet_id is not None:
             curseur.execute(
@@ -347,7 +352,7 @@ def message_route(
             )
 
         reponse_llm = client.chat.completions.create(
-            model=settings.albert_model_chat,
+            model=modele_chat,
             messages=messages,
             max_tokens=MAX_TOKENS_REPONSE,
         )
@@ -369,7 +374,7 @@ def message_route(
                 "tokens_sortie) VALUES ('chat', %(id)s, %(modele)s, %(entree)s, %(sortie)s)",
                 {
                     "id": session_id,
-                    "modele": settings.albert_model_chat,
+                    "modele": modele_chat,
                     "entree": getattr(usage, "prompt_tokens", 0) or 0,
                     "sortie": getattr(usage, "completion_tokens", 0) or 0,
                 },

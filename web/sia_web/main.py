@@ -132,6 +132,7 @@ def _page_session(
     _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
     _, stories = api_client.appeler("GET", f"/workflows/{session_id}/stories")
     statut_conso, conso = api_client.appeler("GET", f"/workflows/{session_id}/conso")
+    statut_parametres, parametres = api_client.appeler("GET", "/parametres")
     # S3.7 : le registre replié ne se déplie tout seul que si une levée
     # proposée (S2.13) attend la décision du PO.
     nb_levees_a_decider = sum(
@@ -152,6 +153,8 @@ def _page_session(
             # S3.11 : conso de la session (None si l'api ne répond pas — simple
             # indication, jamais bloquant).
             "conso": conso if statut_conso == 200 else None,
+            # S3.12 : le PO sait quel modèle écrit.
+            "modele_actif": parametres.get("modele_actif") if statut_parametres == 200 else None,
             "erreur": erreur,
         },
     )
@@ -283,6 +286,37 @@ def noter_story(
         json={"story_titre": story_titre, "note": note, "commentaire": commentaire},
     )
     return _rediriger(request, f"/sessions/{session_id}")
+
+
+@app.get("/parametres", response_class=HTMLResponse)
+def ecran_parametres(request: Request, erreur: str | None = None) -> HTMLResponse:
+    statut, parametres = api_client.appeler("GET", "/parametres")
+    if statut != 200:
+        return _page_erreur(request, statut, parametres)
+    return templates.TemplateResponse(
+        request=request,
+        name="parametres.html",
+        context={"parametres": parametres, "erreur": erreur},
+    )
+
+
+@app.post("/parametres/modele")
+def changer_modele(
+    request: Request,
+    modele: Annotated[str, Form()] = "",
+    modele_libre: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    """S3.12 : le champ libre (alias hors catalogue) prime sur le select."""
+    choix = (modele_libre or modele).strip()
+    if choix:
+        api_client.appeler("PUT", "/parametres/modele-chat", json={"modele": choix})
+    return _rediriger(request, "/parametres")
+
+
+@app.post("/parametres/modele-defaut")
+def modele_par_defaut(request: Request) -> RedirectResponse:
+    api_client.appeler("DELETE", "/parametres/modele-chat")
+    return _rediriger(request, "/parametres")
 
 
 @app.get("/telemetrie", response_class=HTMLResponse)

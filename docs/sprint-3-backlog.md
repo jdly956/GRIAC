@@ -98,6 +98,8 @@ Critères d'acceptation :
 - [ ] Précédence documentée : base (UI) > défaut du code ; la variable d'env reste le réglage d'infra prioritaire au démarrage
 - [ ] Le modèle actif est affiché sur l'écran session (le PO sait qui écrit) ; TU api + écran
 
+*Code livré le 06/07/2026 : migration 0012 (table `parametres` clé/valeur), `sia_api/parametres.py` (GET / PUT modele-chat / DELETE = retour au défaut, upsert appliqué sans relance), moteur : `lire_surcharge_modele` à chaque appel (surcharge UI > env > défaut code — la conso S3.11 enregistre le modèle réellement utilisé), écran Paramètres (select + champ libre prioritaire + bouton retour défaut) + lien de navigation + modèle actif affiché sous le titre de session. 7 TU — 253 tests. Plan `docs/plans-test/s3.12-modele-ui.md`.*
+
 ### S3.13 — Confort PO : édition des stories, gestion des sessions, copie
 
 - [ ] **Édition** (arbitrage : version simple) : chaque story extraite est éditable (textarea pré-remplie), la version éditée est stockée (migration) et **gagne à l'export** ; le « taux d'édition » de la télémétrie devient une mesure réelle (part des stories éditées)

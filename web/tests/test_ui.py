@@ -351,6 +351,51 @@ def test_jauge_tokens_en_telemetrie(api) -> None:
     assert "Chat (sessions)" in texte
 
 
+def test_ecran_parametres_et_changement_de_modele(api) -> None:
+    # S3.12 : réglage global instance — modèle actif affiché, changement PUT,
+    # champ libre prioritaire sur le select, retour au défaut en DELETE.
+    api.brancher(
+        "GET",
+        "/parametres",
+        200,
+        {
+            "modele_chat": None,
+            "modele_actif": "openweight-medium",
+            "modeles_proposes": ["openweight-medium", "openweight-large"],
+        },
+    )
+    texte = client.get("/parametres").text
+    assert "openweight-medium" in texte and "défaut de l'instance" in texte
+    api.brancher("PUT", "/parametres/modele-chat", 200, {})
+    reponse = client.post(
+        "/parametres/modele",
+        data={"modele": "openweight-medium", "modele_libre": "mistral-medium"},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    appel = next(a for a in api.appels if a[0] == "PUT")
+    assert appel[2] == {"modele": "mistral-medium"}  # le champ libre prime
+    api.brancher("DELETE", "/parametres/modele-chat", 200, {})
+    client.post("/parametres/modele-defaut", follow_redirects=False)
+    assert any(a[0] == "DELETE" for a in api.appels)
+
+
+def test_modele_actif_affiche_sur_la_session(api) -> None:
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher(
+        "GET",
+        "/parametres",
+        200,
+        {
+            "modele_chat": "openweight-large",
+            "modele_actif": "openweight-large",
+            "modeles_proposes": [],
+        },
+    )
+    assert "Modèle : <strong>openweight-large</strong>" in client.get("/sessions/1").text
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")
