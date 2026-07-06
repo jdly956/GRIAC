@@ -360,6 +360,21 @@ def message_route(
                 "voir le gotcha modèles à raisonnement (S1.5).",
             )
 
+        # S3.11 : chaque appel chat verse son usage au registre de consommation
+        # (jauge vs quota tpd 2,46 M — S1.5). Absent du retour = rien à verser.
+        usage = getattr(reponse_llm, "usage", None)
+        if usage is not None:
+            curseur.execute(
+                "INSERT INTO conso_tokens (source, session_id, modele, tokens_entree, "
+                "tokens_sortie) VALUES ('chat', %(id)s, %(modele)s, %(entree)s, %(sortie)s)",
+                {
+                    "id": session_id,
+                    "modele": settings.albert_model_chat,
+                    "entree": getattr(usage, "prompt_tokens", 0) or 0,
+                    "sortie": getattr(usage, "completion_tokens", 0) or 0,
+                },
+            )
+
         # Règle 1 : signalée, jamais bloquée silencieusement.
         if etape == "interview":
             avertissements += verifier_lot_interview(contenu_reponse)

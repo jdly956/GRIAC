@@ -301,6 +301,56 @@ def test_htmx_prefixe_par_le_root_path(api) -> None:
     assert 'src="/proxy/8081/static/htmx.min.js"' in texte
 
 
+def test_conso_de_session_affichee(api) -> None:
+    # S3.11 : la conso s'affiche sous le titre — simple indication, l'écran
+    # reste servi si l'endpoint est absent (défaut 404 des autres tests).
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher(
+        "GET",
+        "/workflows/1/conso",
+        200,
+        {"appels": 3, "tokens_entree": 12000, "tokens_sortie": 4500},
+    )
+    texte = client.get("/sessions/1").text
+    assert "Consommation de la session : 3 appel(s)" in texte
+    assert "12 000 tokens entrée" in texte
+
+
+def test_jauge_tokens_en_telemetrie(api) -> None:
+    api.brancher(
+        "GET",
+        "/telemetrie",
+        200,
+        {
+            "sessions_total": 1,
+            "actifs_hebdo": [],
+            "stories_notees": 0,
+            "note_moyenne": None,
+            "pourcentage_conservees": None,
+            "validations_total": 0,
+            "taux_edition": None,
+        },
+    )
+    api.brancher(
+        "GET",
+        "/telemetrie/tokens",
+        200,
+        {
+            "total_entree": 200000,
+            "total_sortie": 50000,
+            "jour_total": 123000,
+            "tpd_quota": 2460000,
+            "jour_part_tpd": 0.05,
+            "par_source": [{"source": "chat", "tokens_entree": 150000, "tokens_sortie": 50000}],
+        },
+    )
+    texte = client.get("/telemetrie").text
+    assert "123 000 tokens" in texte
+    assert "5.0 % du quota quotidien" in texte
+    assert "Chat (sessions)" in texte
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")

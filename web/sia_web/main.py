@@ -131,6 +131,7 @@ def _page_session(
         return _page_erreur(request, statut_etat, etat)
     _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
     _, stories = api_client.appeler("GET", f"/workflows/{session_id}/stories")
+    statut_conso, conso = api_client.appeler("GET", f"/workflows/{session_id}/conso")
     # S3.7 : le registre replié ne se déplie tout seul que si une levée
     # proposée (S2.13) attend la décision du PO.
     nb_levees_a_decider = sum(
@@ -148,6 +149,9 @@ def _page_session(
             "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
             "dernier_resultat": dernier_resultat,
             "nb_levees_a_decider": nb_levees_a_decider,
+            # S3.11 : conso de la session (None si l'api ne répond pas — simple
+            # indication, jamais bloquant).
+            "conso": conso if statut_conso == 200 else None,
             "erreur": erreur,
         },
     )
@@ -284,12 +288,18 @@ def noter_story(
 @app.get("/telemetrie", response_class=HTMLResponse)
 def ecran_telemetrie(request: Request) -> HTMLResponse:
     statut, telemetrie = api_client.appeler("GET", "/telemetrie")
+    statut_tokens, tokens = api_client.appeler("GET", "/telemetrie/tokens")
     if statut != 200:
         return _page_erreur(request, statut, telemetrie)
     return templates.TemplateResponse(
         request=request,
         name="telemetrie.html",
-        context={"telemetrie": telemetrie},
+        context={
+            "telemetrie": telemetrie,
+            # S3.11 : la jauge tokens est une indication — l'écran reste servi
+            # même si l'endpoint conso est indisponible.
+            "tokens": tokens if statut_tokens == 200 else None,
+        },
     )
 
 

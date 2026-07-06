@@ -90,6 +90,8 @@ Critères d'acceptation :
 - [ ] Télémétrie : conso **globale** (jour/semaine, jauge vs tpd 2,46 M), **par session** (affichée aussi sur l'écran session), **par import**
 - [ ] TU (usage simulé dans les fausses réponses Albert)
 
+*Code livré le 06/07/2026 : migration 0011 — **registre unique `conso_tokens`** (source chat/embeddings, session_id SET NULL — variante assumée des « colonnes sur workflow_messages » : un seul mécanisme pour les deux sources) ; capture `usage` dans le moteur (chat, rattaché à la session) et dans `embed.py` (une ligne par lot) ; `GET /workflows/{id}/conso` + `GET /telemetrie/tokens` (jauge du jour vs tpd, `ALBERT_TPD_QUOTA` surchargeable) ; conso affichée sous le titre de session + panneau Télémétrie avec jauge. « Par import » = par jour tant que S3.10 n'a pas ses runs. 7 TU — 246 tests. Plan `docs/plans-test/s3.11-conso-tokens.md`.*
+
 ### S3.12 — Changement de modèle depuis l'UI (global instance)
 
 - [ ] Écran **« Paramètres »** : modèle de chat actif (select `openweight-large`/`openweight-medium` + alias libre), stocké en base (table `parametres`, migration) — appliqué aux nouveaux appels sans relance

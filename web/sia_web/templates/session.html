@@ -2,6 +2,11 @@
 {% block titre %}Session {{ etat.id }}{% endblock %}
 {% block contenu %}
 <h1>Session {{ etat.id }} <span class="fr-badge fr-badge--info">{{ libelle_etape }}</span></h1>
+{% if conso and conso.appels %}
+<p class="fr-hint-text">Consommation de la session : {{ conso.appels }} appel(s) —
+  {{ "{:,}".format(conso.tokens_entree).replace(",", " ") }} tokens entrée /
+  {{ "{:,}".format(conso.tokens_sortie).replace(",", " ") }} sortie (S3.11).</p>
+{% endif %}
 
 {% if erreur %}
 <div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>

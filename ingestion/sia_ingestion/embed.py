@@ -37,14 +37,21 @@ def lire_chunks_a_vectoriser(connexion) -> list[tuple[int, str]]:
         return [(ligne[0], ligne[1]) for ligne in curseur.fetchall()]
 
 
-def vectoriser_lot(client, settings, contenus: list[str]) -> list[list[float]]:
+def vectoriser_lot(client, settings, contenus: list[str]) -> tuple[list[list[float]], int]:
+    """Vecteurs du lot + tokens consommés (S3.11 — 0 si l'API n'en renvoie pas)."""
     reponse = client.embeddings.create(
         model=settings.albert_model_embeddings,
         input=contenus,
         encoding_format="float",  # gotcha Albert (S1.5) : jamais le base64 par défaut
     )
     donnees = sorted(reponse.data, key=lambda element: element.index)
-    return [element.embedding for element in donnees]
+    usage = getattr(reponse, "usage", None)
+    tokens = (
+        (getattr(usage, "total_tokens", 0) or getattr(usage, "prompt_tokens", 0) or 0)
+        if usage
+        else 0
+    )
+    return [element.embedding for element in donnees], tokens
 
 
 def traiter_chunks(
@@ -52,12 +59,12 @@ def traiter_chunks(
 ) -> dict[str, int]:
     """Vectorise par lots ; un lot en échec est signalé et n'interrompt pas la suite."""
     chunks = lire_chunks_a_vectoriser(connexion)
-    statistiques = {"vectorises": 0, "lots": 0, "lots_en_echec": 0}
+    statistiques = {"vectorises": 0, "lots": 0, "lots_en_echec": 0, "tokens": 0}
     for depart in range(0, len(chunks), taille_lot):
         lot = chunks[depart : depart + taille_lot]
         statistiques["lots"] += 1
         try:
-            vecteurs = vectoriser_lot(client, settings, [contenu for _, contenu in lot])
+            vecteurs, tokens_lot = vectoriser_lot(client, settings, [contenu for _, contenu in lot])
         except Exception as exc:  # réseau/quota : lot isolé, relance possible
             print(
                 f"  lot en échec (chunks {lot[0][0]}–{lot[-1][0]}) : {type(exc).__name__}: {exc}",
@@ -75,8 +82,16 @@ def traiter_chunks(
                 curseur.execute(
                     REQUETE_MAJ, {"id": identifiant, "vecteur": formater_vecteur(vecteur)}
                 )
+            if tokens_lot:
+                # S3.11 : la conso embeddings entre au registre (jauge tpd).
+                curseur.execute(
+                    "INSERT INTO conso_tokens (source, modele, tokens_entree) "
+                    "VALUES ('embeddings', %(modele)s, %(tokens)s)",
+                    {"modele": settings.albert_model_embeddings, "tokens": tokens_lot},
+                )
         connexion.commit()  # commit par lot : un échec ultérieur ne perd pas l'acquis
         statistiques["vectorises"] += len(lot)
+        statistiques["tokens"] += tokens_lot
     return statistiques
 
 

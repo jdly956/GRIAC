@@ -152,10 +152,13 @@ class FausseConnexion:
 
 
 class FauxChat:
-    def __init__(self, contenu: str, finish_reason: str = "stop") -> None:
+    def __init__(
+        self, contenu: str, finish_reason: str = "stop", usage: tuple[int, int] | None = None
+    ) -> None:
         self.appels: list[dict] = []
         self._contenu = contenu
         self._finish = finish_reason
+        self._usage = usage  # (prompt_tokens, completion_tokens) — S3.11
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._creer))
 
     def _creer(self, **kwargs):
@@ -165,7 +168,12 @@ class FauxChat:
                 SimpleNamespace(
                     message=SimpleNamespace(content=self._contenu), finish_reason=self._finish
                 )
-            ]
+            ],
+            usage=(
+                SimpleNamespace(prompt_tokens=self._usage[0], completion_tokens=self._usage[1])
+                if self._usage
+                else None
+            ),
         )
 
 
@@ -189,9 +197,10 @@ def brancher(monkeypatch: pytest.MonkeyPatch):
         reponse_llm: str,
         contexte: ContexteResultat = CONTEXTE_CANNE,
         finish_reason: str = "stop",
+        usage: tuple[int, int] | None = None,
     ):
         connexion = FausseConnexion(resultats)
-        faux_client = FauxChat(reponse_llm, finish_reason)
+        faux_client = FauxChat(reponse_llm, finish_reason, usage)
         app.dependency_overrides[get_connexion] = lambda: connexion
         app.dependency_overrides[get_albert] = lambda: (faux_client, _settings())
         monkeypatch.setattr(moteur, "construire_contexte", lambda *a, **k: contexte)
@@ -328,6 +337,16 @@ def test_levee_proposee_hors_registre_ignoree(brancher) -> None:
     corps = client_http.post("/workflows/7/message", json={"message": "ok"}).json()
     assert corps["levees_proposees"] == []
     assert not any("SET statut_propose" in r for r, _ in connexion.curseur.requetes)
+
+
+def test_usage_verse_au_registre_de_conso(brancher) -> None:
+    # S3.11 : l'usage de chaque appel chat entre dans conso_tokens (jauge tpd) ;
+    # sans usage dans la réponse (fixtures par défaut), aucun INSERT — couvert
+    # par les autres tests qui n'attendent pas cette requête.
+    connexion, _ = brancher(list(SCRIPT_NOMINAL), "Réponse.", usage=(1_200, 300))
+    assert client_http.post("/workflows/7/message", json={"message": "ok"}).status_code == 200
+    inserts = [p for r, p in connexion.curseur.requetes if "conso_tokens" in r]
+    assert inserts == [{"id": 7, "modele": "openweight-medium", "entree": 1_200, "sortie": 300}]
 
 
 def test_reponse_vide_erreur_explicite(brancher) -> None:
