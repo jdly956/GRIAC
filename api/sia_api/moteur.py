@@ -24,7 +24,6 @@ moteur, pas d'écran dédié). À chaque message, le moteur :
    d'échec silencieux.
 """
 
-import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -34,7 +33,7 @@ from pydantic import BaseModel, Field
 
 from sia_api.config import Settings
 from sia_api.db import get_connexion
-from sia_api.gabarit import extraire_stories_us, valider_dor, valider_us
+from sia_api.gabarit import extraire_stories_us, titre_us, valider_dor, valider_us
 from sia_api.recherche import (
     RechercheEntree,
     SourceCitee,
@@ -73,8 +72,7 @@ ETAPES_AVEC_STORIES = ("redaction", "controle_dor", "synthese")
 
 
 def _titre_us(story: str) -> str:
-    correspondance = re.search(r"\*\*US — (.+?)\*\*", story)
-    return correspondance.group(1) if correspondance else "(sans titre)"
+    return titre_us(story) or "(sans titre)"
 
 
 def _extraire_tableau_dor(contenu: str) -> str:
@@ -101,8 +99,14 @@ def controler_conformite(etape: str, contenu: str) -> list[str]:
 
     - étapes rédaction/contrôle DoR/synthèse : chaque US extraite passe par
       `valider_us` (le modèle s'auto-contrôle mal — le validateur tranche) ;
-    - étape contrôle DoR : le tableau DoR (isolé des tableaux de CA) passe par
-      `valider_dor` (10 critères, statuts, « estimée en refinement » toujours 🔵).
+    - un tableau DoR présent dans N'IMPORTE quelle étape de production passe
+      par `valider_dor` (10 critères, statuts, « estimée en refinement »
+      toujours 🔵) — constaté session 9 (06/07/2026) : le cycle réel est
+      « une story = rédaction + DoR » et la machine à états file à `synthese`
+      pendant que les DoR continuent d'arriver ; conditionner à la seule
+      étape `controle_dor` laissait ces tableaux sans contrôle. L'ABSENCE de
+      tableau ne se signale qu'à l'étape contrôle DoR (ailleurs elle est
+      normale).
     Signalé au PO dans les avertissements, jamais bloquant : c'est lui qui
     valide ou itère (règle 5).
     """
@@ -115,12 +119,11 @@ def controler_conformite(etape: str, contenu: str) -> list[str]:
                     f"Contrôle gabarit (S1.10) — US « {_titre_us(story)} » non conforme : "
                     + " ; ".join(rapport.violations)
                 )
-    if etape == "controle_dor":
-        rapport_dor = valider_dor(_extraire_tableau_dor(contenu))
-        if not rapport_dor.conforme:
-            rapports.append(
-                "Contrôle DoR automatisé (étape 4) : " + " ; ".join(rapport_dor.violations)
-            )
+        tableau_dor = _extraire_tableau_dor(contenu)
+        if tableau_dor or etape == "controle_dor":
+            rapport_dor = valider_dor(tableau_dor)
+            if not rapport_dor.conforme:
+                rapports.append("Contrôle DoR automatisé : " + " ; ".join(rapport_dor.violations))
     return rapports
 
 
@@ -182,18 +185,6 @@ def construire_prompt_systeme(
         "- Si une affirmation du PO contredit un extrait cité, signale-le sur une ligne "
         f"commençant par {MARQUEUR_DIVERGENCE} avec la source — c'est le PO qui arbitre (A9)."
     )
-    if hypotheses_en_attente:
-        registre = "\n".join(f"- #{hid} : {texte}" for hid, texte in hypotheses_en_attente)
-        blocs.append(
-            "## REGISTRE DES HYPOTHÈSES EN ATTENTE (A8)\n"
-            f"{registre}\n"
-            "Si le dernier message du PO ou un extrait cité tranche l'une de ces hypothèses, "
-            "propose sa levée sur une ligne dédiée : "
-            "[LEVÉE PROPOSÉE : #<numéro> — confirmée|rejetée — justification courte]. "
-            "C'est une PROPOSITION : seul le PO confirme ou rejette dans le registre (A8) — "
-            "ne considère jamais une hypothèse comme levée de toi-même. "
-            "Ne re-marque pas ces hypothèses déjà enregistrées avec [HYPOTHÈSE À VALIDER]."
-        )
     if few_shot:
         exemple, origine = few_shot
         avertissement = (
@@ -203,6 +194,24 @@ def construire_prompt_systeme(
             "jamais comme une référence validée, ses [HYPOTHÈSE À VALIDER] le restent"
         )
         blocs.append(f"## EXEMPLE DE FORMAT ({avertissement})\n{exemple}")
+    # En DERNIÈRE position du prompt (la plus saillante) : constaté session 9
+    # (06/07/2026), la consigne noyée en milieu de prompt n'a pas été suivie —
+    # le PO a tranché une hypothèse sans qu'aucune levée ne soit proposée.
+    if hypotheses_en_attente:
+        registre = "\n".join(f"- #{hid} : {texte}" for hid, texte in hypotheses_en_attente)
+        blocs.append(
+            "## REGISTRE DES HYPOTHÈSES EN ATTENTE (A8)\n"
+            f"{registre}\n"
+            "IMPÉRATIF — à vérifier À CHAQUE réponse : si le dernier message du PO ou un "
+            "extrait cité tranche l'une de ces hypothèses, termine ta réponse par une ligne "
+            "dédiée, exactement sous cette forme :\n"
+            "[LEVÉE PROPOSÉE : #<numéro> — confirmée|rejetée — justification courte]\n"
+            "Exemple : « [LEVÉE PROPOSÉE : #7 — confirmée — le PO a confirmé que l'équipe "
+            "crée le jeu de données] ». "
+            "C'est une PROPOSITION : seul le PO confirme ou rejette dans le registre (A8) — "
+            "ne considère jamais une hypothèse comme levée de toi-même. "
+            "Ne re-marque pas ces hypothèses déjà enregistrées avec [HYPOTHÈSE À VALIDER]."
+        )
     return "\n\n".join(blocs)
 
 

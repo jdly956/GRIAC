@@ -33,6 +33,7 @@ from sia_api.gabarit import (
     BLOCS_RECIT,
     MARQUEUR_HYPOTHESE,
     extraire_stories_us,
+    titre_us,
     valider_us,
 )
 
@@ -93,8 +94,7 @@ class Resultat:
 
 
 def _titre(story: str) -> str:
-    correspondance = re.search(r"\*\*US — (.+?)\*\*", story)
-    return correspondance.group(1) if correspondance else "(sans titre)"
+    return titre_us(story) or "(sans titre)"
 
 
 def charger_cas() -> tuple[list[Cas], str]:

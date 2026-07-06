@@ -6,6 +6,7 @@ from sia_api.gabarit import (
     CRITERE_DOR_REFINEMENT,
     CRITERES_DOR,
     extraire_stories_us,
+    titre_us,
     valider_dor,
     valider_us,
 )
@@ -235,3 +236,29 @@ def test_bloc_reellement_vide_toujours_signale() -> None:
     )
     rapport = valider_us(texte)
     assert any("Contexte" in violation for violation in rapport.violations)
+
+
+def test_variante_de_titre_extraite_et_signalee() -> None:
+    # Session 9 (06/07/2026) : « ### US — **Titre** » — la story était perdue en
+    # silence (ni feedback, ni export). Elle doit être EXTRAITE puis signalée
+    # non conforme (entête hors gabarit) — jamais ignorée.
+    variante = US_MINIMALE_CONFORME.replace(
+        "**US — Consulter mon dossier**", "### US — **Consulter mon dossier** (Story 2)"
+    )
+    document = f"préambule\n\n---\n{variante}\n---\n"
+    stories = extraire_stories_us(document)
+    assert len(stories) == 1
+    assert titre_us(stories[0]) == "Consulter mon dossier"
+    rapport = valider_us(stories[0])
+    assert any("entête" in violation for violation in rapport.violations)
+
+
+def test_attendus_en_liste_numerotee_acceptes() -> None:
+    # Session 9 : faux positif « sans aucun attendu listé » sur les listes
+    # numérotées (« 1. **Vue en lecture** … »), forme réelle des sorties Albert.
+    texte = US_MINIMALE_CONFORME.replace(
+        "- Attendu 1 : l'usager voit le statut courant de son dossier",
+        "1. **Vue liste** : l'usager voit le statut courant de son dossier",
+    )
+    rapport = valider_us(texte)
+    assert rapport.conforme, rapport.violations

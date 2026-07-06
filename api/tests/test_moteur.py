@@ -84,6 +84,12 @@ def test_prompt_systeme_injecte_le_registre_en_attente() -> None:
     # Sans hypothèse en attente : ni section, ni consigne inutile.
     sans_registre = construire_prompt_systeme("interview", None, "", None)
     assert "REGISTRE DES HYPOTHÈSES EN ATTENTE" not in sans_registre
+    # Session 9 (06/07/2026) : la consigne noyée en milieu de prompt n'a pas été
+    # suivie — le registre vit désormais en DERNIÈRE position, après le few-shot.
+    complet = construire_prompt_systeme(
+        "interview", None, "", charger_few_shot(), [(3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]")]
+    )
+    assert complet.index("EXEMPLE DE FORMAT") < complet.index("REGISTRE DES HYPOTHÈSES EN ATTENTE")
 
 
 def test_extraire_divergences() -> None:
@@ -348,6 +354,19 @@ def test_controle_dor_refinement_doit_rester_bleu() -> None:
     )
     rapports = controler_conformite("controle_dor", tableau)
     assert any("🔵" in r for r in rapports)
+
+
+def test_controle_dor_sur_toute_etape_de_production() -> None:
+    # Session 9 (06/07/2026) : le cycle réel est « une story = rédaction + DoR »
+    # et la machine à états file à `synthese` pendant que les tableaux DoR
+    # continuent d'arriver — un tableau présent se contrôle quelle que soit
+    # l'étape de production ; son absence ne se signale qu'à l'étape 4.
+    tableau_bancal = _tableau_dor_conforme().replace(
+        f"| {CRITERE_DOR_REFINEMENT} | 🔵 |", f"| {CRITERE_DOR_REFINEMENT} | ✅ |"
+    )
+    rapports = controler_conformite("synthese", tableau_bancal)
+    assert any("Contrôle DoR automatisé" in r for r in rapports)
+    assert controler_conformite("synthese", "du texte sans tableau DoR") == []
 
 
 def test_pas_de_controle_hors_etapes_de_production() -> None:

@@ -76,10 +76,28 @@ class RapportConformite:
         return not self.violations
 
 
+# Variante réelle constatée (session 9 pod, 06/07/2026) : « ### US — **Titre** »
+# — le gras porte sur le seul titre. Une story ainsi titrée doit être EXTRAITE
+# (sinon perte silencieuse en aval : feedback E4.4, exports E5) puis signalée
+# non conforme par `valider_us` (entête hors gabarit) — jamais ignorée.
+_MOTIF_TITRE_US = re.compile(r"\*\*US — (.+?)\*\*")
+_MOTIF_TITRE_US_VARIANTE = re.compile(r"US — \*\*(.+?)\*\*")
+
+# Les attendus/critères sortent en puces OU en listes numérotées (forme réelle
+# des sorties Albert, session 9 : faux positif « sans aucun attendu listé »).
+_MOTIF_ITEM_LISTE = r"^\s*(?:[-*]|\d+[.)]) .+"
+
+
+def titre_us(story: str) -> str | None:
+    """Titre d'une story — tolérant à la variante « US — **Titre** »."""
+    correspondance = _MOTIF_TITRE_US.search(story) or _MOTIF_TITRE_US_VARIANTE.search(story)
+    return correspondance.group(1).strip() if correspondance else None
+
+
 def extraire_stories_us(texte: str) -> list[str]:
     """Découpe un fichier markdown en stories US (séparateur `---`)."""
     segments = re.split(r"\n-{3,}\n", texte)
-    return [segment.strip() for segment in segments if "**US — " in segment]
+    return [segment.strip() for segment in segments if titre_us(segment) is not None]
 
 
 def _cellules(ligne: str) -> list[str]:
@@ -156,7 +174,7 @@ def valider_us(texte: str) -> RapportConformite:
     section_attendu = _section(texte, "Attendu fonctionnel")
     if section_attendu is None:
         rapport.violations.append("bloc manquant : « **Attendu fonctionnel** »")
-    elif not re.search(r"^\s*- .+", section_attendu, re.MULTILINE):
+    elif not re.search(_MOTIF_ITEM_LISTE, section_attendu, re.MULTILINE):
         # Le contenu peut aussi tenir sur la ligne du bloc (forme courte du gabarit).
         ligne = re.search(r"^\*\*Attendu fonctionnel\*\*[ \t]*:?[ \t]*(.+)$", texte, re.MULTILINE)
         if not (ligne and ligne.group(1).strip()):
@@ -195,7 +213,7 @@ def valider_us(texte: str) -> RapportConformite:
     section_dsfr = _section(texte, "Critères d'accessibilité")
     if section_dsfr is None:
         rapport.violations.append("bloc manquant : « **Critères d'accessibilité** » (DSFR)")
-    elif not re.search(r"^\s*- .+", section_dsfr, re.MULTILINE):
+    elif not re.search(_MOTIF_ITEM_LISTE, section_dsfr, re.MULTILINE):
         rapport.violations.append("« Critères d'accessibilité » sans aucun critère listé")
 
     for adverbe in ADVERBES_FLOUS:
@@ -269,11 +287,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     code_retour = 0
     for story in stories:
-        titre = re.search(r"\*\*US — (.+?)\*\*", story)
+        titre = titre_us(story)
         rapport = valider_us(story)
         verdict = "CONFORME" if rapport.conforme else "NON CONFORME"
         print(
-            f"[{verdict}] {titre.group(1) if titre else '(sans titre)'} — "
+            f"[{verdict}] {titre if titre else '(sans titre)'} — "
             f"{rapport.nb_ca} CA, {len(rapport.hypotheses)} hypothèse(s) à valider, "
             f"{len(rapport.avertissements)} avertissement(s)"
         )

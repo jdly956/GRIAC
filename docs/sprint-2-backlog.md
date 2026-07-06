@@ -142,3 +142,16 @@ Critères d'acceptation :
 - [ ] Le banc E6 (`make eval`) continue de comparer large vs medium par défaut — l'instrument de la décision définitive reste en place
 
 *Code livré le 06/07/2026 : défaut basculé sur les 5 surfaces, TU du défaut recalées + TU de surcharge réorientée vers le chemin de retour (large). 220 tests verts. CA à cocher via `docs/plans-test/s2.14-modele-chat-medium.md` (probe + génération réelle + contre-épreuve de réversibilité — pod).*
+
+## Constats de la session réelle 9 (06/07/2026, pod, branche PR #30) — correctifs et suites
+
+Session complète (Feature « prioriser les actes > seuils commande publique », 10 US + DoR) : adhérence gabarit très bonne (valide l'essai medium S2.14 en réel), une seule alerte S1.10 et elle attrapait un vrai défaut (CA10 incomplet). Correctifs livrés dans la foulée (même PR #30) :
+
+- [x] **Story perdue en silence** : titre en variante `### US — **Titre**` non extrait (absente du feedback ET des exports) → extraction tolérante (`titre_us`), la story est extraite puis **signalée** non conforme (entête hors gabarit) — jamais ignorée
+- [x] **DoR sans contrôle hors étape 4** : le cycle réel est « une story = rédaction + DoR » et la machine à états file à `synthese` → un tableau DoR présent se contrôle à toute étape de production ; l'absence ne se signale qu'à l'étape 4
+- [x] **Faux positif « sans aucun attendu listé »** sur les listes numérotées (`1. …`) → item de liste toléré (puce ou numéro)
+- [x] **Levée proposée (S2.13) non suivie par le modèle** (premier cas réel raté) → consigne déplacée en dernière position du prompt + exemple explicite ; contre-épreuve = plan s2.13 §3 bis
+
+Suites au backlog (non couvertes ici) :
+- [ ] **Anti-invention incomplet** : le modèle marque ses hypothèses à SON format (`[HYPOTHÈSE 1 A]`, étape 0) et affirme des valeurs inventées sans marqueur (rétentions, horaires de job, volumétries) — durcir la consigne de marquage + extraction tolérante aux variantes ; story dédiée à cadrer
+- [ ] **Sémantique du « Oui »** : utilisé comme « continuer/story suivante », il désynchronise la machine à états (badge étape trompeur — A5) — arbitrage produit : bouton « story suivante » vs étapes linéaires 0→5
