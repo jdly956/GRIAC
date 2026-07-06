@@ -105,6 +105,36 @@ def creer_session(entree: SessionEntree, connexion: Connexion) -> EtatSession:
     return etat
 
 
+class SessionResume(BaseModel):
+    id: int
+    etape: str
+    projet_id: int | None
+    apercu_feature: str
+
+
+@router.get("/workflows")
+def lister_sessions(connexion: Connexion) -> list[SessionResume]:
+    """Liste des sessions — l'accueil E4 permet de RETROUVER une session en cours.
+
+    Constaté en session de validation (06/07/2026) : sans liste, une session
+    perdue de vue ne se retrouve que par URL devinée.
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "SELECT id, etape, projet_id, feature FROM workflow_sessions "
+            "ORDER BY modifie_le DESC, id DESC"
+        )
+        return [
+            SessionResume(
+                id=ligne[0],
+                etape=ligne[1],
+                projet_id=ligne[2],
+                apercu_feature=(ligne[3][:120] + "…") if len(ligne[3]) > 120 else ligne[3],
+            )
+            for ligne in curseur.fetchall()
+        ]
+
+
 @router.get("/workflows/{session_id}")
 def lire_session(session_id: int, connexion: Connexion) -> EtatSession:
     with connexion.cursor() as curseur:

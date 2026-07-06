@@ -107,6 +107,18 @@ def brancher():
     app.dependency_overrides.clear()
 
 
+def test_liste_des_sessions_pour_l_accueil(brancher) -> None:
+    # Sans liste, une session perdue de vue ne se retrouve que par URL devinée
+    # (constaté session de validation, 06/07/2026).
+    brancher([[(7, "interview", None, "F" * 130), (5, "synthese", 1, "Feature courte")]])
+    reponse = client.get("/workflows")
+    assert reponse.status_code == 200
+    corps = reponse.json()
+    assert [session["id"] for session in corps] == [7, 5]
+    assert corps[0]["apercu_feature"] == "F" * 120 + "…"  # aperçu tronqué
+    assert corps[1]["apercu_feature"] == "Feature courte"
+
+
 def test_creation_session_enregistre_les_hypotheses_de_la_feature(brancher) -> None:
     connexion = brancher(
         [

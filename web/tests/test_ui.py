@@ -62,6 +62,20 @@ def test_accueil_liste_les_projets(api) -> None:
     assert "Ne collez pas de données personnelles" in reponse.text  # bandeau D15
 
 
+def test_accueil_liste_les_sessions_en_cours(api) -> None:
+    api.brancher("GET", "/projects", 200, [])
+    api.brancher(
+        "GET",
+        "/workflows",
+        200,
+        [{"id": 7, "etape": "interview", "projet_id": 1, "apercu_feature": "Feature : connexion"}],
+    )
+    reponse = client.get("/")
+    assert 'href="/sessions/7"' in reponse.text  # la session se RETROUVE depuis l'accueil
+    assert "1 — Interview de refinement" in reponse.text
+    assert "Feature : connexion" in reponse.text
+
+
 def test_accueil_api_injoignable_reste_lisible(api) -> None:
     api.brancher("GET", "/projects", 599, {"detail": "API injoignable (http://x) : ConnectError"})
     reponse = client.get("/")

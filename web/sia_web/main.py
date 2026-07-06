@@ -129,11 +129,14 @@ def _page_session(
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     statut, projets = api_client.appeler("GET", "/projects")
+    statut_sessions, sessions = api_client.appeler("GET", "/workflows")
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
             "projets": projets if statut == 200 else [],
+            "sessions": sessions if statut_sessions == 200 else [],
+            "libelles_etapes": ETAPES_LIBELLES,
             "erreur": None if statut == 200 else projets.get("detail"),
         },
     )
