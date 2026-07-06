@@ -23,12 +23,17 @@ from typing import Annotated
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markdown_it import MarkdownIt
 
 from sia_web import api_client
 
 app = FastAPI(title="SIA PO — Web")
+
+# S3.8 : htmx VENDORÉ (le CDN externe serait un point de fragilité — et la
+# politique réseau des environnements le bloque) ; servi par l'app elle-même.
+app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
 
 def _contexte_racine(request: Request) -> dict[str, str]:

@@ -276,6 +276,31 @@ def test_story_suivante_appelle_le_moteur_sans_avancer(api) -> None:
     assert "STORY SUIVANTE" in corps["message"]
 
 
+def test_htmx_vendore_et_branche_en_progressive_enhancement(api) -> None:
+    # S3.8 : htmx est servi par l'app (pas de CDN) et les formulaires longs
+    # portent hx-boost + anti double-envoi + indicateur — tout en restant des
+    # POST classiques sans JavaScript.
+    statique = client.get("/static/htmx.min.js")
+    assert statique.status_code == 200
+    assert statique.text.startswith("var htmx=")
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, etape="redaction"))
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert 'src="/static/htmx.min.js"' in texte
+    assert texte.count('hx-boost="true"') == 3  # message, story suivante, valider
+    assert texte.count('hx-disabled-elt="find button"') == 3
+    assert "Génération en cours" in texte
+    assert 'action="/sessions/1/message"' in texte  # le repli sans JS demeure
+
+
+def test_htmx_prefixe_par_le_root_path(api) -> None:
+    client_prefixe = TestClient(app, root_path="/proxy/8081")
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client_prefixe.get("/sessions/1").text
+    assert 'src="/proxy/8081/static/htmx.min.js"' in texte
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")

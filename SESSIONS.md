@@ -33,10 +33,12 @@
 
 **S3.7 — écran session réorganisé** (PR #31/S3.6 mergée dans la foulée par le référent ; « go ») : nouvel ordre de page — **« Dernière réponse » rendue EN HAUT après chaque envoi** avec sa traçabilité (mieux qu'une ancre : les POST rendent la page directement, v1 sans JS) ; **zone d'action unifiée** (message / story suivante / valider l'étape) juste dessous ; **registre replié** (`<details>`, auto-déplié seulement si une levée proposée attend la décision — compteur « dont N à décider ») ; **fil replié** au-delà des 4 derniers messages (« Voir les N échanges précédents », partiel `_message.html`) ; notation repliée. 3 TU — **237 tests verts**. Plan `docs/plans-test/s3.7-ecran-session.md`.
 
+**S3.8 — dynamisme htmx** (PR #32/S3.7 mergée dans la foulée) : **htmx 2.0.4 vendoré** (`static/htmx.min.js` via le registre npm — les CDN unpkg/jsdelivr sont bloqués par la politique réseau de l'environnement, ce qui valide le choix du vendoring) + montage `StaticFiles` ; `hx-boost` sur les 3 formulaires longs (message / story suivante / valider) : envoi AJAX + remplacement de page **sans écran blanc**, **zéro route fragment** (le rendu serveur reste unique) ; **indicateur « ⏳ Génération en cours… »** par formulaire + **boutons désactivés pendant l'appel** (anti double-envoi — le défaut qui guettait sur les générations de 7-30 s) ; sans JavaScript, les POST classiques restent intacts (progressive enhancement). 2 TU — **239 tests verts**. Plan `docs/plans-test/s3.8-htmx.md` (test central : indicateur + boutons désactivés pendant une vraie génération, repli JS désactivé).
+
 **Mini-récap** :
-- ✅ Fait : S3.6 livrée ET mergée (PR #31) ; S3.7 livrée (écran réorganisé — l'essentiel visible sans scroll)
-- ⏳ En cours : lot pré-pilote, suite de l'ordre validé : S3.8 (htmx) → S3.11 (tokens) → S3.12 (modèle)
-- ⏳ Référent : revue/merge PR S3.7 ; plans s2.15 + s3.2 + s3.6 + s3.7 sur pod (une seule session suffit)
+- ✅ Fait : S3.6 mergée (PR #31) ; S3.7 mergée (PR #32) ; S3.8 livrée — **le trio « première impression » est complet**
+- ⏳ En cours : lot pré-pilote, suite de l'ordre validé : S3.11 (tokens) → S3.12 (modèle) → S3.10 (upload/pipeline) → S3.9/S3.13
+- ⏳ Référent : revue/merge PR S3.8 ; plans s2.15 + s3.2 + s3.6→s3.8 sur pod (une seule session de contrôle suffit)
 
 ---
 

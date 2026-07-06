@@ -39,18 +39,26 @@
 
 <div class="panneau">
   <h2>Votre message</h2>
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/message">
+  {# S3.8 : hx-boost = envoi AJAX + remplacement de la page sans rechargement
+     blanc ; indicateur pendant la génération ; boutons désactivés (anti double
+     envoi). Sans JavaScript, ces formulaires restent des POST classiques. #}
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/message"
+        hx-boost="true" hx-disabled-elt="find button">
     <p>Réponse d'interview, correction, ou <strong>question documentaire libre</strong> — même fil (A2).</p>
     <textarea class="fr-input" name="message" rows="4" required></textarea>
     <button class="fr-btn" type="submit">Envoyer</button>
+    <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
   </form>
   {% if etat.etape in ("redaction", "controle_dor") %}
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante" class="action-secondaire">
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante" class="action-secondaire"
+        hx-boost="true" hx-disabled-elt="find button">
     <p>Une story = rédaction + contrôle DoR — ce bouton enchaîne <strong>sans changer d'étape</strong>.</p>
     <button class="fr-btn" type="submit">Story suivante</button>
+    <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
   </form>
   {% endif %}
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="action-secondaire">
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="action-secondaire"
+        hx-boost="true" hx-disabled-elt="find button">
     <p><strong>Valider l'étape ? (règle 5)</strong>
     {% if etat.etape in ("redaction", "controle_dor") %}
     « Oui » quand <strong>toutes les stories candidates sont couvertes</strong> — sinon, préférez « Story suivante ».
@@ -60,6 +68,7 @@
     <input class="fr-input" id="commentaire" name="commentaire" placeholder="précisez ce qu'il faut changer">
     <button class="fr-btn" name="valide" value="oui">Oui — étape suivante</button>
     <button class="fr-btn fr-btn--secondary" name="valide" value="non">Non — itérer</button>
+    <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
   </form>
 </div>
 

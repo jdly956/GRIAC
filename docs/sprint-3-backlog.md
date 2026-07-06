@@ -69,6 +69,8 @@ Critères d'acceptation :
 - [ ] Envoi de message et « Story suivante » via htmx : la réponse s'insère dans le fil sans rechargement complet ; **indicateur « génération en cours »** pendant l'appel ; bouton désactivé (anti double-envoi)
 - [ ] Repli sans JavaScript conservé (les formulaires classiques restent fonctionnels — progressive enhancement) ; htmx vendoré en statique (pas de CDN bloqué) ; TU des fragments
 
+*Code livré le 06/07/2026 (PR dédiée) : htmx 2.0.4 **vendoré** (`static/htmx.min.js`, récupéré du registre npm — les CDN sont bloqués par la politique réseau, ce qui valide le choix) + montage `StaticFiles` ; `hx-boost` sur les 3 formulaires longs (message / story suivante / valider) = AJAX + remplacement de page sans écran blanc, **zéro route fragment** (le rendu serveur reste unique — variante assumée du CA « TU des fragments ») ; `hx-disabled-elt` (anti double-envoi) + indicateur `.htmx-indicator` par formulaire ; sans JS, POST classiques intacts. 2 TU — 239 tests. CA à cocher via `docs/plans-test/s3.8-htmx.md`.*
+
 ### S3.9 — Traçabilité persistée + extrait exact (A3 complet)
 
 - [ ] Sources, avertissements et divergences **persistés par message** (migration) et affichés dans le fil au rechargement — plus de « v1 assumée » S2.8
