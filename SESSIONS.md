@@ -41,10 +41,12 @@
 
 **S2.15 livrée (« go pour la suite » n°2) — anti-invention v2** : (1) **dédup sémantique du registre** — `est_doublon_hypothese` (recouvrement des termes porteurs de sens de la formulation courte ≥ 0,8, seuil calibré sur les paires réelles de la session 11), branchée en second étage de l'insertion moteur ; garde-fou A8 vérifié par TU : une hypothèse réellement distincte n'est jamais avalée ; (2) **consignes de traçabilité durcies** au prompt : marqueur EXACT (variantes perdues sinon), valeurs chiffrées inventées marquées sur leur ligne, alternatives A/B/C non marquées (seule l'option retenue), pas de re-liste des hypothèses déjà au registre. 6 TU nouveaux — **229 tests verts**. Plan `docs/plans-test/s2.15-anti-invention.md` (rejeu du récapitulatif session 11, compteur avant/après, contre-épreuve de non-perte).
 
+**Cadrage de la suite (fin de session)** : analyse de l'ensemble des backlogs → **le code ne bloque plus rien** ; le chemin critique vers le pilote (D17/§6) passe par les dépendances externes du §7. Squelette **`docs/sprint-3-backlog.md`** versionné (à amender par le référent) : S3.0 préalables débloquants (merge PR #30, snapshot corpus, gold, panel, registre d'images, 3 arbitrages), S3.1 lecture S3/MinIO (dernier trou de code du DAG E1 — gated snapshot), S3.2 sémantique du « Oui » (gated arbitrage), S3.3 ingestion corpus réel + recalibrages (dont 2e test no-go §6 : débit embeddings sous quotas), S3.4 recalibrage E6 sur gold + verdict modèle définitif, S3.5 préparation pilote (Helm lab, charte d'usage, embarquement).
+
 **Mini-récap** :
-- ✅ Fait : analyse doc + plan de travail ; S2.13 livrée (`8b35dec`) **et validée stack-live (session 11)** ; S2.14 livrée (`f35b538`, corroborée sessions 9/11) ; correctifs sessions 9+11 (`4ce5bd4`, `99b4ee4`) ; **S2.15 anti-invention v2 livrée** ; TNR 229 verts ; PR #30 draft
-- ⏳ Référent : revue/merge PR #30 ; plan s2.15 sur pod (récap → registre stable) ; clics Confirmer/Rejeter + recoupe SQL (facultatif) ; **arbitrage sémantique du « Oui »** (story suivante vs étape suivante — dernier point produit ouvert) ; protection de branche ; compose S1.2 ; Helm lab ; prérequis §7 ; arbitrage PG 16 vs 18.3
-- ⏳ Backlog : sémantique du « Oui » (après arbitrage) ; adhérence format de large (si l'essai medium déçoit) ; relance-idempotence scan (s1.7 étape 4)
+- ✅ Fait : analyse doc + plan de travail ; S2.13 livrée (`8b35dec`) **et validée stack-live (session 11)** ; S2.14 livrée (`f35b538`, corroborée sessions 9/11) ; correctifs sessions 9+11 (`4ce5bd4`, `99b4ee4`) ; **S2.15 anti-invention v2 livrée** ; **sprint 3 cadré et squeletté** ; TNR 229 verts ; PR #30 draft
+- ⏳ Référent : revue/merge PR #30 ; S3.0 (snapshot corpus, gold, panel, registre, protection de branche) ; 3 arbitrages (« Oui », PG 16/18.3, hébergement pilote) ; plan s2.15 sur pod
+- ⏳ Backlog code (gated) : S3.1 lecture S3/MinIO ; S3.2 « Story suivante » ; S3.3/S3.4 recalibrages ; S3.5 préparation pilote
 
 ---
 
