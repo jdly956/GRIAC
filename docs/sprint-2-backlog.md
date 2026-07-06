@@ -119,3 +119,15 @@ Critères d'acceptation :
 - [ ] Le contrôle **signale, ne bloque jamais** (règle 5 : le PO arbitre) ; aucun contrôle aux étapes 0–2 ; TU purs + TU route (Albert/RAG mockés)
 
 *Code livré le 03/07/2026 : `controler_conformite` + `_extraire_tableau_dor` dans `sia_api/moteur.py`, branchés sur `POST /workflows/{id}/message` (canal avertissements existant — affiché par l'UI S2.8 sans modification). 6 TU (203 au total). CA à cocher via `docs/plans-test/s2.12-controle-dor-auto.md` (dans la foulée du plan S2.6). **Le backlog macro côté code est complet** (E0→E6 + E8 ; E7 = post-go).*
+
+## S2.13 — E3 : rapprochement décision d'interview ↔ registre A8 (« levée proposée »)
+
+> Issue du réel (session de validation Onyxia, 06/07/2026) : une réponse d'interview du PO tranche souvent une [HYPOTHÈSE À VALIDER] déjà au registre, mais elle reste « en_attente » jusqu'à ce que le PO la retrouve et clique — bruit au récapitulatif A8 de l'export.
+
+Critères d'acceptation :
+- [ ] Les hypothèses **en attente** entrent au prompt système, numérotées (`#id`), avec la consigne de **proposer** la levée quand un message du PO ou un extrait cité la tranche : `[LEVÉE PROPOSÉE : #id — confirmée|rejetée — justification]`
+- [ ] La proposition est persistée sur des colonnes dédiées (`statut_propose`, `justification_proposee`, `proposee_le` — migration 0010) : **le `statut` n'est JAMAIS modifié par le moteur** — la décision individuelle du PO reste le seul chemin de levée (invariant A8, vérifié par TU) ; identifiant halluciné ou déjà décidé → proposition ignorée
+- [ ] Écran session : badge « Levée proposée » + justification à côté des boutons Confirmer/Rejeter (rappel « c'est vous qui décidez — A8 ») ; panneau du dernier échange : compteur des levées proposées
+- [ ] TU purs (extraction du marqueur) + TU route (Albert/RAG mockés, invariant A8) + TU écran
+
+*Code livré le 06/07/2026 : `extraire_levees_proposees` (pure, `sia_api/workflow.py`), registre en attente injecté au prompt + persistance des propositions (`sia_api/moteur.py`, `levees_proposees` dans la réponse), exposition dans `EtatSession` (`sia_api/workflows.py`), badge écran session. Migration 0010. 8 TU (220 au total). CA à cocher via `docs/plans-test/s2.13-rapprochement-a8.md` (exige clé + base — pod).*

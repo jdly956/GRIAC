@@ -122,6 +122,34 @@ def test_ecran_session_affiche_fil_etape_et_hypotheses(api) -> None:
     assert "question documentaire libre" in reponse.text  # A2
 
 
+def test_levee_proposee_affichee_sans_lever(api) -> None:
+    # Rapprochement interview↔registre (S2.13) : la proposition du moteur
+    # s'affiche à côté des boutons — la décision individuelle reste au PO (A8).
+    etat = {
+        "id": 1,
+        "etape": "interview",
+        "projet_id": None,
+        "hypotheses": [
+            {
+                "id": 3,
+                "texte": "Seuil 10 Mo [HYPOTHÈSE À VALIDER]",
+                "origine": "modele",
+                "statut": "en_attente",
+                "statut_propose": "confirmee",
+                "justification_proposee": "le PO a fixé 10 Mo",
+            }
+        ],
+        "nb_en_attente": 1,
+    }
+    api.brancher("GET", "/workflows/1", 200, etat)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    reponse = client.get("/sessions/1")
+    assert "Levée proposée" in reponse.text
+    assert "le PO a fixé 10 Mo" in reponse.text
+    assert "c'est vous qui décidez (A8)" in reponse.text
+    assert "Confirmer" in reponse.text and "Rejeter" in reponse.text  # boutons intacts
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")

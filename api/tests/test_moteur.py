@@ -71,6 +71,21 @@ def test_few_shot_silver_jamais_presente_comme_valide() -> None:
     assert "**US — " in prompt  # l'exemple est bien inclus
 
 
+def test_prompt_systeme_injecte_le_registre_en_attente() -> None:
+    # Rapprochement interview↔registre (A8) : les hypothèses en attente entrent
+    # au prompt, numérotées, avec la consigne de PROPOSER la levée — jamais de
+    # la considérer acquise (la décision individuelle reste au PO).
+    prompt = construire_prompt_systeme(
+        "interview", None, "", None, [(3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]")]
+    )
+    assert "#3 : Seuil 10 Mo" in prompt
+    assert "[LEVÉE PROPOSÉE" in prompt
+    assert "seul le PO confirme ou rejette" in prompt
+    # Sans hypothèse en attente : ni section, ni consigne inutile.
+    sans_registre = construire_prompt_systeme("interview", None, "", None)
+    assert "REGISTRE DES HYPOTHÈSES EN ATTENTE" not in sans_registre
+
+
 def test_extraire_divergences() -> None:
     texte = (
         "Réponse.\n"
@@ -169,7 +184,7 @@ def brancher(monkeypatch: pytest.MonkeyPatch):
 SCRIPT_NOMINAL = [
     ("interview", None, "Ma Feature"),  # session
     [("po", "Ma Feature")],  # historique
-    [],  # hypothèses déjà connues (aucune)
+    [],  # registre des hypothèses (id, texte, statut) — vide
 ]
 
 
@@ -202,7 +217,7 @@ def test_hypothese_deja_connue_non_dupliquee(brancher) -> None:
     script = [
         ("interview", None, "Ma Feature"),
         [],
-        [("Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]",)],  # déjà au registre
+        [(3, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],  # déjà au registre
     ]
     # Même ligne exacte que celle du registre : la dédup v0 est textuelle.
     connexion, _ = brancher(script, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]")
@@ -237,6 +252,44 @@ def test_aucune_source_avertit(brancher) -> None:
     brancher(list(SCRIPT_NOMINAL), "Réponse prudente.", contexte=contexte_vide)
     corps = client_http.post("/workflows/7/message", json={"message": "sujet inconnu"}).json()
     assert any("Aucune source récupérable" in a for a in corps["avertissements"])
+
+
+SCRIPT_REGISTRE_EN_ATTENTE = [
+    ("interview", None, "Ma Feature"),  # session
+    [("po", "Ma Feature")],  # historique
+    [(3, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],  # registre
+]
+
+
+def test_levee_proposee_persistee_sans_toucher_le_statut(brancher) -> None:
+    reponse = "Votre réponse fixe le seuil.\n[LEVÉE PROPOSÉE : #3 — confirmée — le PO a fixé 10 Mo]"
+    connexion, faux_client = brancher(list(SCRIPT_REGISTRE_EN_ATTENTE), reponse)
+    corps = client_http.post("/workflows/7/message", json={"message": "le seuil est 10 Mo"}).json()
+    assert corps["levees_proposees"] == [
+        {"hypothese_id": 3, "statut_propose": "confirmee", "justification": "le PO a fixé 10 Mo"}
+    ]
+    # Le registre en attente est bien entré au prompt système.
+    assert "#3 : Seuil proposé : 10 Mo" in faux_client.appels[0]["messages"][0]["content"]
+    maj = [p for r, p in connexion.curseur.requetes if "SET statut_propose" in r]
+    assert maj == [
+        {
+            "statut_propose": "confirmee",
+            "justification": "le PO a fixé 10 Mo",
+            "hid": 3,
+            "sid": 7,
+        }
+    ]
+    # Invariant A8 : la proposition ne modifie JAMAIS le statut lui-même.
+    assert not any("SET statut =" in r for r, _ in connexion.curseur.requetes)
+
+
+def test_levee_proposee_hors_registre_ignoree(brancher) -> None:
+    connexion, _ = brancher(
+        list(SCRIPT_REGISTRE_EN_ATTENTE), "[LEVÉE PROPOSÉE : #99 — confirmée — numéro halluciné]"
+    )
+    corps = client_http.post("/workflows/7/message", json={"message": "ok"}).json()
+    assert corps["levees_proposees"] == []
+    assert not any("SET statut_propose" in r for r, _ in connexion.curseur.requetes)
 
 
 def test_reponse_vide_erreur_explicite(brancher) -> None:

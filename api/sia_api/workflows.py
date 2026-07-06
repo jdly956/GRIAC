@@ -29,6 +29,10 @@ class Hypothese(BaseModel):
     texte: str
     origine: Literal["corpus", "po", "modele"]
     statut: Literal["en_attente", "confirmee", "rejetee"]
+    # Levée proposée par le moteur (rapprochement interview↔registre) : une
+    # SUGGESTION affichée à côté des boutons — elle ne lève jamais rien (A8).
+    statut_propose: Literal["confirmee", "rejetee"] | None = None
+    justification_proposee: str | None = None
 
 
 class EtatSession(BaseModel):
@@ -62,12 +66,20 @@ def _lire_session(curseur, session_id: int) -> EtatSession | None:
     if ligne is None:
         return None
     curseur.execute(
-        "SELECT id, texte, origine, statut FROM workflow_hypotheses "
-        "WHERE session_id = %(id)s ORDER BY id",
+        "SELECT id, texte, origine, statut, statut_propose, justification_proposee "
+        "FROM workflow_hypotheses WHERE session_id = %(id)s ORDER BY id",
         {"id": session_id},
     )
     hypotheses = [
-        Hypothese(id=h[0], texte=h[1], origine=h[2], statut=h[3]) for h in curseur.fetchall()
+        Hypothese(
+            id=h[0],
+            texte=h[1],
+            origine=h[2],
+            statut=h[3],
+            statut_propose=h[4],
+            justification_proposee=h[5],
+        )
+        for h in curseur.fetchall()
     ]
     return EtatSession(
         id=ligne[0],

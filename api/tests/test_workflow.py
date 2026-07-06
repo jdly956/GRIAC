@@ -9,10 +9,12 @@ from sia_api.db import get_connexion
 from sia_api.main import app
 from sia_api.workflow import (
     ETAPES,
+    LeveeProposee,
     avancer,
     cle_hypothese,
     est_terminale,
     extraire_hypotheses,
+    extraire_levees_proposees,
     verifier_lot_interview,
 )
 
@@ -77,6 +79,39 @@ def test_lot_interview_limite_a_3_questions() -> None:
     assert verifier_lot_interview("Q1 ? Q2 ? Q3 ?") == []
     violations = verifier_lot_interview("Q1 ? Q2 ? Q3 ? Q4 ?")
     assert violations and "règle 1" in violations[0]
+
+
+# --- levées proposées (rapprochement décision d'interview ↔ registre, A8) ---
+
+
+def test_levee_proposee_extraite_et_filtree_sur_le_registre() -> None:
+    texte = (
+        "Votre réponse fixe le seuil à 10 Mo.\n"
+        "[LEVÉE PROPOSÉE : #3 — confirmée — le PO a fixé le seuil à 10 Mo]\n"
+        "[LEVÉE PROPOSÉE : #99 — rejetée — identifiant hors registre]"
+    )
+    # #99 n'est pas en attente (le modèle peut se tromper de numéro) : ignoré.
+    assert extraire_levees_proposees(texte, {3, 4}) == [
+        LeveeProposee(3, "confirmee", "le PO a fixé le seuil à 10 Mo")
+    ]
+
+
+def test_levee_proposee_rejet_et_justification_optionnelle() -> None:
+    assert extraire_levees_proposees("[LEVÉE PROPOSÉE : #4 — rejetée]", {4}) == [
+        LeveeProposee(4, "rejetee", "")
+    ]
+
+
+def test_levee_proposee_malformee_ou_dupliquee_ignoree() -> None:
+    texte = (
+        "[LEVÉE PROPOSÉE : sans numéro — confirmée]\n"
+        "[LEVÉE PROPOSÉE : #5 — peut-être — statut inconnu]\n"
+        "[LEVÉE PROPOSÉE : #5 — confirmée — première proposition]\n"
+        "[LEVÉE PROPOSÉE : #5 — rejetée — doublon, la première gagne]"
+    )
+    assert extraire_levees_proposees(texte, {5}) == [
+        LeveeProposee(5, "confirmee", "première proposition")
+    ]
 
 
 # --- API (DB scriptée, pattern des tests projets) ---
@@ -146,7 +181,7 @@ def test_creation_session_enregistre_les_hypotheses_de_la_feature(brancher) -> N
         [
             (7,),  # INSERT session RETURNING id
             (7, "recuperation_feature", None),  # _lire_session : session
-            [(1, "Formats : PDF [HYPOTHÈSE À VALIDER]", "po", "en_attente")],  # hypothèses
+            [(1, "Formats : PDF [HYPOTHÈSE À VALIDER]", "po", "en_attente", None, None)],
         ]
     )
     reponse = client.post(
@@ -163,7 +198,7 @@ def test_creation_session_enregistre_les_hypotheses_de_la_feature(brancher) -> N
 
 
 def test_validation_oui_avance_sans_lever_les_hypotheses(brancher) -> None:
-    hypothese = (3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]", "modele", "en_attente")
+    hypothese = (3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]", "modele", "en_attente", None, None)
     connexion = brancher(
         [
             (7, "interview", None),  # _lire_session avant
@@ -207,7 +242,7 @@ def test_decision_individuelle_leve_une_hypothese(brancher) -> None:
         [
             (3,),  # UPDATE ... RETURNING id
             (7, "interview", None),
-            [(3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]", "modele", "confirmee")],
+            [(3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]", "modele", "confirmee", None, None)],
         ]
     )
     reponse = client.post("/workflows/7/hypotheses/3", json={"statut": "confirmee"})
@@ -215,6 +250,32 @@ def test_decision_individuelle_leve_une_hypothese(brancher) -> None:
     assert reponse.json()["hypotheses"][0]["statut"] == "confirmee"
     maj = [p for r, p in connexion.curseur.requetes if "UPDATE workflow_hypotheses" in r]
     assert maj[0] == {"hid": 3, "sid": 7, "statut": "confirmee"}
+
+
+def test_levee_proposee_exposee_sans_lever_l_hypothese(brancher) -> None:
+    # La proposition du moteur (S2.13) est visible dans l'état de session pour
+    # que l'écran l'affiche à côté des boutons — le statut reste en_attente (A8).
+    brancher(
+        [
+            (7, "interview", None),
+            [
+                (
+                    3,
+                    "Seuil 10 Mo [HYPOTHÈSE À VALIDER]",
+                    "modele",
+                    "en_attente",
+                    "confirmee",
+                    "le PO a fixé 10 Mo",
+                )
+            ],
+        ]
+    )
+    corps = client.get("/workflows/7").json()
+    hypothese = corps["hypotheses"][0]
+    assert hypothese["statut"] == "en_attente"  # invariant A8 : proposée ≠ levée
+    assert hypothese["statut_propose"] == "confirmee"
+    assert hypothese["justification_proposee"] == "le PO a fixé 10 Mo"
+    assert corps["nb_en_attente"] == 1
 
 
 def test_decision_hypothese_inconnue_404(brancher) -> None:
@@ -233,8 +294,8 @@ def test_synthese_recapitule_les_hypotheses_non_levees(brancher) -> None:
         [
             (7, "synthese", None),
             [
-                (1, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]", "modele", "en_attente"),
-                (2, "Statuts [HYPOTHÈSE À VALIDER]", "po", "confirmee"),
+                (1, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]", "modele", "en_attente", None, None),
+                (2, "Statuts [HYPOTHÈSE À VALIDER]", "po", "confirmee", None, None),
             ],
         ]
     )

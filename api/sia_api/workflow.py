@@ -15,6 +15,7 @@ Le branchement Albert + RAG (/contexte) sur chaque étape arrive en E3.2.
 """
 
 import re
+from dataclasses import dataclass
 
 from sia_api.gabarit import MARQUEUR_HYPOTHESE
 
@@ -91,6 +92,51 @@ def cle_hypothese(texte: str) -> str:
     texte = texte.translate(_DECORATION_MARKDOWN)
     texte = re.sub(r"\s+", " ", texte).strip(" -").rstrip(" .")
     return texte.lower()
+
+
+# Rapprochement décision d'interview ↔ registre (A8, S2.13) : le moteur émet ce
+# marqueur quand un message du PO (ou un extrait cité) tranche une hypothèse déjà
+# au registre. Ce n'est qu'une PROPOSITION : la levée reste la décision
+# individuelle du PO — le statut de l'hypothèse n'est jamais modifié ici.
+MARQUEUR_LEVEE_PROPOSEE = "[LEVÉE PROPOSÉE"
+
+_MOTIF_LEVEE_PROPOSEE = re.compile(
+    r"\[LEVÉE PROPOSÉE\s*:\s*#?(\d+)\s*[—–-]+\s*(confirmée|rejetée|confirmee|rejetee)"
+    r"\s*(?:[—–-]+\s*([^\]]*))?\]",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class LeveeProposee:
+    hypothese_id: int
+    statut_propose: str  # "confirmee" | "rejetee"
+    justification: str
+
+
+def extraire_levees_proposees(texte: str, ids_en_attente: set[int]) -> list[LeveeProposee]:
+    """Levées proposées par le moteur — filtrées sur le registre réellement en attente.
+
+    Un identifiant inconnu ou déjà décidé est ignoré (le modèle peut se tromper
+    de numéro) ; une ligne malformée est ignorée ; un même identifiant proposé
+    deux fois ne compte qu'une fois (la première proposition gagne).
+    """
+    levees: list[LeveeProposee] = []
+    vus: set[int] = set()
+    for correspondance in _MOTIF_LEVEE_PROPOSEE.finditer(texte):
+        hypothese_id = int(correspondance.group(1))
+        if hypothese_id not in ids_en_attente or hypothese_id in vus:
+            continue
+        statut = "confirmee" if correspondance.group(2).lower().startswith("confirm") else "rejetee"
+        vus.add(hypothese_id)
+        levees.append(
+            LeveeProposee(
+                hypothese_id=hypothese_id,
+                statut_propose=statut,
+                justification=(correspondance.group(3) or "").strip(),
+            )
+        )
+    return levees
 
 
 def compter_questions(texte: str) -> int:
