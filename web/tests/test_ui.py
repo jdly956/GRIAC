@@ -110,6 +110,62 @@ def test_prefixe_root_path_porte_liens_mais_pas_les_redirections(api) -> None:
     assert redirection.headers["location"] == "/sessions/7"
 
 
+def test_registre_replie_sauf_levee_proposee_a_decider(api) -> None:
+    # S3.7 : le registre est replié par défaut ; il ne se déplie tout seul que
+    # si une levée proposée (S2.13) attend la décision du PO.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)  # 1 en attente, sans proposition
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert '<details class="panneau" >' in texte and "Hypothèses à valider (1 en attente)" in texte
+    avec_proposition = dict(
+        ETAT_SESSION,
+        hypotheses=[dict(ETAT_SESSION["hypotheses"][0], statut_propose="confirmee")],
+    )
+    api.brancher("GET", "/workflows/1", 200, avec_proposition)
+    texte = client.get("/sessions/1").text
+    assert '<details class="panneau" open>' in texte
+    assert "1 levée(s) proposée(s) à décider" in texte
+
+
+def test_fil_replie_sauf_derniers_echanges(api) -> None:
+    # S3.7 : la page ne s'allonge plus indéfiniment — seuls les 4 derniers
+    # messages restent dépliés, les précédents vivent dans un bloc repliable.
+    six_messages = [
+        {"role": "po", "etape": "interview", "contenu": f"message numéro {i}"} for i in range(6)
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, six_messages)
+    texte = client.get("/sessions/1").text
+    assert "Voir les 2 échanges précédents" in texte
+    assert "message numéro 5" in texte  # les récents sont toujours là
+    api.brancher("GET", "/workflows/1/messages", 200, six_messages[:2])
+    assert "Voir les" not in client.get("/sessions/1").text  # ≤ 4 messages : rien à replier
+
+
+def test_derniere_reponse_affichee_en_haut_apres_envoi(api) -> None:
+    # S3.7 : après un envoi, la réponse (rendue) et sa traçabilité sont en haut
+    # de page — plus besoin de scroller jusqu'au fil.
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher(
+        "POST",
+        "/workflows/1/message",
+        200,
+        {
+            "reponse": "**Voici la story**",
+            "etape": "interview",
+            "sources": [],
+            "hypotheses_ajoutees": [],
+            "levees_proposees": [],
+            "divergences": [],
+            "avertissements": [],
+        },
+    )
+    texte = client.post("/sessions/1/message", data={"message": "go"}).text
+    assert 'id="dernier-echange"' in texte
+    assert "<strong>Voici la story</strong>" in texte  # rendue markdown, en haut
+
+
 def test_messages_assistant_rendus_en_markdown(api) -> None:
     # S3.6 : le PO lisait les tableaux Gherkin en pipes bruts (sessions 9/11).
     messages = [

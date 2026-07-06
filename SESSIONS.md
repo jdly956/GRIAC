@@ -31,10 +31,12 @@
 
 **Validation en session** : lint vert, **234 tests verts**. Validation stack-live = plan s3.6 (rouvrir la session 11 sur le pod suffit).
 
+**S3.7 — écran session réorganisé** (PR #31/S3.6 mergée dans la foulée par le référent ; « go ») : nouvel ordre de page — **« Dernière réponse » rendue EN HAUT après chaque envoi** avec sa traçabilité (mieux qu'une ancre : les POST rendent la page directement, v1 sans JS) ; **zone d'action unifiée** (message / story suivante / valider l'étape) juste dessous ; **registre replié** (`<details>`, auto-déplié seulement si une levée proposée attend la décision — compteur « dont N à décider ») ; **fil replié** au-delà des 4 derniers messages (« Voir les N échanges précédents », partiel `_message.html`) ; notation repliée. 3 TU — **237 tests verts**. Plan `docs/plans-test/s3.7-ecran-session.md`.
+
 **Mini-récap** :
-- ✅ Fait : S3.6 livrée — les tableaux Gherkin deviennent lisibles
-- ⏳ En cours : lot pré-pilote, suite de l'ordre validé : S3.7 (écran réorganisé) → S3.8 (htmx)
-- ⏳ Référent : revue/merge PR S3.6 ; plans s2.15 + s3.2 + s3.6 sur pod (une seule session suffit)
+- ✅ Fait : S3.6 livrée ET mergée (PR #31) ; S3.7 livrée (écran réorganisé — l'essentiel visible sans scroll)
+- ⏳ En cours : lot pré-pilote, suite de l'ordre validé : S3.8 (htmx) → S3.11 (tokens) → S3.12 (modèle)
+- ⏳ Référent : revue/merge PR S3.7 ; plans s2.15 + s3.2 + s3.6 + s3.7 sur pod (une seule session suffit)
 
 ---
 
