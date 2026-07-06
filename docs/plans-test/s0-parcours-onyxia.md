@@ -15,8 +15,25 @@ cd ~/work/GRIAC/ && git checkout main && git pull origin main
 make install
 source .venv/bin/activate
 # .env : ALBERT_BASE_URL=... (la clé vient de l'env du pod)
-export DATABASE_URL="postgresql+psycopg://<user>:<mdp>@<host>:5432/<base>"   # valeurs du Readme — ce schéma marche partout (alembic ET psycopg)
 ```
+
+⚠️ **Seul `~/work` survit aux chutes/recréations du pod** (constaté le 03/07/2026 : home, `.bashrc`, paquets apt et processus sont perdus). Le `DATABASE_URL` vit donc dans `~/work/.sia-db.env` — création à saisie masquée (encode les caractères spéciaux du mot de passe, valeurs du Readme du service PostgreSQL) :
+
+```bash
+read -s -p "Mot de passe PostgreSQL (Readme du service) : " PGPWD; echo
+export PGPWD
+python3 -c "
+import os, urllib.parse
+p = urllib.parse.quote(os.environ['PGPWD'].strip(), safe='')
+open(os.path.expanduser('~/work/.sia-db.env'), 'w').write(
+    'export DATABASE_URL=\"postgresql+psycopg://<user>:' + p + '@<host>:5432/<base>\"\n')
+print('fichier écrit')
+"
+unset PGPWD
+chmod 600 ~/work/.sia-db.env && source ~/work/.sia-db.env
+```
+
+**Après chaque chute du pod** : `cd ~/work/GRIAC/ && make pod-up` remet tout (libGL, venv, env, api+web avec healthchecks) — voir `infra/onyxia/pod-up.sh`.
 
 4. **TNR à froid** :
 
@@ -44,10 +61,12 @@ make probe
 
 ## Phase 1 — Ingestion sur `evals/fixtures/` (~30 min, 1er run parse = téléchargement docling)
 
+Prérequis pod : `libGL` (chaîne docling/OpenCV) — `sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0` (constaté session Onyxia : absent de l'image `vscode-python`, sinon échec `ImportError: libGL.so.1` sur les PDF natifs ; `make pod-up` l'installe aussi). Optionnel : `export HF_HOME=~/work/.cache-hf` avant le premier `ingest-parse` pour que les modèles docling survivent aux chutes du pod.
+
 ```bash
 cd ~/work/GRIAC/ && source .venv/bin/activate
-make ingest-scan CORPUS=evals/fixtures       # attendu : 7 fichiers inventoriés, derived/inventaire.csv
-make ingest-parse CORPUS=evals/fixtures      # attendu : docx/pdf parsés, scan-courrier -> ocr_requis, derived/rapport-parsing.csv
+make ingest-scan CORPUS=evals/fixtures       # attendu : 6 fichiers inventoriés (plan s1.7), derived/inventaire.csv
+make ingest-parse CORPUS=evals/fixtures      # attendu : 3 parsés, 1 inchangé (copie = même sha), scan-courrier -> ocr_requis, txt hors périmètre (reste a_parser), derived/rapport-parsing.csv
 make ingest-qualify                          # attendu : v2_final_VF3 = référence, copie byte-identique = doublon
 make ingest-chunk                            # attendu : chunks créés, tableaux jamais coupés
 make ingest-embed                            # attendu : embeddings 1024 par lots de 32, 0 échec
@@ -58,24 +77,23 @@ Recoupes SQL (psql du service, ou `python3 -c` avec psycopg) : `select count(*) 
 
 ## Phase 2 — RAG (~20 min)
 
-**Étape 0 impérative — schéma `/v1/rerank` (HYPOTHÈSE documentée, plan s2.4)** :
+**Étape 0 — schéma `/v1/rerank` (CONFIRMÉ pod 03/07/2026, plan s2.4)** :
 
 ```bash
 cd ~/work/GRIAC/
 BASE=$(grep '^ALBERT_BASE_URL=' .env | cut -d= -f2-)
 curl -sS -o /tmp/rerank.json -w "HTTP %{http_code}\n" "$BASE/rerank" \
   -H "Authorization: Bearer $ALBERT_API_KEY" -H "Content-Type: application/json" \
-  -d '{"model":"openweight-rerank","prompt":"délai de traitement","input":["Le délai d'\''instruction est de 15 jours.","La couleur du logo est bleue."]}'
+  -d '{"model":"openweight-rerank","query":"délai de traitement","documents":["Le délai d'\''instruction est de 15 jours.","La couleur du logo est bleue."]}'
 head -c 400 /tmp/rerank.json ; echo
-# attendu : HTTP 200 et data[{index,score}] — sinon consigner le schéma réel (le repli RRF est signalé, jamais silencieux)
+# attendu : HTTP 200 et results[{index,relevance_score}] — en cas d'écart, le repli RRF est signalé, jamais silencieux
 ```
 
-Lancer l'api puis tester recherche et contexte :
+Lancer les services (`make pod-up` lance api ET web, avec `nohup` : ils survivent aux fermetures de terminaux) puis tester recherche et contexte :
 
 ```bash
-cd ~/work/GRIAC/ && source .venv/bin/activate
-uv run --package sia-api uvicorn sia_api.main:app --host 0.0.0.0 --port 8000 > /tmp/api.log 2>&1 &
-sleep 3 && curl -sS http://localhost:8000/health
+cd ~/work/GRIAC/ && make pod-up
+curl -sS http://localhost:8000/health
 curl -sS -X POST http://localhost:8000/recherche -H "Content-Type: application/json" \
   -d '{"question": "temps de connexion au module d'\''authentification"}' | python3 -m json.tool
 # attendu : résultats avec document+section, spec v2 en tête (filtre référence par défaut)
@@ -90,9 +108,10 @@ curl -sS -X POST http://localhost:8000/recherche -H "Content-Type: application/j
 ## Phase 3 — Produit de bout en bout (~1 h, au navigateur)
 
 ```bash
-cd ~/work/GRIAC/ && source .venv/bin/activate
-SIA_API_URL=http://localhost:8000 uv run --package sia-web uvicorn sia_web.main:app --host 0.0.0.0 --port 8081 > /tmp/web.log 2>&1 &
-# navigateur : https://<url-du-pod>/proxy/8081/
+cd ~/work/GRIAC/ && make pod-up     # si pas déjà fait (lance api + web)
+# navigateur : https://<url-du-pod>/proxy/8081/ — le web est lancé avec
+# --root-path /proxy/8081 (proxy code-server : le port 8081 n'est pas
+# exposable directement, RBAC constaté le 03/07/2026)
 ```
 
 Parcours (chaque item renvoie à son plan pour les contre-épreuves) :

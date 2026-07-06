@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from sia_api.db import get_connexion
-from sia_api.workflow import ETAPES, avancer, est_terminale, extraire_hypotheses
+from sia_api.workflow import ETAPES, avancer, cle_hypothese, est_terminale, extraire_hypotheses
 
 router = APIRouter(tags=["workflow"])
 
@@ -93,8 +93,14 @@ def creer_session(entree: SessionEntree, connexion: Connexion) -> EtatSession:
             {"id": session_id, "etape": ETAPES[0], "contenu": entree.feature},
         )
         # Les [HYPOTHÈSE À VALIDER] déjà présentes dans la Feature collée entrent
-        # au registre dès l'étape 0 (jamais perdues, A8).
+        # au registre dès l'étape 0 (jamais perdues, A8) — dédupliquées par clé
+        # normalisée, comme dans le moteur.
+        cles_vues: set[str] = set()
         for texte in extraire_hypotheses(entree.feature):
+            cle = cle_hypothese(texte)
+            if cle in cles_vues:
+                continue
+            cles_vues.add(cle)
             curseur.execute(
                 "INSERT INTO workflow_hypotheses (session_id, texte, origine) "
                 "VALUES (%(id)s, %(texte)s, 'po')",
@@ -103,6 +109,36 @@ def creer_session(entree: SessionEntree, connexion: Connexion) -> EtatSession:
         etat = _lire_session(curseur, session_id)
     connexion.commit()
     return etat
+
+
+class SessionResume(BaseModel):
+    id: int
+    etape: str
+    projet_id: int | None
+    apercu_feature: str
+
+
+@router.get("/workflows")
+def lister_sessions(connexion: Connexion) -> list[SessionResume]:
+    """Liste des sessions — l'accueil E4 permet de RETROUVER une session en cours.
+
+    Constaté en session de validation (06/07/2026) : sans liste, une session
+    perdue de vue ne se retrouve que par URL devinée.
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "SELECT id, etape, projet_id, feature FROM workflow_sessions "
+            "ORDER BY modifie_le DESC, id DESC"
+        )
+        return [
+            SessionResume(
+                id=ligne[0],
+                etape=ligne[1],
+                projet_id=ligne[2],
+                apercu_feature=(ligne[3][:120] + "…") if len(ligne[3]) > 120 else ligne[3],
+            )
+            for ligne in curseur.fetchall()
+        ]
 
 
 @router.get("/workflows/{session_id}")

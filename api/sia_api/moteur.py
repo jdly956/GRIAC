@@ -34,7 +34,7 @@ from sia_api.recherche import (
     construire_contexte,
     get_albert,
 )
-from sia_api.workflow import extraire_hypotheses, verifier_lot_interview
+from sia_api.workflow import cle_hypothese, extraire_hypotheses, verifier_lot_interview
 
 router = APIRouter(tags=["moteur"])
 
@@ -136,7 +136,10 @@ def construire_prompt_systeme(
     blocs = [CHEMIN_PROMPT3.read_text(encoding="utf-8"), "\n---\n## CONTEXTE DE SESSION (SIA PO)"]
     blocs.append(
         f"Étape courante du workflow : **{etape}**. Reste dans cette étape tant que le PO "
-        "n'a pas validé (règle 5) ; c'est l'application qui gère les transitions."
+        "n'a pas validé (règle 5) ; c'est l'application qui gère les transitions. "
+        "Ne demande JAMAIS de validation dans le texte (pas de « Cette version vous "
+        "convient-elle ? (Oui / Non) ») : l'interface fournit les boutons Oui/Non de la "
+        "règle 5 — termine tes messages sur le contenu."
     )
     if projet:
         blocs.append(f"Projet : {projet['nom']} — {projet['contexte']}")
@@ -304,17 +307,20 @@ def message_route(
             "SELECT texte FROM workflow_hypotheses WHERE session_id = %(id)s",
             {"id": session_id},
         )
-        deja_connues = {ligne[0] for ligne in curseur.fetchall()}
+        # Déduplication par clé normalisée (et non texte exact) : une hypothèse
+        # reformulée avec une autre décoration markdown ne rentre pas deux fois.
+        deja_connues = {cle_hypothese(ligne[0]) for ligne in curseur.fetchall()}
         hypotheses_ajoutees = []
         for texte in extraire_hypotheses(contenu_reponse):
-            if texte not in deja_connues:
+            cle = cle_hypothese(texte)
+            if cle not in deja_connues:
                 curseur.execute(
                     "INSERT INTO workflow_hypotheses (session_id, texte, origine) "
                     "VALUES (%(id)s, %(texte)s, 'modele')",
                     {"id": session_id, "texte": texte},
                 )
                 hypotheses_ajoutees.append(texte)
-                deja_connues.add(texte)
+                deja_connues.add(cle)
 
     connexion.commit()
     return MessageResultat(

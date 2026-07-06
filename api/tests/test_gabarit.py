@@ -182,3 +182,56 @@ def test_dor_estimation_reste_bleue() -> None:
 def test_dor_justification_manquante() -> None:
     rapport = valider_dor(_tableau_dor({"Un use case concret est précisé": ("✅", "")}))
     assert any("justification manquante" in violation for violation in rapport.violations)
+
+
+# --- typographie réelle des sorties Albert (faux positifs constatés pod 06/07/2026) ---
+
+US_TYPOGRAPHIE_ALBERT = """**US — Authentifier l’agent**
+
+**En tant que** agent de l’ATE
+**Je veux** saisir mes identifiants professionnels
+**Afin de** accéder au module d’actes
+
+**Contexte** : première étape de la Feature.
+**Écran / module** : page Connexion (DSFR).
+**Parcours concerné** :
+1. L’agent ouvre l’URL du module depuis le RIE.
+2. Il saisit identifiant et mot‑de‑passe.
+**Pré‑requis** :
+- L’agent est connecté au RIE.
+**Règle(s) métier** :
+- Verrouillage temporaire après 5 échecs. **[HYPOTHÈSE À VALIDER]**
+**Maquettes** : à produire.
+
+**Attendu fonctionnel** :
+- Réponse du serveur en moins d’une seconde.
+
+**Critères d’acceptation** :
+
+| # | Étant donné que… | Lorsque… | Alors… |
+|---|---|---|---|
+| CA1 | l’agent est sur le RIE | il saisit des identifiants valides | la réponse arrive en < 1 s |
+
+**Critères d’accessibilité** :
+- Les champs sont reliés à des labels explicites.
+"""
+
+
+def test_typographie_reelle_albert_conforme() -> None:
+    # Tirets insécables (« Pré‑requis »), apostrophes typographiques
+    # (« d’acceptation ») et blocs remplis sur les lignes suivantes : la
+    # sortie réelle d'Albert doit passer sans faux positif (S2.12).
+    rapport = valider_us(US_TYPOGRAPHIE_ALBERT)
+    assert rapport.conforme, rapport.violations
+    assert rapport.nb_ca == 1
+    assert len(rapport.hypotheses) == 1
+
+
+def test_bloc_reellement_vide_toujours_signale() -> None:
+    # La tolérance « contenu sur les lignes suivantes » ne doit pas masquer
+    # un bloc vraiment vide (suivi immédiatement du bloc suivant).
+    texte = US_TYPOGRAPHIE_ALBERT.replace(
+        "**Contexte** : première étape de la Feature.", "**Contexte** :"
+    )
+    rapport = valider_us(texte)
+    assert any("Contexte" in violation for violation in rapport.violations)

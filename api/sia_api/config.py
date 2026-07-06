@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # Réseau (S1.5) : appliqués au client Albert, surchargeables par env.
     albert_timeout_s: float = 30.0
     albert_max_retries: int = 2
+    # Seuil de distance cosinus du volet vectoriel (E2) : au-delà, un chunk
+    # n'est pas une source récupérable — condition du déclenchement de
+    # l'avertissement anti-invention. Calibré sur pod (03/07/2026, bge-m3,
+    # fixtures) : pertinent <= 0.431, hors corpus >= 0.698. À recalibrer sur
+    # le corpus réel via RECHERCHE_SEUIL_DISTANCE.
+    recherche_seuil_distance: float = 0.55
 
     @field_validator("albert_base_url", "albert_api_key", mode="before")
     @classmethod

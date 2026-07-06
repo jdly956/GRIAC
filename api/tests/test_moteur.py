@@ -39,6 +39,9 @@ def test_prompt_systeme_contient_le_prompt3_et_les_consignes() -> None:
     assert "[HYPOTHÈSE À VALIDER]" in prompt
     assert "[DIVERGENCE]" in prompt  # A9
     assert "[Source :" in prompt  # A3
+    # La validation passe par les boutons Oui/Non de l'UI (règle 5) — le modèle
+    # ne doit plus la demander dans le texte (redondance constatée, 06/07/2026).
+    assert "Ne demande JAMAIS de validation dans le texte" in prompt
 
 
 def test_prompt_systeme_injecte_projet_et_nfr() -> None:

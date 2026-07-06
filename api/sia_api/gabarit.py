@@ -90,6 +90,25 @@ def _normaliser(texte: str) -> str:
     return texte.replace("...", "…").strip().lower()
 
 
+# Typographie réelle des sorties Albert (constatée pod 06/07/2026, faux positifs
+# du contrôle S2.12) : tirets insécables et apostrophes typographiques là où le
+# gabarit attend l'ASCII. Les tirets cadratins (—) sont préservés : l'entête
+# « **US — Titre** » en dépend.
+_CANONICALISATION = str.maketrans(
+    {
+        "‐": "-",  # trait d'union
+        "‑": "-",  # trait d'union insécable (« Pré‑requis »)
+        "’": "'",  # apostrophe typographique (« d'acceptation »)
+        " ": " ",  # espace insécable
+        " ": " ",  # espace fine insécable
+    }
+)
+
+
+def _canonicaliser(texte: str) -> str:
+    return texte.translate(_CANONICALISATION)
+
+
 def _section(texte: str, entete: str) -> str | None:
     """Contenu entre `**entete**` et le prochain bloc gras en début de ligne."""
     motif = re.compile(
@@ -107,6 +126,7 @@ def _lignes_tableau(section: str) -> list[list[str]]:
 
 def valider_us(texte: str) -> RapportConformite:
     """Contrôle de conformité d'UNE story au format interne (prompt 3, étape 3)."""
+    texte = _canonicaliser(texte)
     rapport = RapportConformite()
 
     if not re.search(r"\*\*US — .+?\*\*", texte):
@@ -127,7 +147,11 @@ def valider_us(texte: str) -> RapportConformite:
         if not correspondance:
             rapport.violations.append(f"bloc manquant : « **{bloc}** »")
         elif not correspondance.group(1).strip():
-            rapport.violations.append(f"bloc vide : « **{bloc}** »")
+            # Le contenu peut suivre sur les lignes d'après (listes, numérotations —
+            # forme réelle des sorties Albert) : vide seulement si la section l'est.
+            section = _section(texte, bloc)
+            if not (section and section.strip()):
+                rapport.violations.append(f"bloc vide : « **{bloc}** »")
 
     section_attendu = _section(texte, "Attendu fonctionnel")
     if section_attendu is None:
@@ -189,6 +213,7 @@ def valider_us(texte: str) -> RapportConformite:
 
 def valider_dor(texte: str) -> RapportConformite:
     """Contrôle du tableau DoR (prompt 3, étape 4) : 10 critères, statuts, justifications."""
+    texte = _canonicaliser(texte)
     rapport = RapportConformite()
     lignes = _lignes_tableau(texte)
     if not lignes or [_normaliser(cellule) for cellule in lignes[0]] != [

@@ -7,7 +7,7 @@
 <div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
 {% endif %}
 
-<form method="post" action="/sessions" class="panneau">
+<form method="post" action="{{ racine }}/sessions" class="panneau">
   <h2>Nouvelle session (workflow prompt 3)</h2>
   <label class="fr-label" for="projet_id">Projet (contexte &amp; NFR injectés dans la génération — E8)</label>
   <select class="fr-select" id="projet_id" name="projet_id">
@@ -23,6 +23,21 @@
 </form>
 
 <div class="panneau">
+  <h2>Sessions en cours ({{ sessions | length }})</h2>
+  {% if sessions %}
+  <ul>
+    {% for session in sessions %}
+    <li><a href="{{ racine }}/sessions/{{ session.id }}"><strong>Session {{ session.id }}</strong></a>
+      <span class="fr-badge fr-badge--info">{{ libelles_etapes.get(session.etape, session.etape) }}</span>
+      — {{ session.apercu_feature }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Aucune session — créez la première ci-dessus.</p>
+  {% endif %}
+</div>
+
+<div class="panneau">
   <h2>Projets ({{ projets | length }})</h2>
   {% if projets %}
   <ul>
@@ -32,7 +47,7 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p>Aucun projet — <a href="/projets">créez-en un sur l'écran projets</a>.</p>
+  <p>Aucun projet — <a href="{{ racine }}/projets">créez-en un sur l'écran projets</a>.</p>
   {% endif %}
 </div>
 {% endblock %}

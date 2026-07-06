@@ -24,7 +24,7 @@
   {% endif %}
 </div>
 
-<form method="post" action="/projets/{{ projet.id }}/dossiers" class="panneau">
+<form method="post" action="{{ racine }}/projets/{{ projet.id }}/dossiers" class="panneau">
   <h2>Dossiers documentaires associés (A6)</h2>
   <p>Les suggestions viennent de la qualification automatique (S1.9) :
     <strong>elles ne valent pas association</strong> — cochez pour confirmer,
@@ -47,5 +47,5 @@
   <button class="fr-btn" type="submit">Enregistrer l'association</button>
 </form>
 
-<p><a href="/projets">← Retour aux projets</a></p>
+<p><a href="{{ racine }}/projets">← Retour aux projets</a></p>
 {% endblock %}

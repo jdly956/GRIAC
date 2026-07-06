@@ -10,6 +10,7 @@ from sia_api.main import app
 from sia_api.workflow import (
     ETAPES,
     avancer,
+    cle_hypothese,
     est_terminale,
     extraire_hypotheses,
     verifier_lot_interview,
@@ -49,6 +50,27 @@ def test_extraction_des_hypotheses() -> None:
         "Taille max : 10 Mo [HYPOTHÈSE À VALIDER]"
     )
     assert len(extraire_hypotheses(texte)) == 2
+
+
+def test_les_consignes_ne_sont_pas_des_hypotheses() -> None:
+    # Bruit du registre constaté en session de validation (06/07/2026) : le
+    # marqueur cité comme convention n'est pas une hypothèse à lever.
+    texte = (
+        "- Le seuil est de 10 Mo [HYPOTHÈSE À VALIDER]\n"
+        "*(Si une donnée vous échappe, je la marquerai [HYPOTHÈSE À VALIDER].)*\n"
+        "les lignes vides seront considérées comme [HYPOTHÈSE À VALIDER]\n"
+        "Les stories portent la mention [HYPOTHÈSE À VALIDER] car à confirmer."
+    )
+    assert extraire_hypotheses(texte) == ["- Le seuil est de 10 Mo [HYPOTHÈSE À VALIDER]"]
+
+
+def test_cle_hypothese_neutralise_la_decoration_markdown() -> None:
+    # La même hypothèse en puce, en ligne de tableau ou en récapitulatif gras
+    # ne doit produire qu'UNE entrée au registre (déduplication par clé).
+    puce = "- Le seuil d'inactivité est de 30 minutes **[HYPOTHÈSE À VALIDER]**."
+    tableau = "| Le seuil d'inactivité est de 30 minutes [HYPOTHÈSE À VALIDER] |"
+    assert cle_hypothese(puce) == cle_hypothese(tableau)
+    assert cle_hypothese(puce) != cle_hypothese("- Autre seuil [HYPOTHÈSE À VALIDER]")
 
 
 def test_lot_interview_limite_a_3_questions() -> None:
@@ -105,6 +127,18 @@ def brancher():
 
     yield _brancher
     app.dependency_overrides.clear()
+
+
+def test_liste_des_sessions_pour_l_accueil(brancher) -> None:
+    # Sans liste, une session perdue de vue ne se retrouve que par URL devinée
+    # (constaté session de validation, 06/07/2026).
+    brancher([[(7, "interview", None, "F" * 130), (5, "synthese", 1, "Feature courte")]])
+    reponse = client.get("/workflows")
+    assert reponse.status_code == 200
+    corps = reponse.json()
+    assert [session["id"] for session in corps] == [7, 5]
+    assert corps[0]["apercu_feature"] == "F" * 120 + "…"  # aperçu tronqué
+    assert corps[1]["apercu_feature"] == "Feature courte"
 
 
 def test_creation_session_enregistre_les_hypotheses_de_la_feature(brancher) -> None:

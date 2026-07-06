@@ -62,6 +62,20 @@ def test_accueil_liste_les_projets(api) -> None:
     assert "Ne collez pas de données personnelles" in reponse.text  # bandeau D15
 
 
+def test_accueil_liste_les_sessions_en_cours(api) -> None:
+    api.brancher("GET", "/projects", 200, [])
+    api.brancher(
+        "GET",
+        "/workflows",
+        200,
+        [{"id": 7, "etape": "interview", "projet_id": 1, "apercu_feature": "Feature : connexion"}],
+    )
+    reponse = client.get("/")
+    assert 'href="/sessions/7"' in reponse.text  # la session se RETROUVE depuis l'accueil
+    assert "1 — Interview de refinement" in reponse.text
+    assert "Feature : connexion" in reponse.text
+
+
 def test_accueil_api_injoignable_reste_lisible(api) -> None:
     api.brancher("GET", "/projects", 599, {"detail": "API injoignable (http://x) : ConnectError"})
     reponse = client.get("/")
@@ -77,6 +91,23 @@ def test_creation_de_session_redirige_vers_le_fil(api) -> None:
     assert reponse.status_code == 303
     assert reponse.headers["location"] == "/sessions/7"
     assert api.appels[0][2] == {"feature": "Ma feature", "projet_id": 1}
+
+
+def test_prefixe_root_path_porte_liens_mais_pas_les_redirections(api) -> None:
+    # Proxy à préfixe (code-server /proxy/8081/ sur pod Onyxia, 03/07/2026) :
+    # les liens des templates portent le root_path (les corps HTML ne sont pas
+    # réécrits par le proxy), mais les Location partent SANS préfixe — le proxy
+    # les réécrit en pré-ajoutant /proxy/8081 (doublement constaté sinon).
+    client_prefixe = TestClient(app, root_path="/proxy/8081")
+    api.brancher("GET", "/projects", 200, [])
+    reponse = client_prefixe.get("/")
+    assert 'href="/proxy/8081/projets"' in reponse.text
+    assert 'action="/proxy/8081/sessions"' in reponse.text
+    api.brancher("POST", "/workflows", 201, {"id": 7})
+    redirection = client_prefixe.post(
+        "/sessions", data={"feature": "Ma feature"}, follow_redirects=False
+    )
+    assert redirection.headers["location"] == "/sessions/7"
 
 
 def test_ecran_session_affiche_fil_etape_et_hypotheses(api) -> None:
@@ -121,13 +152,43 @@ def test_envoi_message_affiche_sources_et_avertissements(api) -> None:
     assert "règle 1" in reponse.text  # avertissement
 
 
-def test_validation_etape_oui_et_redirection(api) -> None:
+def test_validation_etape_oui_declenche_le_moteur(api) -> None:
+    # Règle 5 bouclée (bug constaté 06/07/2026) : le bouton « Oui » ne se
+    # contente plus d'avancer l'état — la décision est transmise au moteur,
+    # qui produit l'entrée de l'étape suivante dans le même aller-retour.
     api.brancher("POST", "/workflows/1/avancer", 200, {})
-    reponse = client.post(
-        "/sessions/1/valider", data={"valide": "oui", "commentaire": ""}, follow_redirects=False
+    api.brancher(
+        "POST",
+        "/workflows/1/message",
+        200,
+        {"reponse": "Étape suivante…", "etape": "interview", "sources": [], "avertissements": []},
     )
-    assert reponse.status_code == 303
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
+    reponse = client.post("/sessions/1/valider", data={"valide": "oui", "commentaire": ""})
+    assert reponse.status_code == 200
     assert api.appels[0][2] == {"valide": True, "commentaire": ""}
+    methode, chemin, corps = api.appels[1]
+    assert (methode, chemin) == ("POST", "/workflows/1/message")
+    assert "Étape validée (Oui)" in corps["message"]
+
+
+def test_validation_etape_non_transmet_le_commentaire_au_moteur(api) -> None:
+    api.brancher("POST", "/workflows/1/avancer", 200, {})
+    api.brancher(
+        "POST",
+        "/workflows/1/message",
+        200,
+        {"reponse": "J'itère…", "etape": "interview", "sources": [], "avertissements": []},
+    )
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
+    reponse = client.post(
+        "/sessions/1/valider", data={"valide": "non", "commentaire": "revoir le CA2"}
+    )
+    assert reponse.status_code == 200
+    assert api.appels[0][2] == {"valide": False, "commentaire": "revoir le CA2"}
+    assert "revoir le CA2" in api.appels[1][2]["message"]
 
 
 def test_decision_hypothese_et_redirection(api) -> None:
