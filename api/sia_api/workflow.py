@@ -71,12 +71,16 @@ def extraire_hypotheses(texte: str) -> list[str]:
     """Lignes porteuses du marqueur — chaque entrée alimente le registre (A8).
 
     Les phrases de consigne (le marqueur cité comme convention) sont écartées :
-    elles ne sont pas des hypothèses à lever.
+    elles ne sont pas des hypothèses à lever. Les entêtes markdown non plus
+    (« ### Hypothèses encore en attente ([HYPOTHÈSE À VALIDER]) » — titre de
+    section entré au registre, constaté session 11, 06/07/2026).
     """
     return [
         ligne.strip()
         for ligne in texte.splitlines()
-        if MARQUEUR_HYPOTHESE in ligne and not _est_consigne(ligne)
+        if MARQUEUR_HYPOTHESE in ligne
+        and not _est_consigne(ligne)
+        and not ligne.lstrip().startswith("#")
     ]
 
 

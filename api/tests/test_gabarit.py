@@ -253,6 +253,18 @@ def test_variante_de_titre_extraite_et_signalee() -> None:
     assert any("entête" in violation for violation in rapport.violations)
 
 
+def test_rappel_de_titre_au_dessus_du_dor_n_est_pas_une_story() -> None:
+    # Session 11 (06/07/2026) : le modèle répète « **US — Titre** » en rappel
+    # au-dessus de chaque tableau DoR — ce segment (titre + DoR, zéro bloc)
+    # écrasait la vraie story dans la dédup par titre des exports (E5).
+    rappel = (
+        "### ✅ Contrôle DoR – Story 1\n**US — Tableau de bord des dossiers**\n\n"
+        "| Critère DoR | Statut | Justification |\n|---|---|---|\n"
+        "| Le besoin est compréhensible | ✅ | ok |"
+    )
+    assert extraire_stories_us(f"préambule\n\n---\n{rappel}\n---\n") == []
+
+
 def test_attendus_en_liste_numerotee_acceptes() -> None:
     # Session 9 : faux positif « sans aucun attendu listé » sur les listes
     # numérotées (« 1. **Vue en lecture** … »), forme réelle des sorties Albert.

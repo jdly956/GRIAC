@@ -335,7 +335,7 @@ def test_controle_conformite_silencieux_quand_tout_est_conforme() -> None:
 
 
 def test_controle_gabarit_signale_une_story_bancale() -> None:
-    contenu = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    contenu = "---\n**US — Story bancale**\n\n**En tant que** PO pressé\n\nRien d'autre.\n---"
     rapports = controler_conformite("redaction", contenu)
     assert len(rapports) == 1
     assert "Story bancale" in rapports[0] and "Contrôle gabarit" in rapports[0]
@@ -370,7 +370,7 @@ def test_controle_dor_sur_toute_etape_de_production() -> None:
 
 
 def test_pas_de_controle_hors_etapes_de_production() -> None:
-    contenu = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    contenu = "---\n**US — Story bancale**\n\n**En tant que** PO pressé\n\nRien d'autre.\n---"
     assert controler_conformite("interview", contenu) == []
 
 
@@ -380,7 +380,7 @@ def test_route_remonte_les_controles_en_avertissements(brancher) -> None:
         [("po", "Ma Feature")],  # historique
         [],  # hypothèses connues
     ]
-    reponse = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    reponse = "---\n**US — Story bancale**\n\n**En tant que** PO pressé\n\nRien d'autre.\n---"
     brancher(script, reponse)
     http = client_http.post("/workflows/7/message", json={"message": "contrôle la DoR"})
     assert http.status_code == 200

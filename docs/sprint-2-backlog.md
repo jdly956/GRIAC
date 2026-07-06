@@ -125,10 +125,10 @@ Critères d'acceptation :
 > Issue du réel (session de validation Onyxia, 06/07/2026) : une réponse d'interview du PO tranche souvent une [HYPOTHÈSE À VALIDER] déjà au registre, mais elle reste « en_attente » jusqu'à ce que le PO la retrouve et clique — bruit au récapitulatif A8 de l'export.
 
 Critères d'acceptation :
-- [ ] Les hypothèses **en attente** entrent au prompt système, numérotées (`#id`), avec la consigne de **proposer** la levée quand un message du PO ou un extrait cité la tranche : `[LEVÉE PROPOSÉE : #id — confirmée|rejetée — justification]`
-- [ ] La proposition est persistée sur des colonnes dédiées (`statut_propose`, `justification_proposee`, `proposee_le` — migration 0010) : **le `statut` n'est JAMAIS modifié par le moteur** — la décision individuelle du PO reste le seul chemin de levée (invariant A8, vérifié par TU) ; identifiant halluciné ou déjà décidé → proposition ignorée
-- [ ] Écran session : badge « Levée proposée » + justification à côté des boutons Confirmer/Rejeter (rappel « c'est vous qui décidez — A8 ») ; panneau du dernier échange : compteur des levées proposées
-- [ ] TU purs (extraction du marqueur) + TU route (Albert/RAG mockés, invariant A8) + TU écran
+- [x] Les hypothèses **en attente** entrent au prompt système, numérotées (`#id`), avec la consigne de **proposer** la levée quand un message du PO ou un extrait cité la tranche : `[LEVÉE PROPOSÉE : #id — confirmée|rejetée — justification]` — *validé stack-live session 11 (06/07/2026) : cas confirmée (`#104`, « 10 Mo validé MOA ») ET cas rejetée (`#105`, « pas de SMS ») émis par le moteur*
+- [x] La proposition est persistée sur des colonnes dédiées (`statut_propose`, `justification_proposee`, `proposee_le` — migration 0010) : **le `statut` n'est JAMAIS modifié par le moteur** — la décision individuelle du PO reste le seul chemin de levée (invariant A8, vérifié par TU) ; identifiant halluciné ou déjà décidé → proposition ignorée — *session 11 : les deux hypothèses restent `en_attente` avec proposition affichée, persistante au rechargement*
+- [x] Écran session : badge « Levée proposée » + justification à côté des boutons Confirmer/Rejeter (rappel « c'est vous qui décidez — A8 ») ; panneau du dernier échange : compteur des levées proposées — *badges « Confirmer » et « Rejeter » observés session 11 avec justifications*
+- [x] TU purs (extraction du marqueur) + TU route (Albert/RAG mockés, invariant A8) + TU écran
 
 *Code livré le 06/07/2026 : `extraire_levees_proposees` (pure, `sia_api/workflow.py`), registre en attente injecté au prompt + persistance des propositions (`sia_api/moteur.py`, `levees_proposees` dans la réponse), exposition dans `EtatSession` (`sia_api/workflows.py`), badge écran session. Migration 0010. 8 TU (220 au total). CA à cocher via `docs/plans-test/s2.13-rapprochement-a8.md` (exige clé + base — pod).*
 
@@ -153,5 +153,8 @@ Session complète (Feature « prioriser les actes > seuils commande publique »,
 - [x] **Levée proposée (S2.13) non suivie par le modèle** (premier cas réel raté) → consigne déplacée en dernière position du prompt + exemple explicite ; contre-épreuve = plan s2.13 §3 bis
 
 Suites au backlog (non couvertes ici) :
-- [ ] **Anti-invention incomplet** : le modèle marque ses hypothèses à SON format (`[HYPOTHÈSE 1 A]`, étape 0) et affirme des valeurs inventées sans marqueur (rétentions, horaires de job, volumétries) — durcir la consigne de marquage + extraction tolérante aux variantes ; story dédiée à cadrer
+- [ ] **Anti-invention incomplet** : le modèle marque ses hypothèses à SON format (`[HYPOTHÈSE 1 A]`, `[HYPOTHÈSE À VALIDER 1]`, étape 0) et affirme des valeurs inventées sans marqueur (rétentions, horaires de job, volumétries) — durcir la consigne de marquage + extraction tolérante aux variantes ; story dédiée à cadrer
 - [ ] **Sémantique du « Oui »** : utilisé comme « continuer/story suivante », il désynchronise la machine à états (badge étape trompeur — A5) — arbitrage produit : bouton « story suivante » vs étapes linéaires 0→5
+- [ ] **Bruit du registre par reformulation** (session 11 : 18 en attente dont récapitulatifs re-listant des hypothèses déjà enregistrées sous d'autres mots) — la dédup par clé ne rapproche pas les reformulations ; à traiter avec la story anti-invention
+
+**Rejeu session 11 (06/07/2026, branche à jour — 225 tests)** : **S2.13 validée stack-live** (voir CA cochés ci-dessus) ; deux défauts supplémentaires corrigés dans la foulée : le **rappel de titre au-dessus des tableaux DoR** (`**US — Titre**` + DoR, zéro bloc) était extrait comme story et **écrasait la vraie story dans les exports** (dédup par titre) → un segment n'est une story que s'il porte aussi `**En tant que**` ; un **titre de section citant le marqueur** entrait au registre → entêtes markdown écartées de l'extraction.

@@ -54,6 +54,16 @@ def test_extraction_des_hypotheses() -> None:
     assert len(extraire_hypotheses(texte)) == 2
 
 
+def test_les_entetes_markdown_ne_sont_pas_des_hypotheses() -> None:
+    # Session 11 (06/07/2026) : un titre de section citant le marqueur
+    # (« ### 🔎 Hypothèses encore en attente… ») entrait au registre.
+    texte = (
+        "### 🔎 Hypothèses encore en attente de validation ([HYPOTHÈSE À VALIDER])\n"
+        "- Le seuil est de 10 Mo [HYPOTHÈSE À VALIDER]"
+    )
+    assert extraire_hypotheses(texte) == ["- Le seuil est de 10 Mo [HYPOTHÈSE À VALIDER]"]
+
+
 def test_les_consignes_ne_sont_pas_des_hypotheses() -> None:
     # Bruit du registre constaté en session de validation (06/07/2026) : le
     # marqueur cité comme convention n'est pas une hypothèse à lever.

@@ -95,9 +95,21 @@ def titre_us(story: str) -> str | None:
 
 
 def extraire_stories_us(texte: str) -> list[str]:
-    """Découpe un fichier markdown en stories US (séparateur `---`)."""
+    """Découpe un fichier markdown en stories US (séparateur `---`).
+
+    Un segment n'est une story que s'il porte un titre ET le début du récit
+    (`**En tant que**`) : constaté session 11 (06/07/2026), le modèle répète
+    l'entête « **US — Titre** » en RAPPEL au-dessus de chaque tableau DoR —
+    sans ce garde-fou, le rappel (titre + DoR, zéro bloc) était extrait comme
+    story et, la dédup par titre donnant la victoire à la dernière version,
+    ÉCRASAIT la vraie story dans les exports E5.
+    """
     segments = re.split(r"\n-{3,}\n", texte)
-    return [segment.strip() for segment in segments if titre_us(segment) is not None]
+    return [
+        segment.strip()
+        for segment in segments
+        if titre_us(segment) is not None and "**En tant que**" in segment
+    ]
 
 
 def _cellules(ligne: str) -> list[str]:
