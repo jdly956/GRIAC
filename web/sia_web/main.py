@@ -205,6 +205,26 @@ def valider_etape(
     return _page_session(request, session_id, dernier_resultat=reponse_moteur)
 
 
+@app.post("/sessions/{session_id}/story-suivante", response_class=HTMLResponse)
+def story_suivante(request: Request, session_id: int) -> HTMLResponse:
+    """Arbitrage S3.2 (06/07/2026) : le cycle réel est « une story = rédaction +
+    contrôle DoR » — ce bouton enchaîne sur la story suivante SANS toucher la
+    machine à états (le « Oui — étape suivante » reste le geste explicite du PO
+    quand toutes les stories sont couvertes ; badge A5 fidèle)."""
+    statut, resultat = api_client.appeler(
+        "POST",
+        f"/workflows/{session_id}/message",
+        json={
+            "message": "Story validée — enchaîne sur la STORY SUIVANTE de la liste des "
+            "candidates (rédaction complète puis contrôle DoR), sans changer d'étape. "
+            "S'il ne reste aucune story à rédiger, dis-le explicitement."
+        },
+    )
+    if statut != 200:
+        return _page_session(request, session_id, erreur=resultat.get("detail"))
+    return _page_session(request, session_id, dernier_resultat=resultat)
+
+
 @app.post("/sessions/{session_id}/hypotheses/{hypothese_id}")
 def decider_hypothese(
     request: Request, session_id: int, hypothese_id: int, statut: Annotated[str, Form()]

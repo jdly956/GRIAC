@@ -42,6 +42,11 @@ def test_prompt_systeme_contient_le_prompt3_et_les_consignes() -> None:
     # La validation passe par les boutons Oui/Non de l'UI (règle 5) — le modèle
     # ne doit plus la demander dans le texte (redondance constatée, 06/07/2026).
     assert "Ne demande JAMAIS de validation dans le texte" in prompt
+    # Anti-invention durci (S2.15, constats sessions 9-11) : marqueur exact,
+    # valeurs chiffrées inventées marquées, alternatives A/B/C non marquées.
+    assert "EXACTEMENT le marqueur" in prompt
+    assert "VALEUR CHIFFRÉE" in prompt
+    assert "ALTERNATIVES" in prompt
 
 
 def test_prompt_systeme_injecte_projet_et_nfr() -> None:
@@ -54,6 +59,15 @@ def test_prompt_systeme_injecte_projet_et_nfr() -> None:
     assert "Téléservice X" in prompt
     assert "- rgpd : aucune donnée sensible" in prompt
     assert "bloc G" in prompt  # pré-remplissage NFR de l'interview (E8)
+
+
+def test_prompt_une_seule_story_a_la_fois_aux_etapes_de_production() -> None:
+    # Arbitrage S3.2 (06/07/2026) : le cycle réel est « une story = rédaction +
+    # DoR » — le moteur n'enchaîne pas spontanément, l'UI a son bouton.
+    prompt = construire_prompt_systeme("redaction", None, "", None)
+    assert "UNE SEULE story à la fois" in prompt
+    assert "Story suivante" in prompt
+    assert "UNE SEULE story" not in construire_prompt_systeme("interview", None, "", None)
 
 
 def test_prompt_systeme_sans_source_impose_le_signalement() -> None:
@@ -69,6 +83,27 @@ def test_few_shot_silver_jamais_presente_comme_valide() -> None:
     prompt = construire_prompt_systeme("redaction", None, "", few_shot)
     assert "NON VALIDÉE" in prompt
     assert "**US — " in prompt  # l'exemple est bien inclus
+
+
+def test_prompt_systeme_injecte_le_registre_en_attente() -> None:
+    # Rapprochement interview↔registre (A8) : les hypothèses en attente entrent
+    # au prompt, numérotées, avec la consigne de PROPOSER la levée — jamais de
+    # la considérer acquise (la décision individuelle reste au PO).
+    prompt = construire_prompt_systeme(
+        "interview", None, "", None, [(3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]")]
+    )
+    assert "#3 : Seuil 10 Mo" in prompt
+    assert "[LEVÉE PROPOSÉE" in prompt
+    assert "seul le PO confirme ou rejette" in prompt
+    # Sans hypothèse en attente : ni section, ni consigne inutile.
+    sans_registre = construire_prompt_systeme("interview", None, "", None)
+    assert "REGISTRE DES HYPOTHÈSES EN ATTENTE" not in sans_registre
+    # Session 9 (06/07/2026) : la consigne noyée en milieu de prompt n'a pas été
+    # suivie — le registre vit désormais en DERNIÈRE position, après le few-shot.
+    complet = construire_prompt_systeme(
+        "interview", None, "", charger_few_shot(), [(3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]")]
+    )
+    assert complet.index("EXEMPLE DE FORMAT") < complet.index("REGISTRE DES HYPOTHÈSES EN ATTENTE")
 
 
 def test_extraire_divergences() -> None:
@@ -169,7 +204,7 @@ def brancher(monkeypatch: pytest.MonkeyPatch):
 SCRIPT_NOMINAL = [
     ("interview", None, "Ma Feature"),  # session
     [("po", "Ma Feature")],  # historique
-    [],  # hypothèses déjà connues (aucune)
+    [],  # registre des hypothèses (id, texte, statut) — vide
 ]
 
 
@@ -191,7 +226,7 @@ def test_message_nominal_alimente_fil_et_registre(brancher) -> None:
     assert connexion.commits == 1
 
     appel = faux_client.appels[0]
-    assert appel["model"] == "openweight-large"
+    assert appel["model"] == "openweight-medium"  # défaut à l'essai (verdict E6 v0)
     assert appel["max_tokens"] == 4096
     assert appel["messages"][0]["role"] == "system"
     assert "PROMPT 3" in appel["messages"][0]["content"]
@@ -202,11 +237,29 @@ def test_hypothese_deja_connue_non_dupliquee(brancher) -> None:
     script = [
         ("interview", None, "Ma Feature"),
         [],
-        [("Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]",)],  # déjà au registre
+        [(3, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],  # déjà au registre
     ]
     # Même ligne exacte que celle du registre : la dédup v0 est textuelle.
     connexion, _ = brancher(script, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]")
     corps = client_http.post("/workflows/7/message", json={"message": "ok ?"}).json()
+    assert corps["hypotheses_ajoutees"] == []
+    assert not any("INSERT INTO workflow_hypotheses" in r for r, _ in connexion.curseur.requetes)
+
+
+def test_reformulation_du_registre_non_dupliquee(brancher) -> None:
+    # S2.15 : un récapitulatif qui re-liste une hypothèse déjà au registre sous
+    # d'autres mots ne crée pas d'entrée (bruit session 11 : 18 « en attente »).
+    script = [
+        ("interview", None, "Ma Feature"),
+        [],
+        [(3, "- Taille maximale d'une pièce jointe : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],
+    ]
+    reponse = (
+        "- **#3** : Taille maximale de la pièce jointe = 10 Mo, comme indiqué "
+        "dans les critères d'acceptation de la Feature [HYPOTHÈSE À VALIDER]."
+    )
+    connexion, _ = brancher(script, reponse)
+    corps = client_http.post("/workflows/7/message", json={"message": "récapitule"}).json()
     assert corps["hypotheses_ajoutees"] == []
     assert not any("INSERT INTO workflow_hypotheses" in r for r, _ in connexion.curseur.requetes)
 
@@ -237,6 +290,44 @@ def test_aucune_source_avertit(brancher) -> None:
     brancher(list(SCRIPT_NOMINAL), "Réponse prudente.", contexte=contexte_vide)
     corps = client_http.post("/workflows/7/message", json={"message": "sujet inconnu"}).json()
     assert any("Aucune source récupérable" in a for a in corps["avertissements"])
+
+
+SCRIPT_REGISTRE_EN_ATTENTE = [
+    ("interview", None, "Ma Feature"),  # session
+    [("po", "Ma Feature")],  # historique
+    [(3, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],  # registre
+]
+
+
+def test_levee_proposee_persistee_sans_toucher_le_statut(brancher) -> None:
+    reponse = "Votre réponse fixe le seuil.\n[LEVÉE PROPOSÉE : #3 — confirmée — le PO a fixé 10 Mo]"
+    connexion, faux_client = brancher(list(SCRIPT_REGISTRE_EN_ATTENTE), reponse)
+    corps = client_http.post("/workflows/7/message", json={"message": "le seuil est 10 Mo"}).json()
+    assert corps["levees_proposees"] == [
+        {"hypothese_id": 3, "statut_propose": "confirmee", "justification": "le PO a fixé 10 Mo"}
+    ]
+    # Le registre en attente est bien entré au prompt système.
+    assert "#3 : Seuil proposé : 10 Mo" in faux_client.appels[0]["messages"][0]["content"]
+    maj = [p for r, p in connexion.curseur.requetes if "SET statut_propose" in r]
+    assert maj == [
+        {
+            "statut_propose": "confirmee",
+            "justification": "le PO a fixé 10 Mo",
+            "hid": 3,
+            "sid": 7,
+        }
+    ]
+    # Invariant A8 : la proposition ne modifie JAMAIS le statut lui-même.
+    assert not any("SET statut =" in r for r, _ in connexion.curseur.requetes)
+
+
+def test_levee_proposee_hors_registre_ignoree(brancher) -> None:
+    connexion, _ = brancher(
+        list(SCRIPT_REGISTRE_EN_ATTENTE), "[LEVÉE PROPOSÉE : #99 — confirmée — numéro halluciné]"
+    )
+    corps = client_http.post("/workflows/7/message", json={"message": "ok"}).json()
+    assert corps["levees_proposees"] == []
+    assert not any("SET statut_propose" in r for r, _ in connexion.curseur.requetes)
 
 
 def test_reponse_vide_erreur_explicite(brancher) -> None:
@@ -276,7 +367,7 @@ def test_controle_conformite_silencieux_quand_tout_est_conforme() -> None:
 
 
 def test_controle_gabarit_signale_une_story_bancale() -> None:
-    contenu = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    contenu = "---\n**US — Story bancale**\n\n**En tant que** PO pressé\n\nRien d'autre.\n---"
     rapports = controler_conformite("redaction", contenu)
     assert len(rapports) == 1
     assert "Story bancale" in rapports[0] and "Contrôle gabarit" in rapports[0]
@@ -297,8 +388,21 @@ def test_controle_dor_refinement_doit_rester_bleu() -> None:
     assert any("🔵" in r for r in rapports)
 
 
+def test_controle_dor_sur_toute_etape_de_production() -> None:
+    # Session 9 (06/07/2026) : le cycle réel est « une story = rédaction + DoR »
+    # et la machine à états file à `synthese` pendant que les tableaux DoR
+    # continuent d'arriver — un tableau présent se contrôle quelle que soit
+    # l'étape de production ; son absence ne se signale qu'à l'étape 4.
+    tableau_bancal = _tableau_dor_conforme().replace(
+        f"| {CRITERE_DOR_REFINEMENT} | 🔵 |", f"| {CRITERE_DOR_REFINEMENT} | ✅ |"
+    )
+    rapports = controler_conformite("synthese", tableau_bancal)
+    assert any("Contrôle DoR automatisé" in r for r in rapports)
+    assert controler_conformite("synthese", "du texte sans tableau DoR") == []
+
+
 def test_pas_de_controle_hors_etapes_de_production() -> None:
-    contenu = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    contenu = "---\n**US — Story bancale**\n\n**En tant que** PO pressé\n\nRien d'autre.\n---"
     assert controler_conformite("interview", contenu) == []
 
 
@@ -308,7 +412,7 @@ def test_route_remonte_les_controles_en_avertissements(brancher) -> None:
         [("po", "Ma Feature")],  # historique
         [],  # hypothèses connues
     ]
-    reponse = "---\n**US — Story bancale**\n\nDu texte sans blocs.\n---"
+    reponse = "---\n**US — Story bancale**\n\n**En tant que** PO pressé\n\nRien d'autre.\n---"
     brancher(script, reponse)
     http = client_http.post("/workflows/7/message", json={"message": "contrôle la DoR"})
     assert http.status_code == 200

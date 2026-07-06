@@ -119,3 +119,52 @@ Critères d'acceptation :
 - [ ] Le contrôle **signale, ne bloque jamais** (règle 5 : le PO arbitre) ; aucun contrôle aux étapes 0–2 ; TU purs + TU route (Albert/RAG mockés)
 
 *Code livré le 03/07/2026 : `controler_conformite` + `_extraire_tableau_dor` dans `sia_api/moteur.py`, branchés sur `POST /workflows/{id}/message` (canal avertissements existant — affiché par l'UI S2.8 sans modification). 6 TU (203 au total). CA à cocher via `docs/plans-test/s2.12-controle-dor-auto.md` (dans la foulée du plan S2.6). **Le backlog macro côté code est complet** (E0→E6 + E8 ; E7 = post-go).*
+
+## S2.13 — E3 : rapprochement décision d'interview ↔ registre A8 (« levée proposée »)
+
+> Issue du réel (session de validation Onyxia, 06/07/2026) : une réponse d'interview du PO tranche souvent une [HYPOTHÈSE À VALIDER] déjà au registre, mais elle reste « en_attente » jusqu'à ce que le PO la retrouve et clique — bruit au récapitulatif A8 de l'export.
+
+Critères d'acceptation :
+- [x] Les hypothèses **en attente** entrent au prompt système, numérotées (`#id`), avec la consigne de **proposer** la levée quand un message du PO ou un extrait cité la tranche : `[LEVÉE PROPOSÉE : #id — confirmée|rejetée — justification]` — *validé stack-live session 11 (06/07/2026) : cas confirmée (`#104`, « 10 Mo validé MOA ») ET cas rejetée (`#105`, « pas de SMS ») émis par le moteur*
+- [x] La proposition est persistée sur des colonnes dédiées (`statut_propose`, `justification_proposee`, `proposee_le` — migration 0010) : **le `statut` n'est JAMAIS modifié par le moteur** — la décision individuelle du PO reste le seul chemin de levée (invariant A8, vérifié par TU) ; identifiant halluciné ou déjà décidé → proposition ignorée — *session 11 : les deux hypothèses restent `en_attente` avec proposition affichée, persistante au rechargement*
+- [x] Écran session : badge « Levée proposée » + justification à côté des boutons Confirmer/Rejeter (rappel « c'est vous qui décidez — A8 ») ; panneau du dernier échange : compteur des levées proposées — *badges « Confirmer » et « Rejeter » observés session 11 avec justifications*
+- [x] TU purs (extraction du marqueur) + TU route (Albert/RAG mockés, invariant A8) + TU écran
+
+*Code livré le 06/07/2026 : `extraire_levees_proposees` (pure, `sia_api/workflow.py`), registre en attente injecté au prompt + persistance des propositions (`sia_api/moteur.py`, `levees_proposees` dans la réponse), exposition dans `EtatSession` (`sia_api/workflows.py`), badge écran session. Migration 0010. 8 TU (220 au total). CA à cocher via `docs/plans-test/s2.13-rapprochement-a8.md` (exige clé + base — pod).*
+
+## S2.14 — bascule du modèle de chat par défaut vers `openweight-medium` (à l'essai)
+
+> Verdict E6 v0 (06/07/2026, `docs/eval-onyxia.md`) : `openweight-medium` **0,806** > `openweight-large` **0,498** — dérive de format de large corroborée en session réelle 8. Bascule **à l'essai** validée par le référent (« go pour la suite ») ; décision définitive au recalibrage gold.
+
+Critères d'acceptation :
+- [ ] `ALBERT_MODEL_CHAT` par défaut = `openweight-medium` partout où le défaut vit (`config.py`, `.env.example`, compose, exemple de Secret k8s, README) — **jamais en dur dans le code métier** (le moteur lit toujours `settings.albert_model_chat`)
+- [ ] Réversibilité prouvée par TU : la surcharge `ALBERT_MODEL_CHAT=openweight-large` ramène large sans changement de code
+- [ ] Le banc E6 (`make eval`) continue de comparer large vs medium par défaut — l'instrument de la décision définitive reste en place
+
+*Code livré le 06/07/2026 : défaut basculé sur les 5 surfaces, TU du défaut recalées + TU de surcharge réorientée vers le chemin de retour (large). 220 tests verts. CA à cocher via `docs/plans-test/s2.14-modele-chat-medium.md` (probe + génération réelle + contre-épreuve de réversibilité — pod).*
+
+## Constats de la session réelle 9 (06/07/2026, pod, branche PR #30) — correctifs et suites
+
+Session complète (Feature « prioriser les actes > seuils commande publique », 10 US + DoR) : adhérence gabarit très bonne (valide l'essai medium S2.14 en réel), une seule alerte S1.10 et elle attrapait un vrai défaut (CA10 incomplet). Correctifs livrés dans la foulée (même PR #30) :
+
+- [x] **Story perdue en silence** : titre en variante `### US — **Titre**` non extrait (absente du feedback ET des exports) → extraction tolérante (`titre_us`), la story est extraite puis **signalée** non conforme (entête hors gabarit) — jamais ignorée
+- [x] **DoR sans contrôle hors étape 4** : le cycle réel est « une story = rédaction + DoR » et la machine à états file à `synthese` → un tableau DoR présent se contrôle à toute étape de production ; l'absence ne se signale qu'à l'étape 4
+- [x] **Faux positif « sans aucun attendu listé »** sur les listes numérotées (`1. …`) → item de liste toléré (puce ou numéro)
+- [x] **Levée proposée (S2.13) non suivie par le modèle** (premier cas réel raté) → consigne déplacée en dernière position du prompt + exemple explicite ; contre-épreuve = plan s2.13 §3 bis
+
+Suites au backlog (non couvertes ici) :
+- [x] **Anti-invention incomplet** + **bruit du registre par reformulation** → traités par **S2.15** ci-dessous
+- [ ] **Sémantique du « Oui »** : utilisé comme « continuer/story suivante », il désynchronise la machine à états (badge étape trompeur — A5) — arbitrage produit : bouton « story suivante » vs étapes linéaires 0→5
+
+**Rejeu session 11 (06/07/2026, branche à jour — 225 tests)** : **S2.13 validée stack-live** (voir CA cochés ci-dessus) ; deux défauts supplémentaires corrigés dans la foulée : le **rappel de titre au-dessus des tableaux DoR** (`**US — Titre**` + DoR, zéro bloc) était extrait comme story et **écrasait la vraie story dans les exports** (dédup par titre) → un segment n'est une story que s'il porte aussi `**En tant que**` ; un **titre de section citant le marqueur** entrait au registre → entêtes markdown écartées de l'extraction.
+
+## S2.15 — anti-invention v2 : consigne de marquage durcie + dédup sémantique du registre
+
+> Constats des sessions réelles 9/10/11 : registre à 18 « en attente » (récapitulatifs re-listant les hypothèses sous d'autres mots), variantes de marqueur perdues (`[HYPOTHÈSE 1 A]`, `[HYPOTHÈSE À VALIDER 1]`), valeurs chiffrées inventées affirmées sans marqueur.
+
+Critères d'acceptation :
+- [ ] **Dédup sémantique du registre** : une hypothèse re-formulée (recouvrement des termes porteurs de sens de la formulation la plus courte ≥ 0,8 — `est_doublon_hypothese`, seuil calibré sur les paires réelles session 11) n'entre pas deux fois au registre ; **une hypothèse réellement distincte n'est JAMAIS avalée** (TU dédiée — une perte serait contraire à A8)
+- [ ] **Consigne de marquage durcie** (prompt système) : marqueur EXACT (les variantes se perdent), toute VALEUR CHIFFRÉE inventée marquée sur sa ligne, alternatives A/B/C au choix du PO non marquées (seule l'option retenue l'est), pas de re-liste des hypothèses déjà au registre
+- [ ] TU purs (paires réelles session 11) + TU route (récapitulatif reformulé → zéro INSERT) + TU prompt
+
+*Code livré le 06/07/2026 : `est_doublon_hypothese` + `_tokens_hypothese` (`sia_api/workflow.py`), dédup à deux étages branchée sur l'insertion du moteur, consignes de traçabilité enrichies (`construire_prompt_systeme`). 229 tests verts. CA à cocher via `docs/plans-test/s2.15-anti-invention.md` (rejeu du récapitulatif session 11, garde-fou de non-perte).*

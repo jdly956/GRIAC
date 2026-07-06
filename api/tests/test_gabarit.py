@@ -6,6 +6,7 @@ from sia_api.gabarit import (
     CRITERE_DOR_REFINEMENT,
     CRITERES_DOR,
     extraire_stories_us,
+    titre_us,
     valider_dor,
     valider_us,
 )
@@ -235,3 +236,41 @@ def test_bloc_reellement_vide_toujours_signale() -> None:
     )
     rapport = valider_us(texte)
     assert any("Contexte" in violation for violation in rapport.violations)
+
+
+def test_variante_de_titre_extraite_et_signalee() -> None:
+    # Session 9 (06/07/2026) : « ### US — **Titre** » — la story était perdue en
+    # silence (ni feedback, ni export). Elle doit être EXTRAITE puis signalée
+    # non conforme (entête hors gabarit) — jamais ignorée.
+    variante = US_MINIMALE_CONFORME.replace(
+        "**US — Consulter mon dossier**", "### US — **Consulter mon dossier** (Story 2)"
+    )
+    document = f"préambule\n\n---\n{variante}\n---\n"
+    stories = extraire_stories_us(document)
+    assert len(stories) == 1
+    assert titre_us(stories[0]) == "Consulter mon dossier"
+    rapport = valider_us(stories[0])
+    assert any("entête" in violation for violation in rapport.violations)
+
+
+def test_rappel_de_titre_au_dessus_du_dor_n_est_pas_une_story() -> None:
+    # Session 11 (06/07/2026) : le modèle répète « **US — Titre** » en rappel
+    # au-dessus de chaque tableau DoR — ce segment (titre + DoR, zéro bloc)
+    # écrasait la vraie story dans la dédup par titre des exports (E5).
+    rappel = (
+        "### ✅ Contrôle DoR – Story 1\n**US — Tableau de bord des dossiers**\n\n"
+        "| Critère DoR | Statut | Justification |\n|---|---|---|\n"
+        "| Le besoin est compréhensible | ✅ | ok |"
+    )
+    assert extraire_stories_us(f"préambule\n\n---\n{rappel}\n---\n") == []
+
+
+def test_attendus_en_liste_numerotee_acceptes() -> None:
+    # Session 9 : faux positif « sans aucun attendu listé » sur les listes
+    # numérotées (« 1. **Vue en lecture** … »), forme réelle des sorties Albert.
+    texte = US_MINIMALE_CONFORME.replace(
+        "- Attendu 1 : l'usager voit le statut courant de son dossier",
+        "1. **Vue liste** : l'usager voit le statut courant de son dossier",
+    )
+    rapport = valider_us(texte)
+    assert rapport.conforme, rapport.violations

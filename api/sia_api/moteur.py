@@ -9,32 +9,44 @@ moteur, pas d'écran dédié). À chaque message, le moteur :
    + étape courante + contexte/NFR du projet (E8, S1.11) + extraits cités
    + few-shot (gold si fourni, sinon repli silver JAMAIS présenté comme
    validé — CLAUDE.md) + consignes A3 (citation/origine) et A9 (divergences) ;
-3. appelle Albert (`openweight-large`, max_tokens généreux — modèle à
-   raisonnement, gotcha S1.5 ; réponse vide = erreur explicite) ;
+3. appelle Albert (modèle `ALBERT_MODEL_CHAT` — défaut `openweight-medium`,
+   verdict E6 v0 ; max_tokens généreux — gotcha raisonnement S1.5, toujours
+   valable si retour à `openweight-large` ; réponse vide = erreur explicite) ;
 4. verse le message PO et la réponse dans `workflow_messages`, extrait les
    [HYPOTHÈSE À VALIDER] nouvelles vers le registre (origine `modele`, A8) ;
+   quand un message du PO tranche une hypothèse déjà en attente, le moteur
+   émet [LEVÉE PROPOSÉE : #id — confirmée|rejetée — justification] : la
+   proposition est persistée SANS toucher le statut — la décision individuelle
+   du PO reste le seul chemin de levée (rapprochement interview↔registre, A8) ;
 5. restitue : réponse, sources mobilisées (panneau A3), hypothèses ajoutées,
-   [DIVERGENCE] corpus↔PO relevées (A9, arbitrées par le PO), avertissements
-   (règle 1, budget, aucune source, repli rerank) — jamais d'échec silencieux.
+   levées proposées, [DIVERGENCE] corpus↔PO relevées (A9, arbitrées par le PO),
+   avertissements (règle 1, budget, aucune source, repli rerank) — jamais
+   d'échec silencieux.
 """
 
-import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from sia_api.config import Settings
 from sia_api.db import get_connexion
-from sia_api.gabarit import extraire_stories_us, valider_dor, valider_us
+from sia_api.gabarit import extraire_stories_us, titre_us, valider_dor, valider_us
 from sia_api.recherche import (
     RechercheEntree,
     SourceCitee,
     construire_contexte,
     get_albert,
 )
-from sia_api.workflow import cle_hypothese, extraire_hypotheses, verifier_lot_interview
+from sia_api.workflow import (
+    cle_hypothese,
+    est_doublon_hypothese,
+    extraire_hypotheses,
+    extraire_levees_proposees,
+    verifier_lot_interview,
+)
 
 router = APIRouter(tags=["moteur"])
 
@@ -61,8 +73,7 @@ ETAPES_AVEC_STORIES = ("redaction", "controle_dor", "synthese")
 
 
 def _titre_us(story: str) -> str:
-    correspondance = re.search(r"\*\*US — (.+?)\*\*", story)
-    return correspondance.group(1) if correspondance else "(sans titre)"
+    return titre_us(story) or "(sans titre)"
 
 
 def _extraire_tableau_dor(contenu: str) -> str:
@@ -89,8 +100,14 @@ def controler_conformite(etape: str, contenu: str) -> list[str]:
 
     - étapes rédaction/contrôle DoR/synthèse : chaque US extraite passe par
       `valider_us` (le modèle s'auto-contrôle mal — le validateur tranche) ;
-    - étape contrôle DoR : le tableau DoR (isolé des tableaux de CA) passe par
-      `valider_dor` (10 critères, statuts, « estimée en refinement » toujours 🔵).
+    - un tableau DoR présent dans N'IMPORTE quelle étape de production passe
+      par `valider_dor` (10 critères, statuts, « estimée en refinement »
+      toujours 🔵) — constaté session 9 (06/07/2026) : le cycle réel est
+      « une story = rédaction + DoR » et la machine à états file à `synthese`
+      pendant que les DoR continuent d'arriver ; conditionner à la seule
+      étape `controle_dor` laissait ces tableaux sans contrôle. L'ABSENCE de
+      tableau ne se signale qu'à l'étape contrôle DoR (ailleurs elle est
+      normale).
     Signalé au PO dans les avertissements, jamais bloquant : c'est lui qui
     valide ou itère (règle 5).
     """
@@ -103,12 +120,11 @@ def controler_conformite(etape: str, contenu: str) -> list[str]:
                     f"Contrôle gabarit (S1.10) — US « {_titre_us(story)} » non conforme : "
                     + " ; ".join(rapport.violations)
                 )
-    if etape == "controle_dor":
-        rapport_dor = valider_dor(_extraire_tableau_dor(contenu))
-        if not rapport_dor.conforme:
-            rapports.append(
-                "Contrôle DoR automatisé (étape 4) : " + " ; ".join(rapport_dor.violations)
-            )
+        tableau_dor = _extraire_tableau_dor(contenu)
+        if tableau_dor or etape == "controle_dor":
+            rapport_dor = valider_dor(tableau_dor)
+            if not rapport_dor.conforme:
+                rapports.append("Contrôle DoR automatisé : " + " ; ".join(rapport_dor.violations))
     return rapports
 
 
@@ -131,6 +147,7 @@ def construire_prompt_systeme(
     projet: dict | None,
     contexte_cite: str,
     few_shot: tuple[str, str] | None,
+    hypotheses_en_attente: Sequence[tuple[int, str]] = (),
 ) -> str:
     """Assemblage du prompt système — le prompt 3 reste la source unique du workflow."""
     blocs = [CHEMIN_PROMPT3.read_text(encoding="utf-8"), "\n---\n## CONTEXTE DE SESSION (SIA PO)"]
@@ -141,6 +158,17 @@ def construire_prompt_systeme(
         "convient-elle ? (Oui / Non) ») : l'interface fournit les boutons Oui/Non de la "
         "règle 5 — termine tes messages sur le contenu."
     )
+    if etape in ("redaction", "controle_dor"):
+        # Arbitrage S3.2 (06/07/2026) : le cycle réel est « une story = rédaction
+        # + contrôle DoR » — l'UI fournit un bouton « Story suivante ». Une story
+        # à la fois évite aussi la troncature à MAX_TOKENS (constat session 8).
+        blocs.append(
+            "Travaille UNE SEULE story à la fois : sa rédaction complète puis son "
+            "contrôle DoR. N'enchaîne JAMAIS spontanément sur la story suivante — "
+            "l'interface fournit un bouton « Story suivante ». Après chaque story, "
+            "indique combien de stories candidates restent à rédiger ; s'il n'en "
+            "reste aucune, dis-le explicitement (le PO validera l'étape)."
+        )
     if projet:
         blocs.append(f"Projet : {projet['nom']} — {projet['contexte']}")
         if projet["nfrs"]:
@@ -165,7 +193,17 @@ def construire_prompt_systeme(
         "- Toute affirmation issue des extraits cite sa source : "
         "« [Source : nom — section] » (A3).\n"
         "- Toute information ne venant ni des extraits ni du PO est marquée "
-        "[HYPOTHÈSE À VALIDER].\n"
+        "[HYPOTHÈSE À VALIDER]. En particulier toute VALEUR CHIFFRÉE inventée "
+        "(délai, seuil, volumétrie, durée de rétention, horaire de job, "
+        "performance) porte le marqueur sur sa ligne.\n"
+        "- Utilise EXACTEMENT le marqueur [HYPOTHÈSE À VALIDER] — jamais de "
+        "variante ([HYPOTHÈSE 1 A], [HYPOTHÈSE À VALIDER 1], « Hypothèse A1 »…) : "
+        "les variantes n'entrent pas au registre et se perdent.\n"
+        "- Quand tu proposes des ALTERNATIVES au choix du PO (option A / B / C), "
+        "ne les marque pas : seule l'option retenue par le PO deviendra, si "
+        "besoin, une [HYPOTHÈSE À VALIDER].\n"
+        "- Ne re-liste pas dans tes récapitulatifs les hypothèses déjà "
+        "enregistrées au registre — elles y sont, le PO les voit.\n"
         "- Si une affirmation du PO contredit un extrait cité, signale-le sur une ligne "
         f"commençant par {MARQUEUR_DIVERGENCE} avec la source — c'est le PO qui arbitre (A9)."
     )
@@ -178,6 +216,24 @@ def construire_prompt_systeme(
             "jamais comme une référence validée, ses [HYPOTHÈSE À VALIDER] le restent"
         )
         blocs.append(f"## EXEMPLE DE FORMAT ({avertissement})\n{exemple}")
+    # En DERNIÈRE position du prompt (la plus saillante) : constaté session 9
+    # (06/07/2026), la consigne noyée en milieu de prompt n'a pas été suivie —
+    # le PO a tranché une hypothèse sans qu'aucune levée ne soit proposée.
+    if hypotheses_en_attente:
+        registre = "\n".join(f"- #{hid} : {texte}" for hid, texte in hypotheses_en_attente)
+        blocs.append(
+            "## REGISTRE DES HYPOTHÈSES EN ATTENTE (A8)\n"
+            f"{registre}\n"
+            "IMPÉRATIF — à vérifier À CHAQUE réponse : si le dernier message du PO ou un "
+            "extrait cité tranche l'une de ces hypothèses, termine ta réponse par une ligne "
+            "dédiée, exactement sous cette forme :\n"
+            "[LEVÉE PROPOSÉE : #<numéro> — confirmée|rejetée — justification courte]\n"
+            "Exemple : « [LEVÉE PROPOSÉE : #7 — confirmée — le PO a confirmé que l'équipe "
+            "crée le jeu de données] ». "
+            "C'est une PROPOSITION : seul le PO confirme ou rejette dans le registre (A8) — "
+            "ne considère jamais une hypothèse comme levée de toi-même. "
+            "Ne re-marque pas ces hypothèses déjà enregistrées avec [HYPOTHÈSE À VALIDER]."
+        )
     return "\n\n".join(blocs)
 
 
@@ -185,11 +241,20 @@ class MessageEntree(BaseModel):
     message: str = Field(min_length=1)
 
 
+class LeveeProposeeSortie(BaseModel):
+    """Proposition de levée émise par le moteur — la décision reste au PO (A8)."""
+
+    hypothese_id: int
+    statut_propose: Literal["confirmee", "rejetee"]
+    justification: str
+
+
 class MessageResultat(BaseModel):
     reponse: str
     etape: str
     sources: list[SourceCitee]  # panneau « sources mobilisées » (A3)
     hypotheses_ajoutees: list[str]
+    levees_proposees: list[LeveeProposeeSortie]  # rapprochement interview↔registre (A8)
     divergences: list[str]  # A9 — arbitrées par le PO
     avertissements: list[str]
 
@@ -243,6 +308,16 @@ def message_route(
         )
         historique = list(reversed(curseur.fetchall()))
 
+        # Registre lu AVANT l'appel : les hypothèses en attente entrent au prompt
+        # (rapprochement interview↔registre) et l'ensemble sert à la déduplication.
+        curseur.execute(
+            "SELECT id, texte, statut FROM workflow_hypotheses "
+            "WHERE session_id = %(id)s ORDER BY id",
+            {"id": session_id},
+        )
+        registre = curseur.fetchall()
+        hypotheses_en_attente = [(h[0], h[1]) for h in registre if h[2] == "en_attente"]
+
         # A2 : le RAG est mobilisé à chaque étape, question libre comprise.
         contexte = construire_contexte(
             connexion,
@@ -254,7 +329,7 @@ def message_route(
             avertissements.append(contexte.avertissement)
 
         prompt_systeme = construire_prompt_systeme(
-            etape, projet, contexte.contexte, charger_few_shot()
+            etape, projet, contexte.contexte, charger_few_shot(), hypotheses_en_attente
         )
         messages = [{"role": "system", "content": prompt_systeme}]
         messages.append({"role": "user", "content": f"Feature de la session :\n{feature}"})
@@ -303,24 +378,43 @@ def message_route(
             {"id": session_id, "etape": etape, "contenu": contenu_reponse},
         )
 
-        curseur.execute(
-            "SELECT texte FROM workflow_hypotheses WHERE session_id = %(id)s",
-            {"id": session_id},
-        )
-        # Déduplication par clé normalisée (et non texte exact) : une hypothèse
-        # reformulée avec une autre décoration markdown ne rentre pas deux fois.
-        deja_connues = {cle_hypothese(ligne[0]) for ligne in curseur.fetchall()}
+        # Déduplication à deux étages : clé normalisée (décoration markdown)
+        # puis rapprochement sémantique (S2.15) — les récapitulatifs du modèle
+        # re-listent les hypothèses sous d'autres mots (session 11).
+        textes_connus = [h[1] for h in registre]
+        deja_connues = {cle_hypothese(t) for t in textes_connus}
         hypotheses_ajoutees = []
         for texte in extraire_hypotheses(contenu_reponse):
             cle = cle_hypothese(texte)
-            if cle not in deja_connues:
-                curseur.execute(
-                    "INSERT INTO workflow_hypotheses (session_id, texte, origine) "
-                    "VALUES (%(id)s, %(texte)s, 'modele')",
-                    {"id": session_id, "texte": texte},
-                )
-                hypotheses_ajoutees.append(texte)
-                deja_connues.add(cle)
+            if cle in deja_connues or est_doublon_hypothese(texte, textes_connus):
+                continue
+            curseur.execute(
+                "INSERT INTO workflow_hypotheses (session_id, texte, origine) "
+                "VALUES (%(id)s, %(texte)s, 'modele')",
+                {"id": session_id, "texte": texte},
+            )
+            hypotheses_ajoutees.append(texte)
+            deja_connues.add(cle)
+            textes_connus.append(texte)
+
+        # Rapprochement interview↔registre (A8) : la proposition est persistée
+        # sur ses colonnes dédiées — le statut n'est JAMAIS modifié ici, la
+        # décision individuelle du PO reste le seul chemin de levée.
+        levees = extraire_levees_proposees(
+            contenu_reponse, {hid for hid, _ in hypotheses_en_attente}
+        )
+        for levee in levees:
+            curseur.execute(
+                "UPDATE workflow_hypotheses SET statut_propose = %(statut_propose)s, "
+                "justification_proposee = %(justification)s, proposee_le = now() "
+                "WHERE id = %(hid)s AND session_id = %(sid)s AND statut = 'en_attente'",
+                {
+                    "statut_propose": levee.statut_propose,
+                    "justification": levee.justification,
+                    "hid": levee.hypothese_id,
+                    "sid": session_id,
+                },
+            )
 
     connexion.commit()
     return MessageResultat(
@@ -328,6 +422,14 @@ def message_route(
         etape=etape,
         sources=contexte.sources,
         hypotheses_ajoutees=hypotheses_ajoutees,
+        levees_proposees=[
+            LeveeProposeeSortie(
+                hypothese_id=levee.hypothese_id,
+                statut_propose=levee.statut_propose,
+                justification=levee.justification,
+            )
+            for levee in levees
+        ],
         divergences=extraire_divergences(contenu_reponse),
         avertissements=avertissements,
     )

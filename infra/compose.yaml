@@ -47,7 +47,7 @@ services:
       # un message explicite, visible via `docker compose logs api`.
       ALBERT_BASE_URL: ${ALBERT_BASE_URL:-}
       ALBERT_API_KEY: ${ALBERT_API_KEY:-}
-      ALBERT_MODEL_CHAT: ${ALBERT_MODEL_CHAT:-openweight-large}
+      ALBERT_MODEL_CHAT: ${ALBERT_MODEL_CHAT:-openweight-medium}
       ALBERT_MODEL_EMBEDDINGS: ${ALBERT_MODEL_EMBEDDINGS:-openweight-embeddings}
       ALBERT_MODEL_RERANK: ${ALBERT_MODEL_RERANK:-openweight-rerank}
       ALBERT_TIMEOUT_S: ${ALBERT_TIMEOUT_S:-30.0}

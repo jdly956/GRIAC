@@ -14,14 +14,13 @@ annotée dans l'export markdown.
 
 import csv
 import io
-import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 
 from sia_api.db import get_connexion
-from sia_api.gabarit import extraire_stories_us, valider_us
+from sia_api.gabarit import extraire_stories_us, titre_us, valider_us
 
 router = APIRouter(tags=["export"])
 
@@ -31,8 +30,7 @@ ETAPES_AVEC_STORIES = ("redaction", "controle_dor", "synthese")
 
 
 def _titre(story: str) -> str:
-    correspondance = re.search(r"\*\*US — (.+?)\*\*", story)
-    return correspondance.group(1) if correspondance else "(sans titre)"
+    return titre_us(story) or "(sans titre)"
 
 
 def extraire_stories_session(messages: list[tuple[str, str, str]]) -> list[str]:

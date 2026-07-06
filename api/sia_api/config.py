@@ -24,7 +24,10 @@ class Settings(BaseSettings):
 
     albert_base_url: str
     albert_api_key: SecretStr
-    albert_model_chat: str = "openweight-large"
+    # Chat : openweight-medium à l'essai (verdict E6 v0 du 06/07/2026 : 0,806
+    # contre 0,498 pour openweight-large, dérive de format — docs/eval-onyxia.md).
+    # Retour à openweight-large par simple variable d'env ; recalibrage au gold.
+    albert_model_chat: str = "openweight-medium"
     albert_model_embeddings: str = "openweight-embeddings"
     albert_model_rerank: str = "openweight-rerank"
     # Réseau (S1.5) : appliqués au client Albert, surchargeables par env.

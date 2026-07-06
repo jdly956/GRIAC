@@ -33,7 +33,8 @@ def test_chargement_complet_et_alias_par_defaut(env_vierge) -> None:
     assert settings.albert_base_url == "https://albert.example/v1"
     assert settings.albert_api_key.get_secret_value() == "cle-de-test"
     # Alias Albert par défaut (CLAUDE.md : survivre aux rotations de catalogue)
-    assert settings.albert_model_chat == "openweight-large"
+    # Chat : openweight-medium à l'essai (verdict E6 v0 — docs/eval-onyxia.md).
+    assert settings.albert_model_chat == "openweight-medium"
     assert settings.albert_model_embeddings == "openweight-embeddings"
     assert settings.albert_model_rerank == "openweight-rerank"
 
@@ -41,8 +42,10 @@ def test_chargement_complet_et_alias_par_defaut(env_vierge) -> None:
 def test_alias_surchargeables_par_env(env_vierge) -> None:
     env_vierge.setenv("ALBERT_BASE_URL", "https://albert.example/v1")
     env_vierge.setenv("ALBERT_API_KEY", "cle-de-test")
-    env_vierge.setenv("ALBERT_MODEL_CHAT", "openweight-medium")
-    assert charger_settings().albert_model_chat == "openweight-medium"
+    # La surcharge par env est aussi le chemin de RETOUR à openweight-large
+    # si l'essai medium déçoit (aucun changement de code requis).
+    env_vierge.setenv("ALBERT_MODEL_CHAT", "openweight-large")
+    assert charger_settings().albert_model_chat == "openweight-large"
 
 
 def test_timeout_et_retries_par_defaut_et_surcharge(env_vierge) -> None:
@@ -118,4 +121,4 @@ def test_demarrage_api_avec_config_ok(env_vierge) -> None:
     env_vierge.setenv("ALBERT_API_KEY", "cle-de-test")
     with TestClient(app) as client:
         assert client.get("/health").status_code == 200
-        assert app.state.settings.albert_model_chat == "openweight-large"
+        assert app.state.settings.albert_model_chat == "openweight-medium"

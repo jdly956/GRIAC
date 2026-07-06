@@ -16,6 +16,11 @@
     <li>
       <em>[{{ hypothese.origine }}]</em> {{ hypothese.texte }} — <strong>{{ hypothese.statut }}</strong>
       {% if hypothese.statut == "en_attente" %}
+      {% if hypothese.statut_propose %}
+      <span class="fr-badge fr-badge--new">Levée proposée : {{ "Confirmer" if hypothese.statut_propose == "confirmee" else "Rejeter" }}</span>
+      {% if hypothese.justification_proposee %}<em>{{ hypothese.justification_proposee }}</em>{% endif %}
+      — c'est vous qui décidez (A8) :
+      {% endif %}
       <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/{{ hypothese.id }}" style="display:inline">
         <button class="fr-btn fr-btn--sm" name="statut" value="confirmee">Confirmer</button>
         <button class="fr-btn fr-btn--sm fr-btn--secondary" name="statut" value="rejetee">Rejeter</button>
@@ -57,6 +62,9 @@
   {% if dernier_resultat.hypotheses_ajoutees %}
   <p><strong>{{ dernier_resultat.hypotheses_ajoutees | length }} hypothèse(s) ajoutée(s) au registre</strong> (à valider ci-dessus).</p>
   {% endif %}
+  {% if dernier_resultat.levees_proposees %}
+  <p><strong>{{ dernier_resultat.levees_proposees | length }} levée(s) d'hypothèse proposée(s)</strong> — la décision vous revient, dans le registre ci-dessus (A8).</p>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -67,8 +75,19 @@
   <button class="fr-btn" type="submit">Envoyer</button>
 </form>
 
+{% if etat.etape in ("redaction", "controle_dor") %}
+<form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante" class="panneau">
+  <h2>Story suivante</h2>
+  <p>Une story = rédaction + contrôle DoR. Ce bouton enchaîne sur la story suivante <strong>sans changer d'étape</strong>.</p>
+  <button class="fr-btn" type="submit">Story suivante</button>
+</form>
+{% endif %}
+
 <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="panneau">
   <h2>Valider l'étape ? (règle 5)</h2>
+  {% if etat.etape in ("redaction", "controle_dor") %}
+  <p>« Oui » quand <strong>toutes les stories candidates sont couvertes</strong> — sinon, préférez « Story suivante » ci-dessus.</p>
+  {% endif %}
   <label class="fr-label" for="commentaire">Commentaire (obligatoire si « Non »)</label>
   <input class="fr-input" id="commentaire" name="commentaire" placeholder="précisez ce qu'il faut changer">
   <button class="fr-btn" name="valide" value="oui">Oui — étape suivante</button>
