@@ -54,6 +54,8 @@ Critères d'acceptation :
 - [ ] Les messages assistant du fil sont rendus en HTML (gras, titres, listes, **tableaux Gherkin lisibles**) — rendu serveur (lib markdown Python), HTML échappé (le contenu vient du LLM), styles DSFR sur les tableaux
 - [ ] Les messages PO restent en texte brut échappé ; TU rendu (tableau, gras, échappement d'un `<script>`)
 
+*Code livré le 06/07/2026 (PR dédiée post-merge #30) : filtre Jinja `markdown` (`markdown-it-py`, `html=False` — tout HTML source échappé —, `breaks=True`, tables activées), appliqué aux seuls messages assistant (`session.html`), styles `.contenu-md` (tableaux bordés, défilement horizontal, pre-wrap neutralisé). 2 TU — 234 tests. CA à cocher via `docs/plans-test/s3.6-rendu-markdown.md` (s'applique au fil existant sans régénération).*
+
 ### S3.7 — Écran session réorganisé (navigation)
 
 - [ ] Registre des hypothèses **replié par défaut** (`<details>`/accordéon DSFR, compteur visible), déplié s'il y a des levées proposées à décider

@@ -24,6 +24,7 @@ from typing import Annotated
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from markdown_it import MarkdownIt
 
 from sia_web import api_client
 
@@ -35,10 +36,23 @@ def _contexte_racine(request: Request) -> dict[str, str]:
     return {"racine": request.scope.get("root_path", "").rstrip("/")}
 
 
+# S3.6 : rendu serveur des messages du moteur — le PO lisait le markdown BRUT
+# (tableaux Gherkin en pipes, constaté sessions 9/11). `html=False` : tout HTML
+# présent dans la source est échappé (le contenu vient du LLM — jamais de HTML
+# interprété) ; `breaks=True` : les retours à la ligne simples restent visibles
+# (comportement du pre-wrap remplacé).
+_markdown = MarkdownIt("commonmark", {"html": False, "breaks": True}).enable("table")
+
+
+def rendre_markdown(texte: str) -> str:
+    return _markdown.render(texte or "")
+
+
 templates = Jinja2Templates(
     directory=str(Path(__file__).parent / "templates"),
     context_processors=[_contexte_racine],
 )
+templates.env.filters["markdown"] = rendre_markdown
 
 
 def _rediriger(request: Request, chemin: str) -> RedirectResponse:

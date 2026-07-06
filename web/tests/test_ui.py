@@ -110,6 +110,37 @@ def test_prefixe_root_path_porte_liens_mais_pas_les_redirections(api) -> None:
     assert redirection.headers["location"] == "/sessions/7"
 
 
+def test_messages_assistant_rendus_en_markdown(api) -> None:
+    # S3.6 : le PO lisait les tableaux Gherkin en pipes bruts (sessions 9/11).
+    messages = [
+        {"role": "po", "etape": "interview", "contenu": "**pas rendu** côté PO"},
+        {
+            "role": "assistant",
+            "etape": "redaction",
+            "contenu": "**US — Titre**\n\n| # | Étant donné que… | Lorsque… | Alors… |\n"
+            "|---|---|---|---|\n| CA1 | contexte | action | résultat |",
+        },
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, messages)
+    reponse = client.get("/sessions/1")
+    assert "<table>" in reponse.text and "<strong>US — Titre</strong>" in reponse.text
+    assert "| CA1 |" not in reponse.text  # plus de pipes bruts côté assistant
+    assert "**pas rendu** côté PO" in reponse.text  # le message PO reste du texte brut
+
+
+def test_html_du_moteur_echappe_jamais_interprete(api) -> None:
+    # Le contenu vient du LLM : tout HTML source est échappé (html=False).
+    messages = [
+        {"role": "assistant", "etape": "interview", "contenu": "<script>alert(1)</script> ok"}
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, messages)
+    reponse = client.get("/sessions/1")
+    assert "<script>alert(1)</script>" not in reponse.text
+    assert "&lt;script&gt;" in reponse.text
+
+
 def test_ecran_session_affiche_fil_etape_et_hypotheses(api) -> None:
     api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
     api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
