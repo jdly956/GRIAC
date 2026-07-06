@@ -14,6 +14,8 @@ registre des hypothèses. Les invariants produit qu'elles portent :
 Le branchement Albert + RAG (/contexte) sur chaque étape arrive en E3.2.
 """
 
+import re
+
 from sia_api.gabarit import MARQUEUR_HYPOTHESE
 
 ETAPES = (
@@ -44,9 +46,51 @@ def est_terminale(etape: str) -> bool:
     return etape == ETAPES[-1]
 
 
+# Phrases de CONSIGNE citant le marqueur comme convention, pas comme hypothèse
+# (« je marquerai les incertitudes comme [HYPOTHÈSE À VALIDER] ») — bruit du
+# registre constaté en session de validation (06/07/2026). Heuristique assumée :
+# liste courte de tournures méta, en minuscules.
+_TOURNURES_CONSIGNE = (
+    "marquerai",
+    "noterai",
+    "seront considéré",
+    "sera considéré",
+    "porte la mention",
+    "portent la mention",
+    "je propose la question",
+)
+
+
+def _est_consigne(ligne: str) -> bool:
+    minuscule = ligne.lower()
+    return any(tournure in minuscule for tournure in _TOURNURES_CONSIGNE)
+
+
 def extraire_hypotheses(texte: str) -> list[str]:
-    """Lignes porteuses du marqueur — chaque entrée alimente le registre (A8)."""
-    return [ligne.strip() for ligne in texte.splitlines() if MARQUEUR_HYPOTHESE in ligne]
+    """Lignes porteuses du marqueur — chaque entrée alimente le registre (A8).
+
+    Les phrases de consigne (le marqueur cité comme convention) sont écartées :
+    elles ne sont pas des hypothèses à lever.
+    """
+    return [
+        ligne.strip()
+        for ligne in texte.splitlines()
+        if MARQUEUR_HYPOTHESE in ligne and not _est_consigne(ligne)
+    ]
+
+
+# Décoration markdown à neutraliser pour comparer deux formulations d'une même
+# hypothèse (puce, ligne de tableau, gras, italique…).
+_DECORATION_MARKDOWN = str.maketrans("", "", "|*_`>#")
+
+
+def cle_hypothese(texte: str) -> str:
+    """Clé de déduplication du registre (A8) — la MÊME hypothèse reformulée avec
+    une décoration différente (puce vs ligne de tableau vs récapitulatif) ne doit
+    pas créer une nouvelle entrée (bruit constaté session de validation)."""
+    texte = texte.translate(_DECORATION_MARKDOWN)
+    texte = re.sub(r"\s+", " ", texte).strip(" -").rstrip(" .")
+    return texte.lower()
 
 
 def compter_questions(texte: str) -> int:

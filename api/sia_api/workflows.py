@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from sia_api.db import get_connexion
-from sia_api.workflow import ETAPES, avancer, est_terminale, extraire_hypotheses
+from sia_api.workflow import ETAPES, avancer, cle_hypothese, est_terminale, extraire_hypotheses
 
 router = APIRouter(tags=["workflow"])
 
@@ -93,8 +93,14 @@ def creer_session(entree: SessionEntree, connexion: Connexion) -> EtatSession:
             {"id": session_id, "etape": ETAPES[0], "contenu": entree.feature},
         )
         # Les [HYPOTHÈSE À VALIDER] déjà présentes dans la Feature collée entrent
-        # au registre dès l'étape 0 (jamais perdues, A8).
+        # au registre dès l'étape 0 (jamais perdues, A8) — dédupliquées par clé
+        # normalisée, comme dans le moteur.
+        cles_vues: set[str] = set()
         for texte in extraire_hypotheses(entree.feature):
+            cle = cle_hypothese(texte)
+            if cle in cles_vues:
+                continue
+            cles_vues.add(cle)
             curseur.execute(
                 "INSERT INTO workflow_hypotheses (session_id, texte, origine) "
                 "VALUES (%(id)s, %(texte)s, 'po')",
