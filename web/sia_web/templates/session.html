@@ -38,7 +38,14 @@
 {% for message in messages %}
 <div class="fil-message {{ 'fil-po' if message.role == 'po' else 'fil-assistant' }}">
   <p><strong>{{ "PO" if message.role == "po" else "Assistant" }}</strong> <em>({{ message.etape }})</em></p>
+  {% if message.role == "assistant" %}
+  {# S3.6 : markdown rendu côté serveur (tableaux Gherkin lisibles) — le HTML
+     de la source est échappé par le filtre (html=False), |safe ne fait
+     qu'autoriser le HTML PRODUIT par le rendu. #}
+  <div class="contenu-md">{{ message.contenu | markdown | safe }}</div>
+  {% else %}
   <div>{{ message.contenu }}</div>
+  {% endif %}
 </div>
 {% endfor %}
 
