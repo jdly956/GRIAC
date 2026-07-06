@@ -1,0 +1,11 @@
+{# Un message du fil — S3.6 : markdown rendu côté serveur pour l'assistant
+   (le HTML de la source est échappé par le filtre, html=False ; |safe
+   n'autorise que le HTML PRODUIT par le rendu). #}
+<div class="fil-message {{ 'fil-po' if message.role == 'po' else 'fil-assistant' }}">
+  <p><strong>{{ "PO" if message.role == "po" else "Assistant" }}</strong> <em>({{ message.etape }})</em></p>
+  {% if message.role == "assistant" %}
+  <div class="contenu-md">{{ message.contenu | markdown | safe }}</div>
+  {% else %}
+  <div>{{ message.contenu }}</div>
+  {% endif %}
+</div>

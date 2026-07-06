@@ -126,6 +126,13 @@ def _page_session(
         return _page_erreur(request, statut_etat, etat)
     _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
     _, stories = api_client.appeler("GET", f"/workflows/{session_id}/stories")
+    # S3.7 : le registre replié ne se déplie tout seul que si une levée
+    # proposée (S2.13) attend la décision du PO.
+    nb_levees_a_decider = sum(
+        1
+        for h in etat.get("hypotheses", [])
+        if h.get("statut") == "en_attente" and h.get("statut_propose")
+    )
     return templates.TemplateResponse(
         request=request,
         name="session.html",
@@ -135,6 +142,7 @@ def _page_session(
             "stories": stories if isinstance(stories, list) else [],
             "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
             "dernier_resultat": dernier_resultat,
+            "nb_levees_a_decider": nb_levees_a_decider,
             "erreur": erreur,
         },
     )

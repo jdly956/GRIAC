@@ -7,8 +7,66 @@
 <div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
 {% endif %}
 
+{# S3.7 : la dernière réponse et sa traçabilité s'affichent EN HAUT — après un
+   envoi, tout ce qui compte est visible sans scroll (pas d'ancre : les POST
+   rendent la page directement, v1 sans JavaScript — le dynamisme = S3.8). #}
+{% if dernier_resultat %}
+<div class="panneau" id="dernier-echange">
+  <h2>Dernière réponse</h2>
+  <div class="contenu-md">{{ dernier_resultat.reponse | markdown | safe }}</div>
+  {% if dernier_resultat.sources %}
+  <p><strong>Sources mobilisées (A3)</strong> :</p>
+  <ul>
+    {% for source in dernier_resultat.sources %}
+    <li>{{ source.nom }} — {{ source.section }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% for divergence in dernier_resultat.divergences %}
+  <div class="fr-alert fr-alert--warning" role="alert"><p>{{ divergence }} — c'est vous qui arbitrez (A9).</p></div>
+  {% endfor %}
+  {% for avertissement in dernier_resultat.avertissements %}
+  <div class="fr-alert fr-alert--info" role="alert"><p>{{ avertissement }}</p></div>
+  {% endfor %}
+  {% if dernier_resultat.hypotheses_ajoutees %}
+  <p><strong>{{ dernier_resultat.hypotheses_ajoutees | length }} hypothèse(s) ajoutée(s) au registre</strong> (à valider ci-dessous).</p>
+  {% endif %}
+  {% if dernier_resultat.levees_proposees %}
+  <p><strong>{{ dernier_resultat.levees_proposees | length }} levée(s) d'hypothèse proposée(s)</strong> — la décision vous revient, dans le registre ci-dessous (A8).</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="panneau">
-  <h2>Hypothèses à valider ({{ etat.nb_en_attente }} en attente)</h2>
+  <h2>Votre message</h2>
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/message">
+    <p>Réponse d'interview, correction, ou <strong>question documentaire libre</strong> — même fil (A2).</p>
+    <textarea class="fr-input" name="message" rows="4" required></textarea>
+    <button class="fr-btn" type="submit">Envoyer</button>
+  </form>
+  {% if etat.etape in ("redaction", "controle_dor") %}
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante" class="action-secondaire">
+    <p>Une story = rédaction + contrôle DoR — ce bouton enchaîne <strong>sans changer d'étape</strong>.</p>
+    <button class="fr-btn" type="submit">Story suivante</button>
+  </form>
+  {% endif %}
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="action-secondaire">
+    <p><strong>Valider l'étape ? (règle 5)</strong>
+    {% if etat.etape in ("redaction", "controle_dor") %}
+    « Oui » quand <strong>toutes les stories candidates sont couvertes</strong> — sinon, préférez « Story suivante ».
+    {% endif %}
+    </p>
+    <label class="fr-label" for="commentaire">Commentaire (obligatoire si « Non »)</label>
+    <input class="fr-input" id="commentaire" name="commentaire" placeholder="précisez ce qu'il faut changer">
+    <button class="fr-btn" name="valide" value="oui">Oui — étape suivante</button>
+    <button class="fr-btn fr-btn--secondary" name="valide" value="non">Non — itérer</button>
+  </form>
+</div>
+
+{# S3.7 : registre replié par défaut — déplié seulement si une levée proposée
+   attend la décision du PO (A8 : c'est le seul cas où il réclame une action). #}
+<details class="panneau" {% if nb_levees_a_decider %}open{% endif %}>
+  <summary><strong>Hypothèses à valider ({{ etat.nb_en_attente }} en attente{% if nb_levees_a_decider %}, dont {{ nb_levees_a_decider }} levée(s) proposée(s) à décider{% endif %})</strong></summary>
   <p>Chaque hypothèse se lève <strong>individuellement</strong> — une validation d'étape ne lève rien (A8).</p>
   {% if etat.hypotheses %}
   <ul>
@@ -32,79 +90,27 @@
   {% else %}
   <p>Aucune hypothèse enregistrée pour l'instant.</p>
   {% endif %}
-</div>
+</details>
 
 <h2>Fil de la conversation</h2>
-{% for message in messages %}
-<div class="fil-message {{ 'fil-po' if message.role == 'po' else 'fil-assistant' }}">
-  <p><strong>{{ "PO" if message.role == "po" else "Assistant" }}</strong> <em>({{ message.etape }})</em></p>
-  {% if message.role == "assistant" %}
-  {# S3.6 : markdown rendu côté serveur (tableaux Gherkin lisibles) — le HTML
-     de la source est échappé par le filtre (html=False), |safe ne fait
-     qu'autoriser le HTML PRODUIT par le rendu. #}
-  <div class="contenu-md">{{ message.contenu | markdown | safe }}</div>
-  {% else %}
-  <div>{{ message.contenu }}</div>
-  {% endif %}
-</div>
+{# S3.7 : seuls les derniers échanges restent dépliés — les précédents vivent
+   dans un bloc repliable (la page ne s'allonge plus indéfiniment). #}
+{% set anciens = messages[:-4] %}
+{% if anciens %}
+<details class="panneau">
+  <summary>Voir les {{ anciens | length }} échanges précédents</summary>
+  {% for message in anciens %}
+  {% include "_message.html" %}
+  {% endfor %}
+</details>
+{% endif %}
+{% for message in messages[-4:] %}
+{% include "_message.html" %}
 {% endfor %}
 
-{% if dernier_resultat %}
-<div class="panneau">
-  <h3>Dernier échange — traçabilité</h3>
-  {% if dernier_resultat.sources %}
-  <p><strong>Sources mobilisées (A3)</strong> :</p>
-  <ul>
-    {% for source in dernier_resultat.sources %}
-    <li>{{ source.nom }} — {{ source.section }}</li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  {% for divergence in dernier_resultat.divergences %}
-  <div class="fr-alert fr-alert--warning" role="alert"><p>{{ divergence }} — c'est vous qui arbitrez (A9).</p></div>
-  {% endfor %}
-  {% for avertissement in dernier_resultat.avertissements %}
-  <div class="fr-alert fr-alert--info" role="alert"><p>{{ avertissement }}</p></div>
-  {% endfor %}
-  {% if dernier_resultat.hypotheses_ajoutees %}
-  <p><strong>{{ dernier_resultat.hypotheses_ajoutees | length }} hypothèse(s) ajoutée(s) au registre</strong> (à valider ci-dessus).</p>
-  {% endif %}
-  {% if dernier_resultat.levees_proposees %}
-  <p><strong>{{ dernier_resultat.levees_proposees | length }} levée(s) d'hypothèse proposée(s)</strong> — la décision vous revient, dans le registre ci-dessus (A8).</p>
-  {% endif %}
-</div>
-{% endif %}
-
-<form method="post" action="{{ racine }}/sessions/{{ etat.id }}/message" class="panneau">
-  <h2>Votre message</h2>
-  <p>Réponse d'interview, correction, ou <strong>question documentaire libre</strong> — même fil (A2).</p>
-  <textarea class="fr-input" name="message" rows="4" required></textarea>
-  <button class="fr-btn" type="submit">Envoyer</button>
-</form>
-
-{% if etat.etape in ("redaction", "controle_dor") %}
-<form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante" class="panneau">
-  <h2>Story suivante</h2>
-  <p>Une story = rédaction + contrôle DoR. Ce bouton enchaîne sur la story suivante <strong>sans changer d'étape</strong>.</p>
-  <button class="fr-btn" type="submit">Story suivante</button>
-</form>
-{% endif %}
-
-<form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="panneau">
-  <h2>Valider l'étape ? (règle 5)</h2>
-  {% if etat.etape in ("redaction", "controle_dor") %}
-  <p>« Oui » quand <strong>toutes les stories candidates sont couvertes</strong> — sinon, préférez « Story suivante » ci-dessus.</p>
-  {% endif %}
-  <label class="fr-label" for="commentaire">Commentaire (obligatoire si « Non »)</label>
-  <input class="fr-input" id="commentaire" name="commentaire" placeholder="précisez ce qu'il faut changer">
-  <button class="fr-btn" name="valide" value="oui">Oui — étape suivante</button>
-  <button class="fr-btn fr-btn--secondary" name="valide" value="non">Non — itérer</button>
-</form>
-
 {% if stories %}
-<div class="panneau">
-  <h2>Noter les stories (E4.4)</h2>
-  <p>Note 1–5 + commentaire par story — alimente la télémétrie d'usage.</p>
+<details class="panneau">
+  <summary><strong>Noter les stories (E4.4)</strong> — note 1–5 + commentaire, alimente la télémétrie</summary>
   {% for titre in stories %}
   <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/feedback">
     <input type="hidden" name="story_titre" value="{{ titre }}">
@@ -119,7 +125,7 @@
     <button class="fr-btn fr-btn--sm" type="submit">Noter</button>
   </form>
   {% endfor %}
-</div>
+</details>
 {% endif %}
 
 <div class="panneau">

@@ -62,6 +62,8 @@ Critères d'acceptation :
 - [ ] Fil replié : seuls les N derniers échanges ouverts, les précédents en `<details>` ; ancre `#dernier-echange` après chaque envoi (plus de retour en haut de page)
 - [ ] Panneaux d'action (message, story suivante, valider) regroupés et accessibles sans scroll long ; TU écran
 
+*Code livré le 06/07/2026 (PR dédiée) : nouvel ordre de page — **« Dernière réponse » rendue EN HAUT après chaque envoi** (mieux qu'une ancre : les POST rendent la page directement, v1 sans JS — le dynamisme = S3.8) + zone d'action unifiée (message / story suivante / valider) + registre `<details>` replié (auto-déplié si levée proposée à décider, compteur dédié) + fil replié au-delà des 4 derniers messages (partiel `_message.html`) + notation repliée. 3 TU (37 web) — 237 tests. CA à cocher via `docs/plans-test/s3.7-ecran-session.md`.*
+
 ### S3.8 — Dynamisme htmx (envoi sans rechargement)
 
 - [ ] Envoi de message et « Story suivante » via htmx : la réponse s'insère dans le fil sans rechargement complet ; **indicateur « génération en cours »** pendant l'appel ; bouton désactivé (anti double-envoi)
