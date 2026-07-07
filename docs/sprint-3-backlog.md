@@ -122,12 +122,14 @@ Critères d'acceptation :
 
 *Code livré le 06/07/2026 : `GET /documents/{id}` (+ `id` exposé à l'inventaire), lecture du dérivé `derived/md/<sha>.md`, écran `document.html` (badges, parsing rendu, chunks dépliables), liens depuis l'inventaire. 5 TU — 279 tests. Plan `docs/plans-test/s3.14-fiche-document.md`. Validé pod 07/07 (279 verts, écrans OK — photo terminal référent).*
 
-### S3.15 — Requête RAG contextualisée + éval retrieval (candidate — notée le 07/07/2026, pas encore « go »)
+### S3.15 — Requête RAG contextualisée + éval retrieval — *go rendu le 07/07 (session 12)*
 
-> Constat (analyse chunking/scoring du 07/07, questions du référent) : la requête de recherche = le **dernier message PO seul** — ni le contexte projet (E8) ni la Feature en cours n'y entrent ; un message court (« oui », « continue ») produit une requête pauvre et le seuil de distance peut exclure des passages pertinents sans que rien ne le mesure.
+> Constat (analyse chunking/scoring du 07/07, questions du référent — confirmé session 12 : **14 messages sur 26 sans source**) : la requête de recherche = le **dernier message PO seul** — ni le contexte projet (E8) ni la Feature en cours n'y entrent ; un message court (« oui », « continue ») produit une requête pauvre et le seuil de distance peut exclure des passages pertinents sans que rien ne le mesure.
 
 - [ ] Enrichir la requête de recherche (BM25 + vecteur) avec le contexte utile : nom/contexte projet, Feature en cours, étape — budget de contexte respecté
 - [ ] Jeu d'éval retrieval (questions annotées sur les fixtures puis le corpus réel, **recall@15**) pour mesurer avant/après — se branche sur les recalibrages S3.3 ; pas de tuning du seuil à l'aveugle
+
+*Code livré le 07/07/2026 : `construire_requete_recherche` (pure, `moteur.py`) — nom + contexte projet (borne 200) et début de Feature (borne 400) devant le message PO ; dégradée sans projet/Feature ; les endpoints `/recherche` et `/contexte` hors session sont inchangés. L'éval recall@15 reste **gated corpus réel** (S3.3). 2 TU — 302 tests. Plan : section 4 de `docs/plans-test/s3.19-correctifs-session-12.md`.*
 
 ### S3.16 — Formats étendus : PowerPoint, Excel, courriels (.eml)
 
@@ -160,6 +162,36 @@ Critères d'acceptation :
 - [ ] TU api (dépôt dans le dossier, 422 sans dossier, neutralisation `../evil`, liste des dossiers) + TU écran (champ requis + datalist, dossier transmis)
 
 *Code livré le 07/07/2026 : `dossier: Form()` obligatoire sur `POST /documents/upload` (créé au premier dépôt), `GET /documents/dossiers` (union disque+base), champ requis + datalist sur l'écran, `envoyer_fichier(donnees=...)` côté client web. Les TU d'upload existantes ont été recalées au nouveau contrat (objet de la story, validé par le go). Documents déjà à la racine du pod : **pas de script de rattrapage** — supprimer via S3.17, redéposer dans un dossier, ré-indexer. 4 TU nouvelles — 294 tests. Plan `docs/plans-test/s3.18-depot-dossier.md`.*
+
+## Correctifs session réelle 12 (07/07/2026) — S3.19 / S3.20 / S3.21
+
+> Session 12 analysée sur capture : **26 appels, 312 060 tokens entrée** (session sur `openweight-large`), un appel estimé à ~239 814 tokens. Cause racine : le xlsx des macro-fonctionnalités = **UN chunk de ~940k caractères** (« tableaux jamais coupés » sans borne + padding docling ~75 % d'espaces), embarqué ENTIER par le passe-droit du premier chunk de l'assemblage E2, rerank tué au passage, moteur qui signale le dépassement sans tronquer, extrait persisté qui alourdit chaque page (1,2 Mo). Et 16 hypothèses en attente en fin de session. Go référent sur les 3 correctifs + S3.15.
+
+### S3.19 — Tableaux géants scindés au chunking (fix pipeline, cause racine)
+
+- [ ] Règle amendée : jamais couper une LIGNE ni la séparer de son en-tête — un tableau > budget est **scindé par groupes de lignes, l'en-tête (titres + séparateur) répété** ; chaque morceau reste un tableau markdown citable
+- [ ] Lignes de tableau **compactées** (runs d'espaces → un espace — le padding docling xlsx)
+- [ ] TU scission (aucune ligne perdue ni coupée, budget tenu, en-tête partout) + compactage
+
+*Code livré le 07/07/2026 : `_scinder_tableau` + `_compacter_ligne_tableau` (`chunk.py`), docstring recalée (⚠️ corollaire documenté : la reprise sur hash ne re-chunke pas un algorithme changé — propagation par suppression S3.17 + redépôt + ré-indexation, pas de script). TU `test_tableau_geant_jamais_coupe` réécrite en scission (objet de la story, arbitré). 302 tests.*
+
+### S3.20 — Garde-fous chunk géant : assemblage E2 borné, affichage tronqué
+
+- [ ] `assembler_contexte` : **fin du passe-droit du premier chunk** (l'ancien `if retenus and…` embarquait le premier chunk entier quel que soit sa taille) — un chunk seul au-delà du budget est tronqué à la borne avec marqueur explicite (c'est aussi ce qui part en traçabilité S3.9)
+- [ ] Écrans : « extrait exact » borné à 2 000 caractères à l'affichage, mention du volume total
+- [ ] TU assemblage (troncature, rien empilé derrière) + affichage
+
+*Code livré le 07/07/2026 : `recherche.py` (troncature + marqueur « document à re-chunker »), `session.html`/`_message.html` (affichage borné). TU `test_assemblage_garde_toujours_le_premier_chunk` réécrite en troncature (objet du fix). 302 tests.*
+
+### S3.21 — Application en lot des levées proposées (arbitrage A8 assoupli)
+
+> Arbitrage référent 07/07 : le PO **relit** la liste des levées proposées (S2.13) et les applique **d'un clic** — sa décision, en lot. L'esprit d'A8 tient : jamais de levée silencieuse, jamais une hypothèse sans proposition.
+
+- [ ] `POST /workflows/{id}/hypotheses/appliquer-propositions` : `SET statut = statut_propose` UNIQUEMENT sur `en_attente` AVEC proposition (jamais de statut inventé par la route) ; 409 si rien à appliquer
+- [ ] Écran : bouton « Appliquer les N levée(s) proposée(s) » dans le registre (confirmation + rappel de relecture) ; la décision individuelle reste
+- [ ] TU api (lot appliqué, hypothèse sans proposition intacte, 409, 404) + écran
+
+*Code livré le 07/07/2026 : route enregistrée avant `/hypotheses/{id}` (capture dynamique), bouton conditionné aux levées à décider. 5 TU. 302 tests. Plan commun du lot : `docs/plans-test/s3.19-correctifs-session-12.md`.*
 
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 
