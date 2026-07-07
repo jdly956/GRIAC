@@ -58,12 +58,13 @@ def brancher():
 
 
 def test_liste_documents_expose_statuts_reference_doublon(brancher) -> None:
+    # Tuples étendus mécaniquement avec est_obsolete (R8) — assertions intactes.
     brancher(
         [
             [
-                (1, "pa/spec-v2.docx", "spec-v2.docx", "docx", "parse", True, False, "pa"),
-                (2, "pa/spec-v1.docx", "spec-v1.docx", "docx", "parse", False, True, "pa"),
-                (3, "divers/scan.pdf", "scan.pdf", "pdf", "ocr_requis", False, False, None),
+                (1, "pa/spec-v2.docx", "spec-v2.docx", "docx", "parse", True, False, "pa", False),
+                (2, "pa/spec-v1.docx", "spec-v1.docx", "docx", "parse", False, True, "pa", False),
+                (3, "divers/scan.pdf", "scan.pdf", "pdf", "ocr_requis", False, False, None, True),
             ]
         ]
     )
@@ -80,10 +81,27 @@ def test_liste_documents_expose_statuts_reference_doublon(brancher) -> None:
         "est_reference": True,
         "doublon": False,
         "projet_suggere": "pa",
+        "est_obsolete": False,
     }
     assert corps[1]["doublon"] is True
     assert corps[2]["statut_parsing"] == "ocr_requis"
     assert corps[2]["projet_suggere"] is None
+    assert corps[2]["est_obsolete"] is True  # R8 : exposé pour le badge/bascule
+
+
+def test_marquer_obsolete_et_reactiver(brancher) -> None:
+    # R8 (H10) : PATCH bascule est_obsolete — réversible, 404 si inconnu.
+    connexion = brancher([(1,)])
+    reponse = client.patch("/documents/1", json={"est_obsolete": True})
+    assert reponse.status_code == 200
+    assert reponse.json() == {"id": 1, "est_obsolete": True}
+    assert any("SET est_obsolete" in requete for requete in connexion.curseur.requetes)
+    assert connexion.commits == 1
+
+    brancher([(1,)])
+    assert client.patch("/documents/1", json={"est_obsolete": False}).status_code == 200
+    brancher([None])
+    assert client.patch("/documents/99", json={"est_obsolete": True}).status_code == 404
 
 
 def test_fiche_document_traitement_complet(brancher, tmp_path) -> None:
@@ -109,6 +127,7 @@ def test_fiche_document_traitement_complet(brancher, tmp_path) -> None:
                 "pa",
                 2,
                 "spec",
+                False,  # est_obsolete (R8) — extension mécanique du tuple
             ),
             [
                 (0, "Spec > Exigences", 640, "contenu du chunk 0", True),
@@ -145,6 +164,7 @@ def test_fiche_document_derive_absent_reste_consultable(brancher) -> None:
                 None,
                 None,
                 None,
+                False,  # est_obsolete (R8) — extension mécanique du tuple
             ),
             [],
         ]

@@ -54,6 +54,7 @@ class ProjetEntree(BaseModel):
 
 class Projet(ProjetEntree):
     id: int
+    archive: bool = False  # R9 (UX8) : masqué des listes, réversible
 
 
 class SuggestionDossier(BaseModel):
@@ -91,7 +92,9 @@ def _remplacer_dossiers(curseur, projet_id: int, dossiers: list[DossierAssocie])
 
 
 def _lire_projet(curseur, projet_id: int) -> Projet | None:
-    curseur.execute("SELECT id, nom, contexte FROM projects WHERE id = %(id)s", {"id": projet_id})
+    curseur.execute(
+        "SELECT id, nom, contexte, archive FROM projects WHERE id = %(id)s", {"id": projet_id}
+    )
     ligne = curseur.fetchone()
     if ligne is None:
         return None
@@ -106,7 +109,14 @@ def _lire_projet(curseur, projet_id: int) -> Projet | None:
         {"id": projet_id},
     )
     dossiers = [DossierAssocie(dossier=d[0], origine=d[1]) for d in curseur.fetchall()]
-    return Projet(id=ligne[0], nom=ligne[1], contexte=ligne[2], nfrs=nfrs, dossiers=dossiers)
+    return Projet(
+        id=ligne[0],
+        nom=ligne[1],
+        contexte=ligne[2],
+        archive=ligne[3],
+        nfrs=nfrs,
+        dossiers=dossiers,
+    )
 
 
 # --- Routes ---
@@ -133,9 +143,14 @@ def creer_projet(entree: ProjetEntree, connexion: Connexion) -> Projet:
 
 
 @router.get("/projects")
-def lister_projets(connexion: Connexion) -> list[Projet]:
+def lister_projets(connexion: Connexion, archives: bool = False) -> list[Projet]:
+    """Par défaut les projets ACTIFS (l'archivé sort des listes et du choix à
+    la création de session) ; `?archives=true` liste le versant archivé (R9)."""
     with connexion.cursor() as curseur:
-        curseur.execute("SELECT id FROM projects ORDER BY nom")
+        curseur.execute(
+            "SELECT id FROM projects WHERE archive = %(archives)s ORDER BY nom",
+            {"archives": archives},
+        )
         identifiants = [ligne[0] for ligne in curseur.fetchall()]
         return [_lire_projet(curseur, identifiant) for identifiant in identifiants]
 
@@ -164,6 +179,39 @@ def maj_projet(projet_id: int, entree: ProjetEntree, connexion: Connexion) -> Pr
         projet = _lire_projet(curseur, projet_id)
     connexion.commit()
     return projet
+
+
+class ProjetMaj(BaseModel):
+    archive: bool  # R9 (UX8) : seul champ de cycle de vie — le contenu passe par PUT
+
+
+@router.patch("/projects/{projet_id}")
+def archiver_projet(projet_id: int, entree: ProjetMaj, connexion: Connexion) -> dict:
+    """R9 : archiver / désarchiver — masqué des listes, jamais détruit."""
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "UPDATE projects SET archive = %(archive)s, modifie_le = now() "
+            "WHERE id = %(id)s RETURNING id",
+            {"id": projet_id, "archive": entree.archive},
+        )
+        if curseur.fetchone() is None:
+            raise HTTPException(status_code=404, detail=f"Projet {projet_id} introuvable")
+    connexion.commit()
+    return {"id": projet_id, "archive": entree.archive}
+
+
+@router.delete("/projects/{projet_id}", status_code=204)
+def supprimer_projet(projet_id: int, connexion: Connexion) -> None:
+    """R9 : suppression DÉFINITIVE — arbitrage H9 (07/07/2026, « suppression
+    libre ») : NFR et dossiers partent en cascade (0005), les sessions liées
+    passent à projet_id NULL (0008) et continuent SANS contexte/NFR projet,
+    comme toute session créée sans projet. L'archivage reste le geste doux.
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute("DELETE FROM projects WHERE id = %(id)s RETURNING id", {"id": projet_id})
+        if curseur.fetchone() is None:
+            raise HTTPException(status_code=404, detail=f"Projet {projet_id} introuvable")
+    connexion.commit()
 
 
 @router.get("/dossiers/suggestions")

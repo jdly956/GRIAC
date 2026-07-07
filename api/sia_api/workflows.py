@@ -132,17 +132,19 @@ class SessionResume(BaseModel):
 
 
 @router.get("/workflows")
-def lister_sessions(connexion: Connexion) -> list[SessionResume]:
+def lister_sessions(connexion: Connexion, archivees: bool = False) -> list[SessionResume]:
     """Liste des sessions — l'accueil E4 permet de RETROUVER une session en cours.
 
     Constaté en session de validation (06/07/2026) : sans liste, une session
-    perdue de vue ne se retrouve que par URL devinée. Les sessions archivées
-    (S3.13) sont masquées — jamais supprimées.
+    perdue de vue ne se retrouve que par URL devinée. Par défaut les sessions
+    archivées (S3.13) sont masquées — jamais supprimées ; `?archivees=true`
+    liste le versant archivé (R7 : consultation et désarchivage depuis l'UI).
     """
     with connexion.cursor() as curseur:
         curseur.execute(
             "SELECT id, etape, projet_id, feature, titre FROM workflow_sessions "
-            "WHERE NOT archivee ORDER BY modifie_le DESC, id DESC"
+            "WHERE archivee = %(archivees)s ORDER BY modifie_le DESC, id DESC",
+            {"archivees": archivees},
         )
         return [
             SessionResume(
@@ -185,6 +187,25 @@ def gerer_session(session_id: int, entree: SessionMaj, connexion: Connexion) -> 
             raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
     connexion.commit()
     return {"id": ligne[0], "titre": ligne[1], "archivee": ligne[2]}
+
+
+@router.delete("/workflows/{session_id}", status_code=204)
+def supprimer_session(session_id: int, connexion: Connexion) -> None:
+    """R6 (refonte UX/UI, arbitrage UX8) : suppression DÉFINITIVE d'une session.
+
+    L'archivage (S3.13) reste le geste réversible ; ici tout part avec la
+    ligne : messages, traces A3, hypothèses, feedback et éditions suivent par
+    cascade FK (0008/0009/0014/0015), la conso de tokens est conservée
+    dérattachée (SET NULL, 0011 — la télémétrie globale reste juste).
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "DELETE FROM workflow_sessions WHERE id = %(id)s RETURNING id",
+            {"id": session_id},
+        )
+        if curseur.fetchone() is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
+    connexion.commit()
 
 
 @router.get("/workflows/{session_id}")
@@ -330,6 +351,45 @@ def appliquer_levees_proposees(session_id: int, connexion: Connexion) -> EtatSes
         if not appliquees:
             raise HTTPException(
                 status_code=409, detail="Aucune levée proposée à appliquer sur cette session."
+            )
+        etat = _lire_session(curseur, session_id)
+    connexion.commit()
+    return etat
+
+
+class DecisionLotEntree(BaseModel):
+    ids: list[int] = Field(min_length=1, description="Hypothèses cochées par le PO")
+    statut: Literal["confirmee", "rejetee"]  # LA décision du PO, appliquée au lot
+
+
+# Enregistrée AVANT /hypotheses/{hypothese_id} (capture dynamique), comme
+# « appliquer-propositions » ci-dessus.
+@router.post("/workflows/{session_id}/hypotheses/decider-lot")
+def decider_hypotheses_en_lot(
+    session_id: int, entree: DecisionLotEntree, connexion: Connexion
+) -> EtatSession:
+    """R4 (refonte UX/UI, H5) : décision en MASSE sur une sélection relue.
+
+    Arbitrage UX1 du 07/07/2026 (« la sélection en masse doit être possible ») :
+    le PO coche des hypothèses puis choisit Confirmer OU Rejeter — le statut
+    appliqué est LE SIEN, jamais inventé par la route ; seules les hypothèses
+    de la session, encore en_attente ET sélectionnées, bougent. L'esprit d'A8
+    tient : un geste explicite du PO, aucune levée silencieuse.
+    """
+    with connexion.cursor() as curseur:
+        if _lire_session(curseur, session_id) is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
+        curseur.execute(
+            "UPDATE workflow_hypotheses SET statut = %(statut)s, decidee_le = now() "
+            "WHERE session_id = %(sid)s AND statut = 'en_attente' "
+            "AND id = ANY(%(ids)s) RETURNING id",
+            {"sid": session_id, "statut": entree.statut, "ids": entree.ids},
+        )
+        decidees = curseur.fetchall()
+        if not decidees:
+            raise HTTPException(
+                status_code=409,
+                detail="Aucune hypothèse en attente ne correspond à la sélection.",
             )
         etat = _lire_session(curseur, session_id)
     connexion.commit()

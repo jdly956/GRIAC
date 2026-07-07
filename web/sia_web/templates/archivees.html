@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titre %}Sessions archivées{% endblock %}
+{% block fil_ariane %}
+<nav role="navigation" class="fr-breadcrumb" aria-label="vous êtes ici :">
+  <ol class="fr-breadcrumb__list">
+    <li><a class="fr-breadcrumb__link" href="{{ racine }}/">Sessions</a></li>
+    <li><a class="fr-breadcrumb__link" aria-current="page">Archivées</a></li>
+  </ol>
+</nav>
+{% endblock %}
+{% block contenu %}
+{# R7 (UX8) : le versant archivé, consultable — désarchiver ramène la session
+   à l'accueil ; la suppression reste le seul geste destructif (confirmé). #}
+<h1>Sessions archivées ({{ sessions | length }})</h1>
+<p class="fr-hint-text">L'archivage masque de l'accueil sans rien détruire ;
+  une session archivée reste consultable ici.</p>
+
+{% if sessions %}
+<div class="fr-table">
+  <table>
+    <caption>Sessions archivées</caption>
+    <thead>
+      <tr><th>Session</th><th>Étape</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for session in sessions %}
+      <tr>
+        <td><a class="fr-link" href="{{ racine }}/sessions/{{ session.id }}">{{ session.titre or session.apercu_feature }}</a></td>
+        <td><span class="fr-badge fr-badge--info">{{ libelles_etapes.get(session.etape, session.etape) }}</span></td>
+        <td class="actions-ligne">
+          <form method="post" action="{{ racine }}/sessions/{{ session.id }}/gerer" class="action-en-ligne">
+            <button class="fr-btn fr-btn--sm fr-btn--tertiary" name="desarchiver" value="1" type="submit">Désarchiver</button>
+          </form>
+          <form method="post" action="{{ racine }}/sessions/{{ session.id }}/supprimer" class="action-en-ligne"
+                onsubmit="return confirm('Supprimer définitivement cette session archivée ? Fil, hypothèses, stories et notes seront perdus.')">
+            <button class="fr-btn fr-btn--sm fr-btn--tertiary" type="submit">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>Aucune session archivée.</p>
+{% endif %}
+{% endblock %}

@@ -1,201 +1,136 @@
 {% extends "base.html" %}
-{% block titre %}Session {{ etat.id }}{% endblock %}
+{% block titre %}{{ etat.titre or "Session " ~ etat.id }}{% endblock %}
 {% block contenu %}
-<h1>Session {{ etat.id }} <span class="fr-badge fr-badge--info">{{ libelle_etape }}</span></h1>
-<p class="fr-hint-text">
-{% if modele_actif %}Modèle : <strong>{{ modele_actif }}</strong>{% endif %}
-{% if conso and conso.appels %}{% if modele_actif %} — {% endif %}Consommation de la session : {{ conso.appels }} appel(s),
-  {{ "{:,}".format(conso.tokens_entree).replace(",", " ") }} tokens entrée /
-  {{ "{:,}".format(conso.tokens_sortie).replace(",", " ") }} sortie{% endif %}
-</p>
 
 {% if erreur %}
 <div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
 {% endif %}
 
-{# S3.7 : la dernière réponse et sa traçabilité s'affichent EN HAUT — après un
-   envoi, tout ce qui compte est visible sans scroll (pas d'ancre : les POST
-   rendent la page directement, v1 sans JavaScript — le dynamisme = S3.8). #}
-{% if dernier_resultat %}
-<div class="panneau" id="dernier-echange">
-  <h2>Dernière réponse</h2>
-  <div class="contenu-md">{{ dernier_resultat.reponse | markdown | safe }}</div>
-  {% if dernier_resultat.sources %}
-  <p><strong>Sources mobilisées (A3)</strong> :</p>
-  <ul>
-    {% for source in dernier_resultat.sources %}
-    <li>{{ source.nom }} — {{ source.section }}
-      {% if source.extrait %}
-      {# S3.20 : extrait borné à l'affichage — un extrait anormalement long
-         (session 12 : 940k chars) rendait la page inutilisable. #}
-      <details><summary>extrait exact</summary><blockquote>{{ source.extrait[:2000] }}{% if source.extrait | length > 2000 %}<br><em>[… affichage tronqué à 2 000 caractères sur {{ source.extrait | length }}]</em>{% endif %}</blockquote></details>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  {% for divergence in dernier_resultat.divergences %}
-  <div class="fr-alert fr-alert--warning" role="alert"><p>{{ divergence }} — c'est vous qui arbitrez (A9).</p></div>
-  {% endfor %}
-  {% for avertissement in dernier_resultat.avertissements %}
-  <div class="fr-alert fr-alert--info" role="alert"><p>{{ avertissement }}</p></div>
-  {% endfor %}
-  {% if dernier_resultat.hypotheses_ajoutees %}
-  <p><strong>{{ dernier_resultat.hypotheses_ajoutees | length }} hypothèse(s) ajoutée(s) au registre</strong> (à valider ci-dessous).</p>
-  {% endif %}
-  {% if dernier_resultat.levees_proposees %}
-  <p><strong>{{ dernier_resultat.levees_proposees | length }} levée(s) d'hypothèse proposée(s)</strong> — la décision vous revient, dans le registre ci-dessous (A8).</p>
-  {% endif %}
-</div>
-{% endif %}
-
-<div class="panneau">
-  <h2>Votre message</h2>
-  {# S3.8 : hx-boost = envoi AJAX + remplacement de la page sans rechargement
-     blanc ; indicateur pendant la génération ; boutons désactivés (anti double
-     envoi). Sans JavaScript, ces formulaires restent des POST classiques. #}
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/message"
-        hx-boost="true" hx-disabled-elt="find button">
-    <p>Réponse d'interview, correction, ou <strong>question documentaire libre</strong> — même fil (A2).</p>
-    <textarea class="fr-input" name="message" rows="4" required></textarea>
-    <button class="fr-btn" type="submit">Envoyer</button>
-    <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
-  </form>
-  {% if etat.etape in ("redaction", "controle_dor") %}
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante" class="action-secondaire"
-        hx-boost="true" hx-disabled-elt="find button">
-    <p>Une story = rédaction + contrôle DoR — ce bouton enchaîne <strong>sans changer d'étape</strong>.</p>
-    <button class="fr-btn" type="submit">Story suivante</button>
-    <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
-  </form>
-  {% endif %}
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="action-secondaire"
-        hx-boost="true" hx-disabled-elt="find button">
-    <p><strong>Valider l'étape ? (règle 5)</strong>
-    {% if etat.etape in ("redaction", "controle_dor") %}
-    « Oui » quand <strong>toutes les stories candidates sont couvertes</strong> — sinon, préférez « Story suivante ».
-    {% endif %}
-    </p>
-    <label class="fr-label" for="commentaire">Commentaire (obligatoire si « Non »)</label>
-    <input class="fr-input" id="commentaire" name="commentaire" placeholder="précisez ce qu'il faut changer">
-    <button class="fr-btn" name="valide" value="oui">Oui — étape suivante</button>
-    <button class="fr-btn fr-btn--secondary" name="valide" value="non">Non — itérer</button>
-    <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
-  </form>
+{# R2 (refonte UX/UI, arbitrages UX4/UX5/UX6) : barre de session — étape (A5),
+   modèle + conso, exports (H13) et gestion — puis chat + rail. #}
+<div class="barre-session">
+  <div class="barre-session__titre">
+    <a class="fr-link fr-link--sm" href="{{ racine }}/">← Sessions</a>
+    <h1 class="fr-h6">{{ etat.titre or "Session " ~ etat.id }}</h1>
+  </div>
+  {% include "_stepper.html" %}
+  {% include "_meta_session.html" %}
+  <div class="barre-session__actions">
+    <a class="fr-btn fr-btn--secondary fr-btn--sm" href="{{ racine }}/sessions/{{ etat.id }}/export/csv"
+      title="Export autorisé même avec des hypothèses non levées — le récapitulatif les accompagne (A8)">CSV Jira</a>
+    <a class="fr-btn fr-btn--secondary fr-btn--sm" href="{{ racine }}/sessions/{{ etat.id }}/export/markdown"
+      title="Export autorisé même avec des hypothèses non levées — le récapitulatif les accompagne (A8)">Copier-coller (markdown)</a>
+    <details class="gerer-session">
+      <summary class="fr-btn fr-btn--tertiary fr-btn--sm">Gérer la session</summary>
+      <div class="gerer-session__menu">
+        <p class="fr-hint-text">Export autorisé même avec des hypothèses non levées —
+          le récapitulatif les accompagne (A8).</p>
+        <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/gerer">
+          <label class="fr-label" for="titre-session">Nom affiché à l'accueil</label>
+          <input class="fr-input" id="titre-session" name="titre" placeholder="ex. Priorisation des actes > seuil">
+          <button class="fr-btn fr-btn--sm" type="submit">Renommer</button>
+        </form>
+        <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/gerer" class="action-secondaire">
+          <p class="fr-hint-text">L'archivage masque la session de l'accueil — rien n'est supprimé.</p>
+          <button class="fr-btn fr-btn--sm fr-btn--secondary" name="archiver" value="1" type="submit">Archiver la session</button>
+        </form>
+        {# R6 (UX8) : suppression DÉFINITIVE — fil, hypothèses, stories et
+           feedback partent avec la session (cascade). L'archivage reste le
+           geste réversible. #}
+        <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/supprimer" class="action-secondaire"
+              onsubmit="return confirm('Supprimer définitivement cette session ? Fil, hypothèses, stories et notes seront perdus — l\'archivage est le geste réversible.')">
+          <button class="fr-btn fr-btn--sm fr-btn--secondary" type="submit">Supprimer définitivement</button>
+        </form>
+      </div>
+    </details>
+  </div>
 </div>
 
-{# S3.7 : registre replié par défaut — déplié seulement si une levée proposée
-   attend la décision du PO (A8 : c'est le seul cas où il réclame une action). #}
-<details class="panneau" {% if nb_levees_a_decider %}open{% endif %}>
-  <summary><strong>Hypothèses à valider ({{ etat.nb_en_attente }} en attente{% if nb_levees_a_decider %}, dont {{ nb_levees_a_decider }} levée(s) proposée(s) à décider{% endif %})</strong></summary>
-  <p>Chaque hypothèse se lève <strong>individuellement</strong> — une validation d'étape ne lève rien (A8).</p>
-  {% if nb_levees_a_decider %}
-  {# S3.21 (arbitrage 07/07) : le PO relit les propositions listées ci-dessous
-     et les applique d'un clic — sa décision, en lot. Seules les hypothèses
-     portant une proposition du moteur sont touchées. #}
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/appliquer-propositions"
-        onsubmit="return confirm('Appliquer les {{ nb_levees_a_decider }} levée(s) proposée(s) telles qu\'affichées (Confirmer/Rejeter) ? Les hypothèses sans proposition ne bougent pas.')">
-    <button class="fr-btn fr-btn--sm" type="submit">Appliquer les {{ nb_levees_a_decider }} levée(s) proposée(s)</button>
-    <span class="fr-hint-text">Relisez chaque proposition ci-dessous avant d'appliquer — vous pouvez aussi décider hypothèse par hypothèse.</span>
-  </form>
-  {% endif %}
-  {% if etat.hypotheses %}
-  <ul>
-    {% for hypothese in etat.hypotheses %}
-    <li>
-      <em>[{{ hypothese.origine }}]</em> {{ hypothese.texte }} — <strong>{{ hypothese.statut }}</strong>
-      {% if hypothese.statut == "en_attente" %}
-      {% if hypothese.statut_propose %}
-      <span class="fr-badge fr-badge--new">Levée proposée : {{ "Confirmer" if hypothese.statut_propose == "confirmee" else "Rejeter" }}</span>
-      {% if hypothese.justification_proposee %}<em>{{ hypothese.justification_proposee }}</em>{% endif %}
-      — c'est vous qui décidez (A8) :
-      {% endif %}
-      <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/{{ hypothese.id }}" style="display:inline">
-        <button class="fr-btn fr-btn--sm" name="statut" value="confirmee">Confirmer</button>
-        <button class="fr-btn fr-btn--sm fr-btn--secondary" name="statut" value="rejetee">Rejeter</button>
-      </form>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p>Aucune hypothèse enregistrée pour l'instant.</p>
-  {% endif %}
-</details>
+<div class="fr-grid-row fr-grid-row--gutters">
+  <div class="fr-col-12 fr-col-lg-8">
+    {# UX6 : chat classique — fil chronologique COMPLET (H2) à défilement
+       interne, les nouveaux messages arrivent en bas, saisie fixée en bas.
+       R3 (H7) : les POST htmx ajoutent les bulles au fil (beforeend) et
+       mettent à jour les panneaux en out-of-band — sans JavaScript, les
+       mêmes formulaires rendent la page complète (H14). #}
+    <section class="chat" aria-label="Fil de la conversation">
+      <div class="fil" id="fil">
+        {% for message in messages %}
+        {% include "_message.html" %}
+        {% endfor %}
+        {% if dernier_message %}
+        {# Le résultat du POST rejoint le BAS du fil — sur la stack réelle il y
+           figure déjà (persisté par l'api, S3.9) et ce bloc est sauté. #}
+        <div id="dernier-echange">
+          {% set message = dernier_message %}
+          {% include "_message.html" %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="composeur">
+        <div class="actions-etape">
+          {% if etat.etape in ("redaction", "controle_dor") %}
+          <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante"
+                hx-post="{{ racine }}/sessions/{{ etat.id }}/story-suivante"
+                hx-target="#fil" hx-swap="beforeend" hx-disabled-elt="find button">
+            <button class="fr-btn fr-btn--secondary fr-btn--sm" type="submit"
+              title="Une story = rédaction + contrôle DoR — ce bouton enchaîne sans changer d'étape.">Story suivante</button>
+            <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
+          </form>
+          <span class="fr-hint-text">enchaîne la story suivante <strong>sans changer d'étape</strong></span>
+          {% endif %}
+          <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="valider-etape"
+                hx-post="{{ racine }}/sessions/{{ etat.id }}/valider"
+                hx-target="#fil" hx-swap="beforeend" hx-disabled-elt="find button">
+            <span class="fr-hint-text"><strong>Valider l'étape ? (règle 5)</strong>
+            {% if etat.etape in ("redaction", "controle_dor") %}
+            « Oui » quand <strong>toutes les stories candidates sont couvertes</strong>.
+            {% endif %}
+            </span>
+            <input class="fr-input" name="commentaire" placeholder="si « Non » : précisez ce qu'il faut changer"
+              aria-label="Commentaire (obligatoire si « Non »)">
+            <button class="fr-btn fr-btn--sm" name="valide" value="oui">Oui — étape suivante</button>
+            <button class="fr-btn fr-btn--sm fr-btn--secondary" name="valide" value="non">Non — itérer</button>
+            <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
+          </form>
+        </div>
+        <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/message"
+              hx-post="{{ racine }}/sessions/{{ etat.id }}/message"
+              hx-target="#fil" hx-swap="beforeend" hx-disabled-elt="find button"
+              hx-on::after-request="if (event.detail.successful) this.reset()">
+          <p class="fr-hint-text">Réponse d'interview, correction, ou <strong>question documentaire libre</strong> — même fil (A2).
+            Rappel : pas de données personnelles (D15).</p>
+          <div class="saisie">
+            <textarea class="fr-input" name="message" rows="3" required aria-label="Votre message"></textarea>
+            <button class="fr-btn" type="submit">Envoyer</button>
+          </div>
+          <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
+        </form>
+      </div>
+    </section>
+    <script>
+      /* R2 : le fil démarre en bas (chat) — sans JavaScript, on scrolle
+         manuellement (repli H14). R3 : re-scroll après chaque ajout htmx. */
+      (function () {
+        var fil = document.getElementById("fil");
+        if (fil) { fil.scrollTop = fil.scrollHeight; }
+      })();
+      document.body.addEventListener("htmx:afterSwap", function () {
+        var fil = document.getElementById("fil");
+        if (fil) { fil.scrollTop = fil.scrollHeight; }
+      });
+    </script>
+  </div>
 
-<h2>Fil de la conversation</h2>
-{# S3.7 : seuls les derniers échanges restent dépliés — les précédents vivent
-   dans un bloc repliable (la page ne s'allonge plus indéfiniment). #}
-{% set anciens = messages[:-4] %}
-{% if anciens %}
-<details class="panneau">
-  <summary>Voir les {{ anciens | length }} échanges précédents</summary>
-  {% for message in anciens %}
-  {% include "_message.html" %}
-  {% endfor %}
-</details>
-{% endif %}
-{% for message in messages[-4:] %}
-{% include "_message.html" %}
-{% endfor %}
-
-{% if stories %}
-<details class="panneau">
-  <summary><strong>Noter les stories (E4.4)</strong> — note 1–5 + commentaire, alimente la télémétrie</summary>
-  {% for titre in stories %}
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/feedback">
-    <input type="hidden" name="story_titre" value="{{ titre }}">
-    <p><strong>{{ titre }}</strong></p>
-    <select class="fr-select" name="note" aria-label="Note de « {{ titre }} »">
-      {% for note in [5, 4, 3, 2, 1] %}
-      <option value="{{ note }}">{{ note }}</option>
-      {% endfor %}
-    </select>
-    <input class="fr-input" name="commentaire" placeholder="Commentaire (optionnel)"
-      aria-label="Commentaire sur « {{ titre }} »">
-    <button class="fr-btn fr-btn--sm" type="submit">Noter</button>
-  </form>
-  {% endfor %}
-</details>
-{% endif %}
-
-{% if stories_contenus %}
-<details class="panneau">
-  <summary><strong>Stories — éditer / copier ({{ stories_contenus | length }})</strong> — la version éditée gagne à l'export (S3.13)</summary>
-  {% for story in stories_contenus %}
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/stories/edition" class="action-secondaire">
-    <p><strong>{{ story.titre }}</strong>
-      {% if story.editee %}<span class="fr-badge fr-badge--new">éditée — cette version part à l'export</span>{% endif %}
-    </p>
-    <input type="hidden" name="titre" value="{{ story.titre }}">
-    <textarea class="fr-input" name="contenu" rows="8">{{ story.contenu }}</textarea>
-    <button class="fr-btn fr-btn--sm" type="submit">Enregistrer l'édition</button>
-    <button class="fr-btn fr-btn--sm fr-btn--secondary" type="button"
-      onclick="navigator.clipboard.writeText(this.closest('form').querySelector('textarea').value)">Copier</button>
-  </form>
-  {% endfor %}
-</details>
-{% endif %}
-
-<details class="panneau">
-  <summary><strong>Gérer la session</strong> — renommer, archiver</summary>
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/gerer">
-    <label class="fr-label" for="titre-session">Nom affiché à l'accueil</label>
-    <input class="fr-input" id="titre-session" name="titre" placeholder="ex. Priorisation des actes > seuil">
-    <button class="fr-btn fr-btn--sm" type="submit">Renommer</button>
-  </form>
-  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/gerer" class="action-secondaire">
-    <p>L'archivage masque la session de l'accueil — rien n'est supprimé.</p>
-    <button class="fr-btn fr-btn--sm fr-btn--secondary" name="archiver" value="1" type="submit">Archiver la session</button>
-  </form>
-</details>
-
-<div class="panneau">
-  <h2>Export (E5)</h2>
-  <p>
-    <a class="fr-btn fr-btn--secondary" href="{{ racine }}/sessions/{{ etat.id }}/export/csv">CSV Jira</a>
-    <a class="fr-btn fr-btn--secondary" href="{{ racine }}/sessions/{{ etat.id }}/export/markdown">Copier-coller (markdown)</a>
-  </p>
-  <p>Export autorisé même avec des hypothèses non levées — le récapitulatif les accompagne (A8).</p>
+  <div class="fr-col-12 fr-col-lg-4">
+    {# UX5 : rail droit — panneaux EMPILÉS, tous visibles, repliables un à un.
+       `details` plutôt que l'accordéon DSFR : le repli sans JavaScript est un
+       invariant (H14) — les composants internes restent DSFR (UX13). #}
+    <aside class="rail" aria-label="Panneaux de travail">
+      {% include "_rail_stories.html" %}
+      {% include "_rail_hypotheses.html" %}
+      {% include "_rail_sources.html" %}
+    </aside>
+  </div>
 </div>
 {% endblock %}

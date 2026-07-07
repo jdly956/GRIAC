@@ -110,20 +110,20 @@ def test_prefixe_root_path_porte_liens_mais_pas_les_redirections(api) -> None:
     assert redirection.headers["location"] == "/sessions/7"
 
 
-def test_registre_replie_sauf_levee_proposee_a_decider(api) -> None:
-    # S3.7 : le registre est replié par défaut ; il ne se déplie tout seul que
-    # si une levée proposée (S2.13) attend la décision du PO.
+def test_panneau_hypotheses_toujours_visible_dans_le_rail(api) -> None:
+    # R2 (UX4/UX5, recale S3.7) : le registre vit dans le rail droit, OUVERT en
+    # permanence — compteur et levées proposées (S2.13) restent sous les yeux.
     api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)  # 1 en attente, sans proposition
     api.brancher("GET", "/workflows/1/messages", 200, [])
     texte = client.get("/sessions/1").text
-    assert '<details class="panneau" >' in texte and "Hypothèses à valider (1 en attente)" in texte
+    assert '<details class="panneau-rail" open id="hypotheses">' in texte
+    assert "Hypothèses à valider (1 en attente)" in texte
     avec_proposition = dict(
         ETAT_SESSION,
         hypotheses=[dict(ETAT_SESSION["hypotheses"][0], statut_propose="confirmee")],
     )
     api.brancher("GET", "/workflows/1", 200, avec_proposition)
     texte = client.get("/sessions/1").text
-    assert '<details class="panneau" open>' in texte
     assert "1 levée(s) proposée(s) à décider" in texte
 
 
@@ -147,26 +147,26 @@ def test_application_en_lot_des_levees_proposees(api) -> None:
     assert ("POST", "/workflows/1/hypotheses/appliquer-propositions", None) in api.appels
 
 
-def test_fil_replie_sauf_derniers_echanges(api) -> None:
-    # S3.7 : la page ne s'allonge plus indéfiniment — seuls les 4 derniers
-    # messages restent dépliés, les précédents vivent dans un bloc repliable.
+def test_fil_complet_charge_dans_le_chat(api) -> None:
+    # R2 (H2, recale S3.7) : le fil charge l'historique COMPLET — le chat a son
+    # propre défilement, plus de bloc « voir les échanges précédents ».
     six_messages = [
         {"role": "po", "etape": "interview", "contenu": f"message numéro {i}"} for i in range(6)
     ]
     api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
     api.brancher("GET", "/workflows/1/messages", 200, six_messages)
     texte = client.get("/sessions/1").text
-    assert "Voir les 2 échanges précédents" in texte
-    assert "message numéro 5" in texte  # les récents sont toujours là
-    api.brancher("GET", "/workflows/1/messages", 200, six_messages[:2])
-    assert "Voir les" not in client.get("/sessions/1").text  # ≤ 4 messages : rien à replier
+    assert "Voir les" not in texte
+    for i in range(6):
+        assert f"message numéro {i}" in texte  # tous les messages sont dans le fil
 
 
-def test_derniere_reponse_affichee_en_haut_apres_envoi(api) -> None:
-    # S3.7 : après un envoi, la réponse (rendue) et sa traçabilité sont en haut
-    # de page — plus besoin de scroller jusqu'au fil.
+def test_reponse_du_post_rejoint_le_bas_du_fil(api) -> None:
+    # R2 (UX6/H3, recale S3.7) : après un envoi, la réponse est le DERNIER
+    # message du fil (chat classique, ancre #dernier-echange) — le panneau
+    # « Dernière réponse » séparé a disparu.
     api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
-    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
     api.brancher(
         "POST",
         "/workflows/1/message",
@@ -183,7 +183,18 @@ def test_derniere_reponse_affichee_en_haut_apres_envoi(api) -> None:
     )
     texte = client.post("/sessions/1/message", data={"message": "go"}).text
     assert 'id="dernier-echange"' in texte
-    assert "<strong>Voici la story</strong>" in texte  # rendue markdown, en haut
+    assert "<strong>Voici la story</strong>" in texte  # rendue markdown
+    assert texte.index("Q1 ? Q2 ?") < texte.index("Voici la story")  # au BAS du fil
+    # Stack réelle : la réponse est déjà persistée dans le fil (S3.9) — le bloc
+    # d'appoint est sauté, pas de doublon.
+    api.brancher(
+        "GET",
+        "/workflows/1/messages",
+        200,
+        MESSAGES + [{"role": "assistant", "etape": "interview", "contenu": "**Voici la story**"}],
+    )
+    texte = client.post("/sessions/1/message", data={"message": "go"}).text
+    assert texte.count("Voici la story") == 1  # une seule occurrence
 
 
 def test_messages_assistant_rendus_en_markdown(api) -> None:
@@ -297,9 +308,9 @@ def test_story_suivante_appelle_le_moteur_sans_avancer(api) -> None:
 
 
 def test_htmx_vendore_et_branche_en_progressive_enhancement(api) -> None:
-    # S3.8 : htmx est servi par l'app (pas de CDN) et les formulaires longs
-    # portent hx-boost + anti double-envoi + indicateur — tout en restant des
-    # POST classiques sans JavaScript.
+    # S3.8 (recalée R3/H7, validée PO 07/07) : htmx est servi par l'app (pas de
+    # CDN) et les formulaires longs POSTent en fragments ciblés vers le fil
+    # (anti double-envoi + indicateur) — POST classiques intacts sans JavaScript.
     statique = client.get("/static/htmx.min.js")
     assert statique.status_code == 200
     assert statique.text.startswith("var htmx=")
@@ -307,7 +318,8 @@ def test_htmx_vendore_et_branche_en_progressive_enhancement(api) -> None:
     api.brancher("GET", "/workflows/1/messages", 200, [])
     texte = client.get("/sessions/1").text
     assert 'src="/static/htmx.min.js"' in texte
-    assert texte.count('hx-boost="true"') == 3  # message, story suivante, valider
+    assert texte.count('hx-post="/sessions/1/') == 3  # message, story suivante, valider
+    assert texte.count('hx-target="#fil"') == 3
     assert texte.count('hx-disabled-elt="find button"') == 3
     assert "Génération en cours" in texte
     assert 'action="/sessions/1/message"' in texte  # le repli sans JS demeure
@@ -535,10 +547,10 @@ def test_edition_et_gestion_de_session(api) -> None:
         [{"titre": "Consulter mon dossier", "contenu": "**US — …**", "editee": True}],
     )
     texte = client.get("/sessions/1").text
-    assert "Stories — éditer / copier (1)" in texte
+    assert "Stories produites (1)" in texte  # R2 : le panneau du rail
     assert "éditée — cette version part à l'export" in texte
     assert "navigator.clipboard.writeText" in texte  # bouton copier (dégradé sans JS : textarea)
-    assert "Gérer la session" in texte
+    assert "Gérer la session" in texte  # R2 : dans la barre de session
 
     api.brancher("PUT", "/workflows/1/stories/edition", 200, {})
     reponse = client.post(
@@ -746,14 +758,17 @@ def test_decision_hypothese_et_redirection(api) -> None:
 # --- S2.10 : feedback par story + télémétrie (E4.4) ---
 
 
-def test_panneau_de_notation_quand_des_stories_existent(api) -> None:
+def test_panneau_stories_du_rail_porte_la_notation(api) -> None:
+    # R2 (H11) : la notation E4.4 vit dans le panneau « Stories produites » du
+    # rail — repli sur les seuls titres si l'endpoint contenus manque.
     api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
     api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
     api.brancher("GET", "/workflows/1/stories", 200, ["Consulter mon dossier"])
     reponse = client.get("/sessions/1")
     assert reponse.status_code == 200
-    assert "Noter les stories" in reponse.text
+    assert "Stories produites (1)" in reponse.text
     assert "Consulter mon dossier" in reponse.text
+    assert 'aria-label="Note de « Consulter mon dossier »"' in reponse.text
 
 
 def test_pas_de_panneau_sans_stories(api) -> None:
@@ -762,7 +777,7 @@ def test_pas_de_panneau_sans_stories(api) -> None:
     api.brancher("GET", "/workflows/1/stories", 200, [])
     reponse = client.get("/sessions/1")
     assert reponse.status_code == 200
-    assert "Noter les stories" not in reponse.text
+    assert "Stories produites" not in reponse.text
 
 
 def test_notation_envoie_le_feedback_et_redirige(api) -> None:
@@ -830,6 +845,7 @@ PROJET_DETAIL = {
     "id": 1,
     "nom": "Téléservice X",
     "contexte": "Suivi des demandes",
+    "archive": False,  # R9 — extension mécanique de la fixture
     "nfrs": [{"type": "performance", "formulation": "p95 < 1 s", "valeur_cible": "1 s"}],
     "dossiers": [
         {"dossier": "projet-alpha", "origine": "suggestion"},
@@ -896,6 +912,67 @@ def test_ecran_projet_detail_suggestions_et_ajout_manuel(api) -> None:
     assert "elles ne valent pas association" in reponse.text  # A6
 
 
+def test_edition_projet_apres_creation(api) -> None:
+    # R9 : le formulaire d'édition envoie un PUT complet — NFR reconstruites
+    # depuis les lignes remplies, dossiers A6 PRÉSERVÉS tels quels.
+    api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
+    api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
+    texte = client.get("/projets/1").text
+    assert "Modifier le projet" in texte
+    assert 'value="p95 &lt; 1 s"' in texte  # NFR existante pré-remplie
+
+    api.brancher("PUT", "/projects/1", 200, PROJET_DETAIL)
+    reponse = client.post(
+        "/projets/1/modifier",
+        data={
+            "nom": "Téléservice X v2",
+            "contexte": "Nouveau périmètre",
+            "nfr_type_1": "performance",
+            "nfr_formulation_1": "",  # formulation vidée : la NFR est retirée
+            "nfr_type_2": "rgpd",
+            "nfr_formulation_2": "registre des traitements tenu",
+            "nfr_valeur_2": "",
+        },
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    methode, chemin, corps = api.appels[-1]
+    assert (methode, chemin) == ("PUT", "/projects/1")
+    assert corps["nom"] == "Téléservice X v2"
+    assert corps["contexte"] == "Nouveau périmètre"
+    assert corps["nfrs"] == [
+        {"type": "rgpd", "formulation": "registre des traitements tenu", "valeur_cible": None}
+    ]
+    assert corps["dossiers"] == PROJET_DETAIL["dossiers"]  # A6 intacte
+
+
+def test_cycle_de_vie_projet_archiver_et_supprimer(api) -> None:
+    # R9 (UX8/H9) : archiver = PATCH réversible ; supprimer = DELETE confirmé
+    # (l'écran rappelle que les sessions liées continueront sans le contexte).
+    api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
+    api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
+    texte = client.get("/projets/1").text
+    assert "Archiver le projet" in texte
+    assert "continueront SANS son contexte" in texte  # l'avertissement H9
+
+    api.brancher("PATCH", "/projects/1", 200, {})
+    reponse = client.post("/projets/1/gerer", data={"archiver": "1"}, follow_redirects=False)
+    assert reponse.status_code == 303 and reponse.headers["location"] == "/projets"
+    patch = next(a for a in api.appels if a[0] == "PATCH")
+    assert patch[2] == {"archive": True}
+
+    api.brancher("DELETE", "/projects/1", 204, {})
+    reponse = client.post("/projets/1/supprimer", follow_redirects=False)
+    assert reponse.status_code == 303
+    assert ("DELETE", "/projects/1", None) in api.appels
+
+    # Les archivés restent visibles sur l'écran projets (section dédiée).
+    api.brancher("GET", "/projects", 200, [])
+    api.brancher("GET", "/projects?archives=true", 200, [dict(PROJET_DETAIL, archive=True)])
+    texte = client.get("/projets").text
+    assert "Projets archivés (1)" in texte and "Désarchiver" in texte
+
+
 def test_association_dossiers_envoie_un_put_complet(api) -> None:
     api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
     api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
@@ -919,6 +996,7 @@ def test_association_dossiers_envoie_un_put_complet(api) -> None:
 
 DOCUMENTS = [
     {
+        "id": 1,
         "chemin": "projet-alpha/spec-v2.docx",
         "nom": "spec-v2.docx",
         "extension": "docx",
@@ -926,8 +1004,10 @@ DOCUMENTS = [
         "est_reference": True,
         "doublon": False,
         "projet_suggere": "projet-alpha",
+        "est_obsolete": False,
     },
     {
+        "id": 2,
         "chemin": "divers/scan.pdf",
         "nom": "scan.pdf",
         "extension": "pdf",
@@ -935,6 +1015,7 @@ DOCUMENTS = [
         "est_reference": False,
         "doublon": False,
         "projet_suggere": None,
+        "est_obsolete": True,  # R8 : la bascule « Réactiver » s'affiche
     },
 ]
 
@@ -969,6 +1050,42 @@ def test_ecran_documents_couverture_ok_sans_alerte(api) -> None:
     assert "Couverture documentaire faible" not in reponse.text
 
 
+def test_inventaire_groupe_par_dossier_avec_obsolete(api) -> None:
+    # R8 : inventaire regroupé PAR DOSSIER (la clé A6/S3.18) avec projets
+    # associés affichés ; bascule obsolète/réactiver par document (H10).
+    api.brancher("GET", "/documents", 200, DOCUMENTS)
+    api.brancher("GET", "/documents/stats", 200, _stats(1.0))
+    api.brancher(
+        "GET",
+        "/projects",
+        200,
+        [
+            {
+                "id": 1,
+                "nom": "Téléservice X",
+                "contexte": "",
+                "nfrs": [],
+                "dossiers": [{"dossier": "projet-alpha", "origine": "po"}],
+            }
+        ],
+    )
+    texte = client.get("/documents").text
+    assert "📁 projet-alpha" in texte and "📁 divers" in texte  # groupes
+    assert "associé au(x) projet(s) : Téléservice X" in texte
+    assert "associé à aucun projet" in texte  # divers — le trou A6 est visible
+    assert 'action="/documents/1/obsolete"' in texte
+    assert "Réactiver" in texte  # scan.pdf est obsolète → bascule inverse
+    assert ">obsolète<" in texte  # badge sur la ligne
+
+    api.brancher("PATCH", "/documents/1", 200, {})
+    reponse = client.post(
+        "/documents/1/obsolete", data={"est_obsolete": "1"}, follow_redirects=False
+    )
+    assert reponse.status_code == 303
+    patch = next(a for a in api.appels if a[0] == "PATCH")
+    assert patch[2] == {"est_obsolete": True}
+
+
 def test_export_proxifie(api, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         api_client,
@@ -979,3 +1096,334 @@ def test_export_proxifie(api, monkeypatch: pytest.MonkeyPatch) -> None:
     assert reponse.status_code == 200
     assert reponse.headers["content-type"].startswith("text/csv")
     assert reponse.text.startswith('"Summary"')
+
+
+# --- R1 : socle DSFR & navigation (refonte UX/UI, arbitrages UX9/UX11/UX13) ---
+
+
+def test_socle_dsfr_header_notice_et_ressources(api) -> None:
+    # R1 : en-tête DSFR officiel + notice D15 discrète (l'obligation d'affichage
+    # demeure — plus d'alerte pleine largeur) ; CSS ET JS DSFR chargés (H15).
+    api.brancher("GET", "/projects", 200, [])
+    texte = client.get("/").text
+    assert 'class="fr-header"' in texte and 'class="fr-nav"' in texte
+    assert 'class="fr-notice fr-notice--info"' in texte
+    assert "Ne collez pas de données personnelles" in texte  # D15 tenu
+    assert "fr-alert fr-alert--warning" not in texte  # l'ancienne alerte a disparu
+    assert "dsfr.min.css" in texte and "dsfr.module.min.js" in texte
+
+
+def test_navigation_entree_active_par_ecran(api) -> None:
+    # R1 : l'entrée active porte aria-current — le PO sait toujours où il est.
+    api.brancher("GET", "/projects", 200, [])
+    accueil = client.get("/").text
+    assert '<a class="fr-nav__link" href="/" aria-current="true">Sessions</a>' in accueil
+    api.brancher("GET", "/documents", 200, [])
+    api.brancher("GET", "/documents/stats", 200, DOCS_STATS)
+    documents = client.get("/documents").text
+    assert 'href="/documents" aria-current="true">Mes documents</a>' in documents
+    assert 'href="/" aria-current="true"' not in documents  # une seule entrée active
+
+
+def test_fil_ariane_sur_les_fiches(api) -> None:
+    # R1 : fil d'Ariane DSFR sur les sous-pages (fiche document, fiche projet).
+    api.brancher("GET", "/documents/1", 200, FICHE_MINIMALE)
+    texte = client.get("/documents/1").text
+    assert 'class="fr-breadcrumb"' in texte
+    assert 'href="/documents">Mes documents</a>' in texte
+    api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
+    api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
+    assert 'class="fr-breadcrumb"' in client.get("/projets/1").text
+
+
+# --- R2 : écran session — barre, chat, rail (refonte UX/UI, vague 1) ---
+
+
+def test_barre_session_stepper_et_actions(api) -> None:
+    # R2 : la barre de session porte le stepper d'étape (A5/H8), les exports
+    # (H13) et la gestion de session — plus de blocs en bas de page.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert "Étape 2 sur 6" in texte  # interview = 2e étape du workflow 0→5
+    assert 'data-fr-current-step="2" data-fr-steps="6"' in texte
+    assert 'href="/sessions/1/export/csv"' in texte  # exports dans la barre (H13)
+    assert "Gérer la session" in texte
+
+
+def test_rail_sources_de_la_derniere_reponse(api) -> None:
+    # R2 (H6) : le rail montre les sources du dernier message assistant tracé
+    # (S3.9) — l'historique complet reste dans le fil.
+    messages = MESSAGES + [
+        {
+            "role": "assistant",
+            "etape": "interview",
+            "contenu": "Réponse sourcée",
+            "sources": [{"nom": "spec.docx", "section": "Spec > CA", "extrait": "30 jours"}],
+        }
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, messages)
+    texte = client.get("/sessions/1").text
+    assert "Sources de la dernière réponse (1)" in texte
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)  # aucun message sourcé
+    texte = client.get("/sessions/1").text
+    assert "Sources de la dernière réponse (0)" in texte
+    assert "Aucune source mobilisée sur la dernière réponse" in texte
+
+
+# --- R3 : dynamisme htmx en fragments ciblés (H7, validée PO 07/07) ---
+
+REPONSE_MOTEUR = {
+    "reponse": "**Frag**",
+    "etape": "interview",
+    "sources": [{"nom": "spec.docx", "section": "Spec > CA", "extrait": "30 jours"}],
+    "hypotheses_ajoutees": ["Seuil 10 Mo [HYPOTHÈSE À VALIDER]"],
+    "levees_proposees": [],
+    "divergences": [],
+    "avertissements": [],
+}
+
+
+def test_envoi_htmx_renvoie_fragment_bulles_et_oob(api) -> None:
+    # R3 : un POST htmx reçoit un FRAGMENT — bulles PO + assistant à ajouter au
+    # fil, panneaux du rail / stepper / conso en out-of-band. Pas de page.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("POST", "/workflows/1/message", 200, REPONSE_MOTEUR)
+    reponse = client.post(
+        "/sessions/1/message", data={"message": "ma question"}, headers={"HX-Request": "true"}
+    )
+    texte = reponse.text
+    assert "fr-header" not in texte  # un fragment, pas la page complète
+    assert "ma question" in texte  # bulle PO ajoutée au fil
+    assert "<strong>Frag</strong>" in texte  # bulle assistant rendue markdown
+    assert 'id="dernier-echange"' in texte
+    assert "1 hypothèse(s) ajoutée(s)" in texte  # signal A8 dans la bulle
+    assert texte.count('hx-swap-oob="true"') == 5  # stepper, conso, 3 panneaux du rail
+    assert 'id="stepper"' in texte and 'id="sources-rail"' in texte
+    assert "Sources de la dernière réponse (1)" in texte
+
+
+def test_envoi_sans_javascript_reste_pleine_page(api) -> None:
+    # H14 : le même POST sans en-tête HX-Request rend la page complète.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
+    api.brancher("POST", "/workflows/1/message", 200, REPONSE_MOTEUR)
+    texte = client.post("/sessions/1/message", data={"message": "go"}).text
+    assert "fr-header" in texte  # page complète (repli)
+
+
+def test_erreur_moteur_en_fragment_sans_oob(api) -> None:
+    # R3 : sur erreur, le fragment ne porte que l'alerte — pas d'out-of-band
+    # (l'écran garde l'état du dernier succès), pas de bulle PO orpheline.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("POST", "/workflows/1/message", 429, {"detail": "quota Albert atteint"})
+    reponse = client.post(
+        "/sessions/1/message", data={"message": "go"}, headers={"HX-Request": "true"}
+    )
+    texte = reponse.text
+    assert "quota Albert atteint" in texte and "fr-alert--error" in texte
+    assert "hx-swap-oob" not in texte
+    assert 'id="dernier-echange"' not in texte
+
+
+def test_valider_htmx_fragment_avec_stepper_a_jour(api) -> None:
+    # R3 : la validation d'étape en htmx renvoie la décision (bulle PO), la
+    # réponse du moteur et le stepper OOB — l'étape affichée suit (A5).
+    api.brancher("POST", "/workflows/1/avancer", 200, {})
+    api.brancher(
+        "POST",
+        "/workflows/1/message",
+        200,
+        dict(REPONSE_MOTEUR, reponse="Étape suivante…", etape="stories_candidates"),
+    )
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, etape="stories_candidates"))
+    reponse = client.post(
+        "/sessions/1/valider",
+        data={"valide": "oui", "commentaire": ""},
+        headers={"HX-Request": "true"},
+    )
+    texte = reponse.text
+    assert "Étape validée (Oui)" in texte  # la décision PO apparaît dans le fil
+    assert 'id="stepper"' in texte and 'hx-swap-oob="true"' in texte
+    assert 'data-fr-current-step="3"' in texte  # stories_candidates = 3e étape
+
+
+# --- R4 : sélection en masse des hypothèses (H5, arbitrage UX1) ---
+
+
+def test_selection_en_masse_des_hypotheses(api) -> None:
+    # R4 : cases rattachées au formulaire de lot par l'attribut form (pas
+    # d'imbrication de formulaires) ; le statut envoyé est celui du bouton
+    # cliqué par le PO (A8) ; seules les en_attente sont cochables.
+    etat = dict(
+        ETAT_SESSION,
+        hypotheses=[
+            dict(ETAT_SESSION["hypotheses"][0]),
+            {
+                "id": 4,
+                "texte": "SSO requis [HYPOTHÈSE À VALIDER]",
+                "origine": "modele",
+                "statut": "en_attente",
+            },
+            {"id": 5, "texte": "Déjà levée", "origine": "po", "statut": "confirmee"},
+        ],
+        nb_en_attente=2,
+    )
+    api.brancher("GET", "/workflows/1", 200, etat)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert texte.count('form="form-lot-hypotheses"') == 2  # 2 en_attente cochables, pas la levée
+    assert "Confirmer la sélection" in texte and "Rejeter la sélection" in texte
+    assert "Tout sélectionner" in texte
+
+    api.brancher("POST", "/workflows/1/hypotheses/decider-lot", 200, {})
+    reponse = client.post(
+        "/sessions/1/hypotheses/decider-lot",
+        data={"statut": "rejetee", "hypothese_ids": ["3", "4"]},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    appel = next(a for a in api.appels if "decider-lot" in a[1])
+    assert appel[2] == {"ids": [3, 4], "statut": "rejetee"}
+
+
+def test_lot_sans_selection_ne_touche_pas_l_api(api) -> None:
+    # A8 : aucune case cochée → aucun appel api — jamais de décision implicite.
+    reponse = client.post(
+        "/sessions/1/hypotheses/decider-lot", data={"statut": "confirmee"}, follow_redirects=False
+    )
+    assert reponse.status_code == 303
+    assert not any("decider-lot" in chemin for _, chemin, _ in api.appels)
+
+
+# --- R10 : « Suivi & réglages » fusionnés (UX9/H12) ---
+
+
+def test_suivi_et_reglages_fusionnes(api) -> None:
+    # R10 : une page à deux sections ancrées ; les anciennes routes redirigent ;
+    # la navigation passe à 4 entrées ; chaque section dégrade indépendamment.
+    api.brancher(
+        "GET",
+        "/telemetrie",
+        200,
+        {
+            "sessions_total": 3,
+            "actifs_hebdo": [],
+            "stories_notees": 0,
+            "note_moyenne": None,
+            "pourcentage_conservees": None,
+            "validations_total": 0,
+            "taux_edition": None,
+        },
+    )
+    api.brancher(
+        "GET",
+        "/parametres",
+        200,
+        {
+            "modele_chat": None,
+            "modele_actif": "openweight-medium",
+            "modeles_proposes": ["openweight-medium"],
+        },
+    )
+    texte = client.get("/suivi").text
+    assert 'id="telemetrie"' in texte and 'id="parametres"' in texte  # deux sections
+    assert "3 sessions au total" in texte and "openweight-medium" in texte
+    assert 'href="/suivi" aria-current="true">Suivi &amp; réglages</a>' in texte  # nav 4 entrées
+    assert "Télémétrie</a>" not in texte  # les anciennes entrées ont disparu
+
+    redirection = client.get("/telemetrie", follow_redirects=False)
+    assert redirection.status_code == 303
+    assert redirection.headers["location"] == "/suivi#telemetrie"
+    redirection = client.get("/parametres", follow_redirects=False)
+    assert redirection.headers["location"] == "/suivi#parametres"
+
+
+# --- R7 : accueil orienté reprise + sessions archivées (UX10/UX8) ---
+
+
+def test_accueil_oriente_reprise_avec_actions(api) -> None:
+    # R7 (UX10) : tableau des sessions avec projet et actions archiver/supprimer,
+    # création repliée derrière « + Nouvelle session », lien vers les archivées.
+    api.brancher(
+        "GET",
+        "/projects",
+        200,
+        [{"id": 1, "nom": "Téléservice X", "contexte": "", "nfrs": [], "dossiers": []}],
+    )
+    api.brancher(
+        "GET",
+        "/workflows",
+        200,
+        [
+            {
+                "id": 7,
+                "etape": "interview",
+                "projet_id": 1,
+                "apercu_feature": "Feature : connexion",
+                "titre": None,
+            }
+        ],
+    )
+    api.brancher(
+        "GET",
+        "/workflows?archivees=true",
+        200,
+        [{"id": 5, "etape": "synthese", "projet_id": None, "apercu_feature": "x", "titre": "V"}],
+    )
+    texte = client.get("/").text
+    assert "+ Nouvelle session" in texte  # création repliée (details)
+    assert 'action="/sessions/7/gerer"' in texte  # archiver depuis la liste
+    assert 'action="/sessions/7/supprimer"' in texte  # supprimer (confirmé)
+    assert "Téléservice X" in texte  # nom du projet sur la ligne ET dans le select
+    assert "Voir les sessions archivées (1)" in texte
+
+
+def test_ecran_sessions_archivees_et_desarchivage(api) -> None:
+    # R7 (UX8) : l'archivage devient réversible depuis l'UI — désarchiver
+    # renvoie la session à l'accueil (PATCH archivee=False).
+    api.brancher(
+        "GET",
+        "/workflows?archivees=true",
+        200,
+        [
+            {
+                "id": 5,
+                "etape": "synthese",
+                "projet_id": None,
+                "apercu_feature": "x",
+                "titre": "Vieille session",
+            }
+        ],
+    )
+    texte = client.get("/sessions/archivees").text
+    assert "Vieille session" in texte
+    assert 'name="desarchiver"' in texte
+
+    api.brancher("PATCH", "/workflows/5", 200, {})
+    reponse = client.post("/sessions/5/gerer", data={"desarchiver": "1"}, follow_redirects=False)
+    assert reponse.status_code == 303
+    assert reponse.headers["location"] == "/sessions/archivees"
+    patch = next(a for a in api.appels if a[0] == "PATCH")
+    assert patch[2] == {"archivee": False}
+
+
+# --- R6 : suppression définitive d'une session (UX8) ---
+
+
+def test_suppression_de_session_confirmee_et_redirigee(api) -> None:
+    # R6 : le menu « Gérer la session » porte la suppression définitive (avec
+    # garde-fou navigateur) ; le POST appelle DELETE et renvoie à l'accueil.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert "Supprimer définitivement" in texte
+    assert 'action="/sessions/1/supprimer"' in texte
+    assert "confirm(" in texte  # action définitive : garde-fou navigateur
+
+    api.brancher("DELETE", "/workflows/1", 204, {})
+    reponse = client.post("/sessions/1/supprimer", follow_redirects=False)
+    assert reponse.status_code == 303
+    assert reponse.headers["location"] == "/"  # retour à l'accueil
+    assert ("DELETE", "/workflows/1", None) in api.appels

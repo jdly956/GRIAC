@@ -105,6 +105,18 @@ def test_recherche_hybride_fusionne_et_trace_les_sources() -> None:
     assert parametres_bm25["dossiers"] is None
 
 
+def test_recherche_exclut_les_documents_obsoletes() -> None:
+    # R8 (H10, arbitrage UX8) : un document marqué obsolète sort des DEUX
+    # volets de la recherche (BM25 + vecteur) — le filtre vit dans
+    # FILTRES_COMMUNS, la réactivation le fait revenir sans ré-indexation.
+    connexion = FausseConnexion([[(1,)], [(1,)], DETAILS[:1]])
+    rechercher(connexion, FauxAlbert(), _settings(), RechercheEntree(question="délai"))
+    requete_bm25 = connexion.curseur.requetes[0][0]
+    requete_vecteur = connexion.curseur.requetes[1][0]
+    assert "NOT d.est_obsolete" in requete_bm25
+    assert "NOT d.est_obsolete" in requete_vecteur
+
+
 def test_recherche_filtre_par_projet_a6() -> None:
     connexion = FausseConnexion([[("projet-alpha",)], [(1,)], [(1,)], DETAILS[:1]])
     resultat = rechercher(

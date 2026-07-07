@@ -1,12 +1,12 @@
 """Interface web du SIA PO — conversation (E4.1, S2.8), écrans projets et
 « mes documents » (E4.2/E4.3, S2.9).
 
-Front volontairement simple (CLAUDE.md) : formulaires HTML classiques, aucun
-JavaScript requis — htmx pourra enrichir plus tard. Le DSFR est chargé par CDN
-au MVP (à vendorer pour la prod, E7) avec des styles de repli locaux : la page
-reste utilisable hors ligne. v1 assumée : les sources/avertissements du dernier
-échange sont affichés dans la réponse du POST (non persistés côté UI) — au
-rechargement, seul le fil (persisté par l'api) demeure.
+Front volontairement simple (CLAUDE.md) : formulaires HTML classiques en socle,
+enrichis par htmx en fragments ciblés (R3/H7 : un POST htmx ajoute les bulles au
+fil et met à jour rail/stepper/conso en out-of-band ; sans JavaScript, les mêmes
+routes rendent la page complète — repli H14). Le DSFR (CSS + JS) est chargé par
+CDN au MVP (à vendorer pour la prod, E7) avec des styles de repli locaux : la
+page reste utilisable hors ligne.
 
 Préfixe de chemin : les LIENS portent le `root_path` ASGI (`{{ racine }}`
 dans les templates), pour servir l'app derrière un proxy à préfixe — cas
@@ -41,6 +41,30 @@ def _contexte_racine(request: Request) -> dict[str, str]:
     return {"racine": request.scope.get("root_path", "").rstrip("/")}
 
 
+# R1 (socle DSFR) : entrée active de la navigation, déduite du chemin
+# APPLICATIF (scope["path"] ne porte pas le root_path — cohérent avec le
+# proxy à préfixe du pod, cf. docstring du module).
+_NAV_PREFIXES = [
+    ("/projets", "projets"),
+    ("/documents", "documents"),
+    # R10 (UX9) : télémétrie + paramètres fusionnés sous « Suivi & réglages ».
+    ("/suivi", "suivi"),
+    ("/telemetrie", "suivi"),
+    ("/parametres", "suivi"),
+    ("/sessions", "sessions"),
+]
+
+
+def _contexte_navigation(request: Request) -> dict[str, str]:
+    chemin = request.scope.get("path", "/")
+    if chemin == "/":
+        return {"nav_actif": "sessions"}
+    for prefixe, entree in _NAV_PREFIXES:
+        if chemin.startswith(prefixe):
+            return {"nav_actif": entree}
+    return {"nav_actif": ""}
+
+
 # S3.6 : rendu serveur des messages du moteur — le PO lisait le markdown BRUT
 # (tableaux Gherkin en pipes, constaté sessions 9/11). `html=False` : tout HTML
 # présent dans la source est échappé (le contenu vient du LLM — jamais de HTML
@@ -55,7 +79,7 @@ def rendre_markdown(texte: str) -> str:
 
 templates = Jinja2Templates(
     directory=str(Path(__file__).parent / "templates"),
-    context_processors=[_contexte_racine],
+    context_processors=[_contexte_racine, _contexte_navigation],
 )
 templates.env.filters["markdown"] = rendre_markdown
 
@@ -82,6 +106,9 @@ ETAPES_LIBELLES = {
     "controle_dor": "4 — Contrôle DoR",
     "synthese": "5 — Synthèse finale",
 }
+
+# R2 : ordre des étapes pour le stepper DSFR de la barre de session (A5/H8).
+ETAPES_ORDRE = list(ETAPES_LIBELLES)
 
 # Les 7 types de NFR de l'entité Projet (E8/D19) — mêmes valeurs que l'api.
 TYPES_NFR = [
@@ -120,48 +147,144 @@ def _page_erreur(request: Request, statut: int, corps: dict) -> HTMLResponse:
     )
 
 
-def _page_session(
-    request: Request,
-    session_id: int,
-    dernier_resultat: dict | None = None,
-    erreur: str | None = None,
-) -> HTMLResponse:
+def _contexte_session(session_id: int) -> tuple[int, dict, dict | None]:
+    """R3 : contexte commun à l'écran complet et au fragment htmx (hors fil)."""
     statut_etat, etat = api_client.appeler("GET", f"/workflows/{session_id}")
     if statut_etat != 200:
-        return _page_erreur(request, statut_etat, etat)
-    _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
+        return statut_etat, etat, None
     _, stories = api_client.appeler("GET", f"/workflows/{session_id}/stories")
     statut_conso, conso = api_client.appeler("GET", f"/workflows/{session_id}/conso")
     statut_parametres, parametres = api_client.appeler("GET", "/parametres")
     statut_contenus, stories_contenus = api_client.appeler(
         "GET", f"/workflows/{session_id}/stories/contenus"
     )
-    # S3.7 : le registre replié ne se déplie tout seul que si une levée
-    # proposée (S2.13) attend la décision du PO.
+    # Compteur des levées proposées (S2.13) en attente de décision du PO.
     nb_levees_a_decider = sum(
         1
         for h in etat.get("hypotheses", [])
         if h.get("statut") == "en_attente" and h.get("statut_propose")
     )
-    return templates.TemplateResponse(
-        request=request,
-        name="session.html",
-        context={
-            "etat": etat,
-            "messages": messages if isinstance(messages, list) else [],
-            "stories": stories if isinstance(stories, list) else [],
-            "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
-            "dernier_resultat": dernier_resultat,
-            "nb_levees_a_decider": nb_levees_a_decider,
-            # S3.11 : conso de la session (None si l'api ne répond pas — simple
-            # indication, jamais bloquant).
-            "conso": conso if statut_conso == 200 else None,
-            # S3.12 : le PO sait quel modèle écrit.
-            "modele_actif": parametres.get("modele_actif") if statut_parametres == 200 else None,
-            # S3.13 : édition/copie des stories (version éditée gagnante à l'export).
-            "stories_contenus": stories_contenus if statut_contenus == 200 else [],
+    # R2 : panneau Stories du rail — contenus S3.13 en priorité, sinon repli
+    # sur les seuls titres (l'endpoint contenus peut manquer, jamais bloquant).
+    stories_affichees = stories_contenus if statut_contenus == 200 and stories_contenus else []
+    if not stories_affichees and isinstance(stories, list):
+        stories_affichees = [{"titre": t, "contenu": "", "editee": False} for t in stories]
+    contexte = {
+        "etat": etat,
+        "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
+        "etape_index": (ETAPES_ORDRE.index(etat["etape"]) if etat["etape"] in ETAPES_ORDRE else 0),
+        "etapes_total": len(ETAPES_ORDRE),
+        "nb_levees_a_decider": nb_levees_a_decider,
+        # S3.11 : conso de la session (None si l'api ne répond pas — simple
+        # indication, jamais bloquant). S3.12 : le PO sait quel modèle écrit.
+        "conso": conso if statut_conso == 200 else None,
+        "modele_actif": parametres.get("modele_actif") if statut_parametres == 200 else None,
+        "stories_affichees": stories_affichees,
+    }
+    return 200, etat, contexte
+
+
+def _construire_message_assistant(dernier_resultat: dict, etape_defaut: str) -> dict:
+    """R2 (UX6) : le résultat d'un POST devient une bulle du fil ; les signaux
+    A8 (hypothèses ajoutées, levées proposées) rejoignent ses avertissements."""
+    notices = list(dernier_resultat.get("avertissements") or [])
+    if dernier_resultat.get("hypotheses_ajoutees"):
+        notices.append(
+            f"{len(dernier_resultat['hypotheses_ajoutees'])} hypothèse(s) ajoutée(s) "
+            "au registre — à décider dans le panneau Hypothèses (A8)."
+        )
+    if dernier_resultat.get("levees_proposees"):
+        notices.append(
+            f"{len(dernier_resultat['levees_proposees'])} levée(s) d'hypothèse "
+            "proposée(s) — la décision vous revient, panneau Hypothèses (A8)."
+        )
+    return {
+        "role": "assistant",
+        "etape": dernier_resultat.get("etape", etape_defaut),
+        "contenu": dernier_resultat.get("reponse", ""),
+        "sources": dernier_resultat.get("sources") or [],
+        "avertissements": notices,
+        "divergences": dernier_resultat.get("divergences") or [],
+    }
+
+
+def _page_session(
+    request: Request,
+    session_id: int,
+    dernier_resultat: dict | None = None,
+    erreur: str | None = None,
+) -> HTMLResponse:
+    statut, etat, contexte = _contexte_session(session_id)
+    if contexte is None:
+        return _page_erreur(request, statut, etat)
+    _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
+    messages = messages if isinstance(messages, list) else []
+    # R2 (UX6) : le résultat d'un POST rejoint le BAS du fil comme un message —
+    # sauf s'il y figure déjà (stack réelle : persisté par l'api, S3.9).
+    dernier_message = None
+    if dernier_resultat:
+        deja_dans_fil = (
+            bool(messages)
+            and messages[-1].get("role") == "assistant"
+            and messages[-1].get("contenu") == dernier_resultat.get("reponse")
+        )
+        if not deja_dans_fil:
+            dernier_message = _construire_message_assistant(dernier_resultat, etat["etape"])
+    # R2 (H6) : panneau « sources de la dernière réponse » — celles du POST,
+    # sinon celles du dernier message assistant tracé (S3.9).
+    sources_dernier = (dernier_resultat or {}).get("sources") or []
+    if not sources_dernier:
+        for message in reversed(messages):
+            if message.get("role") == "assistant" and message.get("sources"):
+                sources_dernier = message["sources"]
+                break
+    contexte.update(
+        {
+            "messages": messages,
+            "dernier_message": dernier_message,
+            "sources_dernier": sources_dernier,
             "erreur": erreur,
-        },
+        }
+    )
+    return templates.TemplateResponse(request=request, name="session.html", context=contexte)
+
+
+def _est_htmx(request: Request) -> bool:
+    """R3 (H7) : un POST htmx reçoit un fragment ; le même POST sans JavaScript
+    reçoit la page complète (repli H14)."""
+    return request.headers.get("hx-request") == "true"
+
+
+def _fragment_echange(
+    request: Request,
+    session_id: int,
+    message_po: str | None = None,
+    dernier_resultat: dict | None = None,
+    erreur: str | None = None,
+) -> HTMLResponse:
+    """R3 (H7) : bulles ajoutées au fil + rail/stepper/conso en out-of-band.
+
+    Sur erreur, seule l'alerte est ajoutée (pas d'OOB) : l'écran garde l'état
+    du dernier succès — le prochain échange réussi resynchronise tout.
+    """
+    statut, etat, contexte = _contexte_session(session_id)
+    if contexte is None:
+        contexte = {"etat": None}
+        erreur = erreur or etat.get("detail", "session introuvable")
+    contexte.update(
+        {
+            "message_po": message_po,
+            "dernier_message": (
+                _construire_message_assistant(dernier_resultat, contexte["etat"]["etape"])
+                if dernier_resultat and contexte.get("etat")
+                else None
+            ),
+            "sources_dernier": (dernier_resultat or {}).get("sources") or [],
+            "erreur": erreur,
+        }
+    )
+    return templates.TemplateResponse(
+        request=request, name="_fragment_echange.html", context=contexte
     )
 
 
@@ -169,14 +292,42 @@ def _page_session(
 def index(request: Request) -> HTMLResponse:
     statut, projets = api_client.appeler("GET", "/projects")
     statut_sessions, sessions = api_client.appeler("GET", "/workflows")
+    # R7 : compteur des archivées — le lien « voir les archivées » dit combien.
+    statut_archivees, archivees = api_client.appeler("GET", "/workflows?archivees=true")
+    erreur = None if statut == 200 else projets.get("detail")
+    projets = projets if statut == 200 else []
+    # R9 : les projets archivés gardent leur nom sur les lignes de session.
+    statut_pa, projets_archives = api_client.appeler("GET", "/projects?archives=true")
+    noms_projets = {p["id"]: p["nom"] for p in projets}
+    if statut_pa == 200 and isinstance(projets_archives, list):
+        noms_projets.update({p["id"]: f"{p['nom']} (archivé)" for p in projets_archives})
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
-            "projets": projets if statut == 200 else [],
+            "projets": projets,
             "sessions": sessions if statut_sessions == 200 else [],
+            "noms_projets": noms_projets,
+            "nb_archivees": (
+                len(archivees) if statut_archivees == 200 and isinstance(archivees, list) else 0
+            ),
             "libelles_etapes": ETAPES_LIBELLES,
-            "erreur": None if statut == 200 else projets.get("detail"),
+            "erreur": erreur,
+        },
+    )
+
+
+# Enregistrée avant la route dynamique /sessions/{session_id}.
+@app.get("/sessions/archivees", response_class=HTMLResponse)
+def sessions_archivees(request: Request) -> HTMLResponse:
+    """R7 (UX8) : le versant archivé — consultation, désarchivage, suppression."""
+    statut, archivees = api_client.appeler("GET", "/workflows?archivees=true")
+    return templates.TemplateResponse(
+        request=request,
+        name="archivees.html",
+        context={
+            "sessions": archivees if statut == 200 and isinstance(archivees, list) else [],
+            "libelles_etapes": ETAPES_LIBELLES,
         },
     )
 
@@ -204,6 +355,10 @@ def envoyer_message(
     statut, resultat = api_client.appeler(
         "POST", f"/workflows/{session_id}/message", json={"message": message}
     )
+    if _est_htmx(request):
+        if statut != 200:
+            return _fragment_echange(request, session_id, erreur=resultat.get("detail"))
+        return _fragment_echange(request, session_id, message_po=message, dernier_resultat=resultat)
     if statut != 200:
         return _page_session(request, session_id, erreur=resultat.get("detail"))
     return _page_session(request, session_id, dernier_resultat=resultat)
@@ -230,6 +385,8 @@ def valider_etape(
         json={"valide": valide == "oui", "commentaire": commentaire},
     )
     if statut != 200:
+        if _est_htmx(request):
+            return _fragment_echange(request, session_id, erreur=resultat.get("detail"))
         return _page_session(request, session_id, erreur=resultat.get("detail"))
     message = (
         "Étape validée (Oui) — poursuis le workflow sur l'étape courante."
@@ -239,6 +396,12 @@ def valider_etape(
     statut_moteur, reponse_moteur = api_client.appeler(
         "POST", f"/workflows/{session_id}/message", json={"message": message}
     )
+    if _est_htmx(request):
+        if statut_moteur != 200:
+            return _fragment_echange(request, session_id, erreur=reponse_moteur.get("detail"))
+        return _fragment_echange(
+            request, session_id, message_po=message, dernier_resultat=reponse_moteur
+        )
     if statut_moteur != 200:
         return _page_session(request, session_id, erreur=reponse_moteur.get("detail"))
     return _page_session(request, session_id, dernier_resultat=reponse_moteur)
@@ -250,15 +413,18 @@ def story_suivante(request: Request, session_id: int) -> HTMLResponse:
     contrôle DoR » — ce bouton enchaîne sur la story suivante SANS toucher la
     machine à états (le « Oui — étape suivante » reste le geste explicite du PO
     quand toutes les stories sont couvertes ; badge A5 fidèle)."""
-    statut, resultat = api_client.appeler(
-        "POST",
-        f"/workflows/{session_id}/message",
-        json={
-            "message": "Story validée — enchaîne sur la STORY SUIVANTE de la liste des "
-            "candidates (rédaction complète puis contrôle DoR), sans changer d'étape. "
-            "S'il ne reste aucune story à rédiger, dis-le explicitement."
-        },
+    message = (
+        "Story validée — enchaîne sur la STORY SUIVANTE de la liste des "
+        "candidates (rédaction complète puis contrôle DoR), sans changer d'étape. "
+        "S'il ne reste aucune story à rédiger, dis-le explicitement."
     )
+    statut, resultat = api_client.appeler(
+        "POST", f"/workflows/{session_id}/message", json={"message": message}
+    )
+    if _est_htmx(request):
+        if statut != 200:
+            return _fragment_echange(request, session_id, erreur=resultat.get("detail"))
+        return _fragment_echange(request, session_id, message_po=message, dernier_resultat=resultat)
     if statut != 200:
         return _page_session(request, session_id, erreur=resultat.get("detail"))
     return _page_session(request, session_id, dernier_resultat=resultat)
@@ -286,8 +452,12 @@ def gerer_session_web(
     session_id: int,
     titre: Annotated[str, Form()] = "",
     archiver: Annotated[str, Form()] = "",
+    desarchiver: Annotated[str, Form()] = "",
 ) -> RedirectResponse:
-    """S3.13 : renommer / archiver (l'archivage masque de l'accueil, sans détruire)."""
+    """S3.13 : renommer / archiver ; R7 : désarchiver depuis l'écran des archivées."""
+    if desarchiver:
+        api_client.appeler("PATCH", f"/workflows/{session_id}", json={"archivee": False})
+        return _rediriger(request, "/sessions/archivees")
     if archiver:
         api_client.appeler("PATCH", f"/workflows/{session_id}", json={"archivee": True})
         return _rediriger(request, "/")
@@ -295,10 +465,39 @@ def gerer_session_web(
     return _rediriger(request, f"/sessions/{session_id}")
 
 
+@app.post("/sessions/{session_id}/supprimer")
+def supprimer_session_web(request: Request, session_id: int) -> RedirectResponse:
+    """R6 (UX8) : suppression définitive — confirmée à l'écran, cascade en base."""
+    api_client.appeler("DELETE", f"/workflows/{session_id}")
+    return _rediriger(request, "/")
+
+
 @app.post("/sessions/{session_id}/hypotheses/appliquer-propositions")
 def appliquer_levees_proposees(request: Request, session_id: int) -> RedirectResponse:
     """S3.21 : applique en lot les levées proposées relues par le PO (A8 assoupli, arbitré)."""
     api_client.appeler("POST", f"/workflows/{session_id}/hypotheses/appliquer-propositions")
+    return _rediriger(request, f"/sessions/{session_id}")
+
+
+# Enregistrée avant la route dynamique /hypotheses/{hypothese_id}.
+@app.post("/sessions/{session_id}/hypotheses/decider-lot")
+def decider_hypotheses_lot(
+    request: Request,
+    session_id: int,
+    statut: Annotated[str, Form()],
+    hypothese_ids: Annotated[list[int] | None, Form()] = None,
+) -> RedirectResponse:
+    """R4 (H5) : applique la décision du PO (Confirmer OU Rejeter) au lot coché.
+
+    Sans sélection, aucun appel api — simple retour à l'écran : jamais de
+    décision implicite (A8).
+    """
+    if hypothese_ids:
+        api_client.appeler(
+            "POST",
+            f"/workflows/{session_id}/hypotheses/decider-lot",
+            json={"ids": hypothese_ids, "statut": statut},
+        )
     return _rediriger(request, f"/sessions/{session_id}")
 
 
@@ -331,16 +530,29 @@ def noter_story(
     return _rediriger(request, f"/sessions/{session_id}")
 
 
-@app.get("/parametres", response_class=HTMLResponse)
-def ecran_parametres(request: Request, erreur: str | None = None) -> HTMLResponse:
-    statut, parametres = api_client.appeler("GET", "/parametres")
-    if statut != 200:
-        return _page_erreur(request, statut, parametres)
+# R10 (UX9/H12) : « Suivi & réglages » — télémétrie + paramètres sur une page,
+# chaque section dégradée indépendamment si son endpoint manque.
+@app.get("/suivi", response_class=HTMLResponse)
+def ecran_suivi(request: Request) -> HTMLResponse:
+    statut_tele, telemetrie = api_client.appeler("GET", "/telemetrie")
+    statut_tokens, tokens = api_client.appeler("GET", "/telemetrie/tokens")
+    statut_parametres, parametres = api_client.appeler("GET", "/parametres")
     return templates.TemplateResponse(
         request=request,
-        name="parametres.html",
-        context={"parametres": parametres, "erreur": erreur},
+        name="suivi.html",
+        context={
+            "telemetrie": telemetrie if statut_tele == 200 else None,
+            "tokens": tokens if statut_tokens == 200 else None,
+            "parametres": parametres if statut_parametres == 200 else None,
+            "erreur": None,
+        },
     )
+
+
+@app.get("/parametres")
+def ecran_parametres(request: Request) -> RedirectResponse:
+    """R10 : l'ancienne route vit en redirection (liens/favoris préservés)."""
+    return _rediriger(request, "/suivi#parametres")
 
 
 @app.post("/parametres/modele")
@@ -353,31 +565,19 @@ def changer_modele(
     choix = (modele_libre or modele).strip()
     if choix:
         api_client.appeler("PUT", "/parametres/modele-chat", json={"modele": choix})
-    return _rediriger(request, "/parametres")
+    return _rediriger(request, "/suivi#parametres")
 
 
 @app.post("/parametres/modele-defaut")
 def modele_par_defaut(request: Request) -> RedirectResponse:
     api_client.appeler("DELETE", "/parametres/modele-chat")
-    return _rediriger(request, "/parametres")
+    return _rediriger(request, "/suivi#parametres")
 
 
-@app.get("/telemetrie", response_class=HTMLResponse)
-def ecran_telemetrie(request: Request) -> HTMLResponse:
-    statut, telemetrie = api_client.appeler("GET", "/telemetrie")
-    statut_tokens, tokens = api_client.appeler("GET", "/telemetrie/tokens")
-    if statut != 200:
-        return _page_erreur(request, statut, telemetrie)
-    return templates.TemplateResponse(
-        request=request,
-        name="telemetrie.html",
-        context={
-            "telemetrie": telemetrie,
-            # S3.11 : la jauge tokens est une indication — l'écran reste servi
-            # même si l'endpoint conso est indisponible.
-            "tokens": tokens if statut_tokens == 200 else None,
-        },
-    )
+@app.get("/telemetrie")
+def ecran_telemetrie(request: Request) -> RedirectResponse:
+    """R10 : l'ancienne route vit en redirection (liens/favoris préservés)."""
+    return _rediriger(request, "/suivi#telemetrie")
 
 
 # --- Écran projets (E4.2, S2.9) ---
@@ -385,11 +585,14 @@ def ecran_telemetrie(request: Request) -> HTMLResponse:
 
 def _page_projets(request: Request, erreur: str | None = None) -> HTMLResponse:
     statut, projets = api_client.appeler("GET", "/projects")
+    # R9 : le versant archivé, consultable et réversible depuis la même page.
+    statut_archives, archives = api_client.appeler("GET", "/projects?archives=true")
     return templates.TemplateResponse(
         request=request,
         name="projets.html",
         context={
             "projets": projets if statut == 200 else [],
+            "archives": archives if statut_archives == 200 and isinstance(archives, list) else [],
             "types_nfr": TYPES_NFR,
             "erreur": erreur or (None if statut == 200 else projets.get("detail")),
         },
@@ -458,8 +661,59 @@ def voir_projet(request: Request, projet_id: int) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="projet.html",
-        context={"projet": projet, "dossiers": lignes},
+        # R9 : types_nfr alimente le formulaire d'édition (NFR après création).
+        context={"projet": projet, "dossiers": lignes, "types_nfr": TYPES_NFR},
     )
+
+
+@app.post("/projets/{projet_id}/modifier", response_model=None)
+async def modifier_projet(request: Request, projet_id: int) -> HTMLResponse | RedirectResponse:
+    """R9 : édition du projet APRÈS création (nom, contexte, NFR) — PUT complet.
+
+    Les dossiers A6 sont PRÉSERVÉS tels quels (leur formulaire dédié reste le
+    seul à les toucher). Lignes NFR dynamiques : type + formulation remplis =
+    NFR retenue ; formulation vidée = NFR retirée.
+    """
+    statut, projet = api_client.appeler("GET", f"/projects/{projet_id}")
+    if statut != 200:
+        return _page_erreur(request, statut, projet)
+    formulaire = await request.form()
+    nfrs = []
+    index = 1
+    while f"nfr_type_{index}" in formulaire or f"nfr_formulation_{index}" in formulaire:
+        type_nfr = str(formulaire.get(f"nfr_type_{index}") or "").strip()
+        formulation = str(formulaire.get(f"nfr_formulation_{index}") or "").strip()
+        valeur = str(formulaire.get(f"nfr_valeur_{index}") or "").strip()
+        if type_nfr and formulation:
+            nfrs.append(
+                {"type": type_nfr, "formulation": formulation, "valeur_cible": valeur or None}
+            )
+        index += 1
+    corps = {
+        "nom": str(formulaire.get("nom") or "").strip() or projet["nom"],
+        "contexte": str(formulaire.get("contexte") or ""),
+        "nfrs": nfrs,
+        "dossiers": projet["dossiers"],
+    }
+    api_client.appeler("PUT", f"/projects/{projet_id}", json=corps)
+    return _rediriger(request, f"/projets/{projet_id}")
+
+
+@app.post("/projets/{projet_id}/gerer")
+def gerer_projet_web(
+    request: Request, projet_id: int, archiver: Annotated[str, Form()]
+) -> RedirectResponse:
+    """R9 (UX8) : archiver (masqué des listes et du choix de session) / désarchiver."""
+    api_client.appeler("PATCH", f"/projects/{projet_id}", json={"archive": archiver == "1"})
+    return _rediriger(request, "/projets")
+
+
+@app.post("/projets/{projet_id}/supprimer")
+def supprimer_projet_web(request: Request, projet_id: int) -> RedirectResponse:
+    """R9 (H9, « suppression libre ») : définitif — les sessions liées continuent
+    sans contexte projet (confirmé à l'écran)."""
+    api_client.appeler("DELETE", f"/projects/{projet_id}")
+    return _rediriger(request, "/projets")
 
 
 @app.post("/projets/{projet_id}/dossiers", response_model=None)
@@ -494,6 +748,15 @@ def associer_dossiers(
 # --- Écran « mes documents » (E4.3, S2.9, arbitrage A5) ---
 
 
+# R8 : classes de badge DSFR par statut de parsing (état lisible d'un coup d'œil).
+BADGES_STATUTS = {
+    "parse": "fr-badge--success",
+    "echec": "fr-badge--error",
+    "ocr_requis": "fr-badge--warning",
+    "a_parser": "fr-badge--info",
+}
+
+
 @app.get("/documents", response_class=HTMLResponse)
 def ecran_documents(request: Request) -> HTMLResponse:
     statut, documents = api_client.appeler("GET", "/documents")
@@ -508,13 +771,31 @@ def ecran_documents(request: Request) -> HTMLResponse:
     # S3.18 : dossiers existants pour la datalist du dépôt — dégradé en liste vide.
     statut_dossiers, dossiers = api_client.appeler("GET", "/documents/dossiers")
     dossiers = dossiers if statut_dossiers == 200 and isinstance(dossiers, list) else []
+    # R8 : inventaire regroupé PAR DOSSIER (la clé d'association A6, S3.18),
+    # avec les projets associés — dégradé sans l'endpoint projets.
+    statut_projets, projets = api_client.appeler("GET", "/projects")
+    projets_par_dossier: dict[str, list[str]] = {}
+    if statut_projets == 200 and isinstance(projets, list):
+        for projet in projets:
+            for association in projet.get("dossiers", []):
+                projets_par_dossier.setdefault(association["dossier"], []).append(projet["nom"])
+    groupes: dict[str, list] = {}
+    for document in documents:
+        dossier = document["chemin"].split("/")[0] if "/" in document["chemin"] else "(racine)"
+        groupes.setdefault(dossier, []).append(document)
+    dossiers_groupes = [
+        {"nom": nom, "documents": docs, "projets": projets_par_dossier.get(nom, [])}
+        for nom, docs in sorted(groupes.items())
+    ]
     return templates.TemplateResponse(
         request=request,
         name="documents.html",
         context={
-            "documents": documents,
+            "dossiers_groupes": dossiers_groupes,
+            "nb_documents": len(documents),
             "stats": stats,
             "libelles": STATUTS_PARSING_LIBELLES,
+            "badges_statuts": BADGES_STATUTS,
             "alerte_couverture": stats["couverture_parsing"] < SEUIL_COUVERTURE,
             "seuil": SEUIL_COUVERTURE,
             "runs": runs,
@@ -584,6 +865,17 @@ def telecharger_original(document_id: int) -> Response:
         media_type=content_type,
         headers=entetes,
     )
+
+
+@app.post("/documents/{document_id}/obsolete")
+def basculer_obsolete(
+    request: Request, document_id: int, est_obsolete: Annotated[str, Form()]
+) -> RedirectResponse:
+    """R8 (H10) : marquer obsolète (exclu des recherches) / réactiver — réversible."""
+    api_client.appeler(
+        "PATCH", f"/documents/{document_id}", json={"est_obsolete": est_obsolete == "1"}
+    )
+    return _rediriger(request, "/documents")
 
 
 @app.post("/documents/{document_id}/supprimer")

@@ -1,0 +1,26 @@
+{# R3 (H7, validée PO 07/07) : réponse aux POST htmx — les nouvelles bulles
+   s'ajoutent au fil (hx-target="#fil", hx-swap="beforeend") ; stepper, conso
+   et panneaux du rail suivent en out-of-band. Sur erreur, seule l'alerte est
+   ajoutée au fil (pas d'OOB : l'état affiché reste celui du dernier succès).
+   Repli sans JavaScript (H14) : les mêmes routes rendent la page complète. #}
+{% if message_po %}
+{% set message = {"role": "po", "etape": etat.etape if etat else "", "contenu": message_po} %}
+{% include "_message.html" %}
+{% endif %}
+{% if dernier_message %}
+<div id="dernier-echange">
+{% set message = dernier_message %}
+{% include "_message.html" %}
+</div>
+{% endif %}
+{% if erreur %}
+<div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
+{% endif %}
+{% if etat and not erreur %}
+{% set oob = true %}
+{% include "_stepper.html" %}
+{% include "_meta_session.html" %}
+{% include "_rail_stories.html" %}
+{% include "_rail_hypotheses.html" %}
+{% include "_rail_sources.html" %}
+{% endif %}

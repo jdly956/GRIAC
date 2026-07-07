@@ -23,7 +23,7 @@ Connexion = Annotated[Any, Depends(get_connexion)]
 
 REQUETE_LISTE = """
     SELECT id, chemin, nom, extension, statut_parsing, est_reference,
-           doublon_de IS NOT NULL AS doublon, projet_suggere
+           doublon_de IS NOT NULL AS doublon, projet_suggere, est_obsolete
     FROM documents ORDER BY chemin
 """
 
@@ -33,7 +33,7 @@ REQUETE_FICHE = """
            statut_parsing, erreur_parsing,
            to_char(date_parsing, 'YYYY-MM-DD HH24:MI') AS date_parsing,
            chemin_derive, est_reference, doublon_de, projet_suggere,
-           version_no, groupe_version
+           version_no, groupe_version, est_obsolete
     FROM documents WHERE id = %(id)s
 """
 
@@ -71,6 +71,7 @@ class DocumentInventaire(BaseModel):
     est_reference: bool
     doublon: bool
     projet_suggere: str | None
+    est_obsolete: bool  # R8 (H10) : exclu des recherches, réversible
 
 
 class ChunkDocument(BaseModel):
@@ -99,6 +100,7 @@ class FicheDocument(BaseModel):
     projet_suggere: str | None
     version_no: int | None
     groupe_version: str | None
+    est_obsolete: bool  # R8 (H10)
     chunks: list[ChunkDocument]
     nb_chunks: int
     nb_embarques: int
@@ -128,6 +130,7 @@ def lister_documents(connexion: Connexion) -> list[DocumentInventaire]:
                 est_reference=ligne[5],
                 doublon=ligne[6],
                 projet_suggere=ligne[7],
+                est_obsolete=ligne[8],
             )
             for ligne in curseur.fetchall()
         ]
@@ -216,10 +219,34 @@ def fiche_document(document_id: int, connexion: Connexion) -> FicheDocument:
         projet_suggere=ligne[12],
         version_no=ligne[13],
         groupe_version=ligne[14],
+        est_obsolete=ligne[15],
         chunks=chunks,
         nb_chunks=len(chunks),
         nb_embarques=sum(1 for c in chunks if c.embarque),
     )
+
+
+class DocumentMaj(BaseModel):
+    est_obsolete: bool  # R8 (H10) : le seul champ modifiable à la main
+
+
+@router.patch("/documents/{document_id}")
+def marquer_obsolete(document_id: int, entree: DocumentMaj, connexion: Connexion) -> dict:
+    """R8 (refonte UX/UI, H10 — arbitrage UX8) : marquer obsolète / réactiver.
+
+    L'obsolète sort des recherches E2 (`FILTRES_COMMUNS`) sans rien détruire —
+    réversible, contrairement à la suppression S3.17. Chunks et embeddings
+    restent en base : la réactivation est immédiate, sans ré-indexation.
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "UPDATE documents SET est_obsolete = %(obsolete)s WHERE id = %(id)s RETURNING id",
+            {"id": document_id, "obsolete": entree.est_obsolete},
+        )
+        if curseur.fetchone() is None:
+            raise HTTPException(status_code=404, detail=f"Document {document_id} introuvable")
+    connexion.commit()
+    return {"id": document_id, "est_obsolete": entree.est_obsolete}
 
 
 def _source_dans_corpus(chemin: str) -> Path | None:

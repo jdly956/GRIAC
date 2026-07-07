@@ -1,0 +1,7 @@
+{# Modèle actif (S3.12) + conso de la session (S3.11) — out-of-band en R3. #}
+<p class="barre-session__meta fr-hint-text" id="conso-meta"{% if oob %} hx-swap-oob="true"{% endif %}>
+{% if modele_actif %}Modèle : <strong>{{ modele_actif }}</strong>{% endif %}
+{% if conso and conso.appels %}{% if modele_actif %} — {% endif %}Consommation de la session : {{ conso.appels }} appel(s),
+  {{ "{:,}".format(conso.tokens_entree).replace(",", " ") }} tokens entrée /
+  {{ "{:,}".format(conso.tokens_sortie).replace(",", " ") }} sortie{% endif %}
+</p>

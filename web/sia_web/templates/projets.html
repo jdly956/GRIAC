@@ -52,4 +52,23 @@
   {% endfor %}
   <button class="fr-btn" type="submit">Créer le projet</button>
 </form>
+
+{# R9 (UX8) : le versant archivé — consultable, désarchivable, supprimable. #}
+<details class="panneau">
+  <summary><strong>Projets archivés ({{ archives | length }})</strong></summary>
+  {% if archives %}
+  <ul>
+    {% for projet in archives %}
+    <li><a href="{{ racine }}/projets/{{ projet.id }}">{{ projet.nom }}</a>
+      <form method="post" action="{{ racine }}/projets/{{ projet.id }}/gerer" class="action-en-ligne">
+        <input type="hidden" name="archiver" value="0">
+        <button class="fr-btn fr-btn--sm fr-btn--tertiary" type="submit">Désarchiver</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Aucun projet archivé.</p>
+  {% endif %}
+</details>
 {% endblock %}

@@ -1,0 +1,45 @@
+{# R2 : panneau « Stories produites » du rail — le livrable (UX1), notation
+   E4.4 + édition/copie S3.13 intégrées. Enveloppe toujours rendue : cible
+   stable pour l'out-of-band htmx (R3), même quand la 1re story apparaît. #}
+<div id="stories-rail"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if stories_affichees %}
+  <details class="panneau-rail" open>
+    <summary>Stories produites ({{ stories_affichees | length }}) — le livrable</summary>
+    <div class="panneau-rail__corps">
+      <p class="fr-hint-text">La version éditée gagne à l'export ; la note 1–5 alimente la télémétrie (E4.4).</p>
+      {% for story in stories_affichees %}
+      <details class="story-bloc">
+        <summary><strong>{{ story.titre }}</strong>
+          {% if story.editee %}<span class="fr-badge fr-badge--new">éditée — cette version part à l'export</span>{% endif %}
+        </summary>
+        <div class="story-bloc__corps">
+          {% if story.contenu %}
+          <div class="contenu-md">{{ story.contenu | markdown | safe }}</div>
+          {% endif %}
+          <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/stories/edition">
+            <input type="hidden" name="titre" value="{{ story.titre }}">
+            <label class="fr-label" for="edition-{{ loop.index }}">Éditer (markdown)</label>
+            <textarea class="fr-input" id="edition-{{ loop.index }}" name="contenu" rows="6">{{ story.contenu }}</textarea>
+            <button class="fr-btn fr-btn--sm" type="submit">Enregistrer l'édition</button>
+            <button class="fr-btn fr-btn--sm fr-btn--secondary" type="button"
+              onclick="navigator.clipboard.writeText(this.closest('form').querySelector('textarea').value)">Copier</button>
+          </form>
+          <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/feedback" class="action-secondaire">
+            <input type="hidden" name="story_titre" value="{{ story.titre }}">
+            <label class="fr-label" for="note-{{ loop.index }}">Noter cette story</label>
+            <select class="fr-select" id="note-{{ loop.index }}" name="note" aria-label="Note de « {{ story.titre }} »">
+              {% for note in [5, 4, 3, 2, 1] %}
+              <option value="{{ note }}">{{ note }}</option>
+              {% endfor %}
+            </select>
+            <input class="fr-input" name="commentaire" placeholder="Commentaire (optionnel)"
+              aria-label="Commentaire sur « {{ story.titre }} »">
+            <button class="fr-btn fr-btn--sm" type="submit">Noter</button>
+          </form>
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</div>

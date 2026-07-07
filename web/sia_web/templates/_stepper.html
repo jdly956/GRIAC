@@ -1,0 +1,8 @@
+{# R2/R3 : stepper d'étape (A5/H8) — inclus dans la barre de session et
+   renvoyé en out-of-band par les fragments htmx (oob=true, H7). #}
+<div class="fr-stepper barre-session__stepper" id="stepper"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <p class="fr-stepper__title">{{ libelle_etape }}
+    <span class="fr-stepper__state">Étape {{ etape_index + 1 }} sur {{ etapes_total }}</span>
+  </p>
+  <div class="fr-stepper__steps" data-fr-current-step="{{ etape_index + 1 }}" data-fr-steps="{{ etapes_total }}"></div>
+</div>
