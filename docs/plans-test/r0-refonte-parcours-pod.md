@@ -13,11 +13,16 @@ git fetch origin claude/ux-ui-ergonomie-refonte-fggyen
 git checkout claude/ux-ui-ergonomie-refonte-fggyen && git pull
 uv sync --all-packages                      # aucune dépendance nouvelle attendue
 make lint && make test                      # attendu : 330 verts
-uv run --package sia-api alembic upgrade head   # migrations 0016 (obsolète) + 0017 (projet.archive)
-make pod-up                                 # api + web relancées (le code modifié doit tourner)
+make pod-up                                 # relance api + web ET joue les migrations
+                                            # (0016 obsolète + 0017 projet.archive — intégré
+                                            # au script depuis la session 30)
 ```
 
-Ouvrir l'UI via le proxy code-server `/proxy/8081/`.
+**Vérifier la ligne finale de `make pod-up`** : elle affiche le **commit servi**
+— il doit être celui du `git pull` (sinon, de vieux process tournent encore :
+relancer `make pod-up`). ⚠️ Sans les migrations, l'api répond 500 sur
+`/documents` et `/projects` → écrans Documents/Projets « en erreur » (vécus
+comme des liens cassés). Ouvrir l'UI via le proxy code-server `/proxy/8081/`.
 
 ## 1. Socle (R1) — 2 min
 

@@ -38,6 +38,13 @@ done
 grep -q "sia-db.env" "$HOME/.bashrc" 2>/dev/null \
     || echo '[ -f ~/work/.sia-db.env ] && source ~/work/.sia-db.env' >> "$HOME/.bashrc"
 
+# 3bis. Migrations — le schéma suit TOUJOURS le code déployé (constaté session
+# 30 : sans 0016/0017, l'api répond 500 sur /documents et /projects → écrans
+# « en erreur », vécus comme des liens cassés). Idempotent : alembic ne rejoue
+# que ce qui manque.
+echo "→ migrations alembic (idempotent)"
+uv run --package sia-api alembic upgrade head
+
 # 4. Relance des services — nohup : survivent à la fermeture des terminaux
 #    (pas aux chutes du pod : dans ce cas, relancer ce script).
 pkill -f "uvicorn sia_api" 2>/dev/null || true
@@ -65,7 +72,10 @@ for _ in $(seq 1 20); do
 done
 echo "api /health : ${api:-KO} — web /health : ${web:-KO}"
 if [ "$api" = "200" ] && [ "$web" = "200" ]; then
-    echo "✅ services relancés — UI : https://<url-du-pod>/proxy/8081/"
+    # Le commit servi s'affiche : un écart entre l'UI vue au navigateur et le
+    # code attendu se diagnostique en une ligne (vieux process = vieux sha).
+    echo "✅ services relancés — code servi : $(git -C "$RACINE" rev-parse --short HEAD)" \
+        "($(git -C "$RACINE" branch --show-current)) — UI : https://<url-du-pod>/proxy/8081/"
 else
     echo "❌ un service ne répond pas — voir /tmp/api.log et /tmp/web.log" >&2
     exit 1
