@@ -305,11 +305,45 @@ def ajouter_hypothese(
     return etat
 
 
+# Enregistrée AVANT /hypotheses/{hypothese_id} : « appliquer-propositions »
+# serait sinon capté par le paramètre dynamique.
+@router.post("/workflows/{session_id}/hypotheses/appliquer-propositions")
+def appliquer_levees_proposees(session_id: int, connexion: Connexion) -> EtatSession:
+    """S3.21 : applique EN LOT les levées proposées par le moteur (S2.13).
+
+    Arbitrage du 07/07/2026 (session 12 : 16 hypothèses en attente en fin de
+    session) : le PO relit la liste des propositions à l'écran et les applique
+    d'un clic — la décision reste la sienne, en lot. L'esprit d'A8 tient :
+    seules les hypothèses portant une PROPOSITION du moteur sont touchées,
+    jamais une hypothèse sans proposition, jamais de levée silencieuse.
+    """
+    with connexion.cursor() as curseur:
+        if _lire_session(curseur, session_id) is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
+        curseur.execute(
+            "UPDATE workflow_hypotheses SET statut = statut_propose, decidee_le = now() "
+            "WHERE session_id = %(sid)s AND statut = 'en_attente' "
+            "AND statut_propose IS NOT NULL RETURNING id",
+            {"sid": session_id},
+        )
+        appliquees = curseur.fetchall()
+        if not appliquees:
+            raise HTTPException(
+                status_code=409, detail="Aucune levée proposée à appliquer sur cette session."
+            )
+        etat = _lire_session(curseur, session_id)
+    connexion.commit()
+    return etat
+
+
 @router.post("/workflows/{session_id}/hypotheses/{hypothese_id}")
 def decider_hypothese(
     session_id: int, hypothese_id: int, entree: DecisionEntree, connexion: Connexion
 ) -> EtatSession:
-    """Décision INDIVIDUELLE et explicite — seul chemin qui lève une hypothèse (A8)."""
+    """Décision INDIVIDUELLE et explicite — chemin nominal de levée (A8).
+
+    L'autre chemin (S3.21, ci-dessus) n'applique QUE des propositions relues.
+    """
     with connexion.cursor() as curseur:
         curseur.execute(
             "UPDATE workflow_hypotheses SET statut = %(statut)s, decidee_le = now() "

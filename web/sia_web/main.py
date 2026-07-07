@@ -295,6 +295,13 @@ def gerer_session_web(
     return _rediriger(request, f"/sessions/{session_id}")
 
 
+@app.post("/sessions/{session_id}/hypotheses/appliquer-propositions")
+def appliquer_levees_proposees(request: Request, session_id: int) -> RedirectResponse:
+    """S3.21 : applique en lot les levées proposées relues par le PO (A8 assoupli, arbitré)."""
+    api_client.appeler("POST", f"/workflows/{session_id}/hypotheses/appliquer-propositions")
+    return _rediriger(request, f"/sessions/{session_id}")
+
+
 @app.post("/sessions/{session_id}/hypotheses/{hypothese_id}")
 def decider_hypothese(
     request: Request, session_id: int, hypothese_id: int, statut: Annotated[str, Form()]

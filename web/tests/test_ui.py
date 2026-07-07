@@ -127,6 +127,26 @@ def test_registre_replie_sauf_levee_proposee_a_decider(api) -> None:
     assert "1 levée(s) proposée(s) à décider" in texte
 
 
+def test_application_en_lot_des_levees_proposees(api) -> None:
+    # S3.21 : dès qu'une levée proposée attend, le registre offre l'application
+    # en lot (relue, confirmée par le PO) — les boutons individuels restent.
+    avec_proposition = dict(
+        ETAT_SESSION,
+        hypotheses=[dict(ETAT_SESSION["hypotheses"][0], statut_propose="confirmee")],
+    )
+    api.brancher("GET", "/workflows/1", 200, avec_proposition)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert 'action="/sessions/1/hypotheses/appliquer-propositions"' in texte
+    assert "Appliquer les 1 levée(s) proposée(s)" in texte
+    assert 'action="/sessions/1/hypotheses/3"' in texte  # décision individuelle intacte
+
+    api.brancher("POST", "/workflows/1/hypotheses/appliquer-propositions", 200, {})
+    reponse = client.post("/sessions/1/hypotheses/appliquer-propositions", follow_redirects=False)
+    assert reponse.status_code == 303
+    assert ("POST", "/workflows/1/hypotheses/appliquer-propositions", None) in api.appels
+
+
 def test_fil_replie_sauf_derniers_echanges(api) -> None:
     # S3.7 : la page ne s'allonge plus indéfiniment — seuls les 4 derniers
     # messages restent dépliés, les précédents vivent dans un bloc repliable.
