@@ -52,6 +52,7 @@ progressive enhancement sans JavaScript, htmx vendoré.
 | UX10 | Accueil | **Reprise d'abord** : liste des sessions en tête (badges étape, actions), « + Nouvelle session » ouvre le formulaire |
 | UX11 | Bandeau D15 | **Notice discrète 1 ligne** sur toutes les pages + rappel micro près de la zone de saisie (l'obligation d'affichage D15 est tenue) |
 | UX12 | Priorité si le temps se resserre | **Session + socle d'abord** (vague 1), puis accueil/documents/projets (vague 2), puis suivi & réglages/fiche document (vague 3) |
+| UX13 | Validation de la maquette (go étape 2) | **« En phase, mais conformité DSFR obligatoire »** : l'implémentation utilise les composants DSFR officiels partout où ils existent (`fr-header`, `fr-nav`, `fr-notice`, `fr-breadcrumb`, `fr-stepper`, `fr-accordion`, `fr-badge`, `fr-btn`, `fr-table`, `fr-tag`, `fr-tile`…) et les tokens DSFR pour les rares parties sans composant natif (bulles du chat) ; le JS DSFR est chargé (les composants interactifs en dépendent). La maquette HTML n'est qu'une approximation visuelle assumée — l'implémentation fait foi |
 
 ## 3. Cible par écran
 
@@ -140,6 +141,7 @@ Une page à deux sections ancrées : Télémétrie (indicateurs + jauge tpd) et 
 | H12 | « Suivi & réglages » = une page, deux sections ancrées ; anciennes routes redirigées | à valider |
 | H13 | Export dans la barre de session (CSV / markdown) avec l'avertissement A8 à proximité | à valider |
 | H14 | Sans JavaScript, tout reste utilisable (progressive enhancement conservé) — les gestes de masse dégradent en gestes individuels | à valider |
+| H15 | Le JS DSFR (module 1.12) est chargé par CDN comme le CSS au MVP (vendoring prévu en E7) ; les composants restent dégradables sans lui (accordéons via `details` en repli) | à valider |
 
 ## 5. Découpage en stories (une story = une PR, TU + TNR + plan de test)
 
@@ -173,8 +175,10 @@ Une page à deux sections ancrées : Télémétrie (indicateurs + jauge tpd) et 
 
 ## 6. Contraintes tenues (rappel des invariants)
 
-- **DSFR réel** (composants, focus visibles, contrastes, thème clair/sombre) — cohérent avec
-  les critères d'accessibilité du gabarit ; police Marianne via le CSS DSFR officiel (CDN au MVP).
+- **DSFR réel — exigence UX13** : composants officiels partout où ils existent, tokens DSFR
+  (custom properties) pour le custom, focus visibles, contrastes, thème clair/sombre —
+  cohérent avec les critères d'accessibilité du gabarit ; police Marianne + JS DSFR via
+  le CDN officiel (CDN au MVP, vendoring en E7).
 - **D15** : la mention « Ne collez pas de données personnelles » reste affichée partout (notice fine).
 - **Arbitrages produit intacts** : A2 (question libre, même fil), A3 (citations + extrait exact),
   A5 (étape fidèle, alerte couverture), A6 (association par dossiers), A7 (instance partagée,
