@@ -21,7 +21,7 @@ racine (prod Helm, dev compose), root_path vide = comportement inchangé.
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi import FastAPI, Form, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -295,6 +295,13 @@ def gerer_session_web(
     return _rediriger(request, f"/sessions/{session_id}")
 
 
+@app.post("/sessions/{session_id}/hypotheses/appliquer-propositions")
+def appliquer_levees_proposees(request: Request, session_id: int) -> RedirectResponse:
+    """S3.21 : applique en lot les levées proposées relues par le PO (A8 assoupli, arbitré)."""
+    api_client.appeler("POST", f"/workflows/{session_id}/hypotheses/appliquer-propositions")
+    return _rediriger(request, f"/sessions/{session_id}")
+
+
 @app.post("/sessions/{session_id}/hypotheses/{hypothese_id}")
 def decider_hypothese(
     request: Request, session_id: int, hypothese_id: int, statut: Annotated[str, Form()]
@@ -498,6 +505,9 @@ def ecran_documents(request: Request) -> HTMLResponse:
     # S3.10 : suivi des runs d'ingestion — l'écran reste servi sans l'endpoint.
     statut_runs, runs = api_client.appeler("GET", "/ingestion/runs")
     runs = runs if statut_runs == 200 and isinstance(runs, list) else []
+    # S3.18 : dossiers existants pour la datalist du dépôt — dégradé en liste vide.
+    statut_dossiers, dossiers = api_client.appeler("GET", "/documents/dossiers")
+    dossiers = dossiers if statut_dossiers == 200 and isinstance(dossiers, list) else []
     return templates.TemplateResponse(
         request=request,
         name="documents.html",
@@ -510,6 +520,7 @@ def ecran_documents(request: Request) -> HTMLResponse:
             "runs": runs,
             "run_en_cours": any(r.get("statut") == "en_cours" for r in runs),
             "erreur_ingestion": request.query_params.get("erreur"),
+            "dossiers": dossiers,
         },
     )
 
@@ -528,11 +539,17 @@ def ecran_document(request: Request, document_id: int) -> HTMLResponse:
 
 
 @app.post("/documents/upload")
-async def deposer_document(request: Request, fichier: UploadFile) -> RedirectResponse:
-    """S3.10 : dépôt → dossier corpus (statut « en attente d'indexation »)."""
+async def deposer_document(
+    request: Request, fichier: UploadFile, dossier: Annotated[str, Form()]
+) -> RedirectResponse:
+    """S3.10/S3.18 : dépôt → un DOSSIER du corpus (celui qu'on associe à un projet)."""
     contenu = await fichier.read()
     statut, corps = api_client.envoyer_fichier(
-        "/documents/upload", fichier.filename or "", contenu, fichier.content_type or ""
+        "/documents/upload",
+        fichier.filename or "",
+        contenu,
+        fichier.content_type or "",
+        donnees={"dossier": dossier},
     )
     if statut != 201:
         return _rediriger(request, f"/documents?erreur={corps.get('detail', 'dépôt refusé')}")
@@ -551,6 +568,32 @@ def lancer_indexation(request: Request) -> RedirectResponse:
 @app.post("/documents/runs/{run_id}/echec")
 def debloquer_run(request: Request, run_id: int) -> RedirectResponse:
     api_client.appeler("POST", f"/ingestion/runs/{run_id}/echec")
+    return _rediriger(request, "/documents")
+
+
+@app.get("/documents/{document_id}/original")
+def telecharger_original(document_id: int) -> Response:
+    """S3.17 : proxy binaire de l'original (l'api n'est pas exposée au navigateur)."""
+    statut, contenu, content_type, disposition = api_client.telecharger_binaire(
+        f"/documents/{document_id}/original"
+    )
+    entetes = {"content-disposition": disposition} if disposition else {}
+    return Response(
+        content=contenu,
+        status_code=statut if statut != 599 else 502,
+        media_type=content_type,
+        headers=entetes,
+    )
+
+
+@app.post("/documents/{document_id}/supprimer")
+def supprimer_document(request: Request, document_id: int) -> RedirectResponse:
+    """S3.17 : suppression complète (base + fichiers) — confirmée côté écran."""
+    statut, corps = api_client.appeler("DELETE", f"/documents/{document_id}")
+    if statut not in (200, 204):
+        return _rediriger(
+            request, f"/documents?erreur={corps.get('detail', 'suppression refusée')}"
+        )
     return _rediriger(request, "/documents")
 
 

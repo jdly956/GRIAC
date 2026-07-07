@@ -248,6 +248,45 @@ def test_message_nominal_alimente_fil_et_registre(brancher) -> None:
     assert appel["messages"][-1]["content"] == "quel seuil de taille ?"
 
 
+def test_requete_recherche_contextualisee(brancher, monkeypatch: pytest.MonkeyPatch) -> None:
+    # S3.15 (session 12 : 14 messages sur 26 sans source) : la requête envoyée
+    # à la recherche porte le projet et la Feature, pas le seul message PO.
+    script = [
+        ("interview", 4, "Feature : mire d'authentification de base"),  # session AVEC projet
+        None,  # pas de surcharge de modèle
+        ("Téléservice Actes", "Dépôt et suivi des actes des collectivités"),  # projet
+        [],  # nfrs
+        [("po", "Ma Feature")],  # historique
+        [],  # registre
+    ]
+    connexion, _ = brancher(script, "Réponse.")
+    entrees_capturees: list = []
+    monkeypatch.setattr(
+        moteur,
+        "construire_contexte",
+        lambda connexion, client, settings, entree: (
+            entrees_capturees.append(entree) or CONTEXTE_CANNE
+        ),
+    )
+    client_http.post("/workflows/7/message", json={"message": "oui"})
+    question = entrees_capturees[0].question
+    assert "Téléservice Actes" in question  # le projet ancre la requête
+    assert "mire d'authentification" in question  # la Feature aussi
+    assert question.endswith("oui")  # le message PO reste la fin de la requête
+
+
+def test_construire_requete_recherche_bornee_et_degradee() -> None:
+    # Fonction pure : sans projet ni Feature, la requête = le message seul ;
+    # avec, chaque morceau est borné (la requête n'est pas un second prompt).
+    assert moteur.construire_requete_recherche("quel seuil ?", None, None) == "quel seuil ?"
+    question = moteur.construire_requete_recherche(
+        "quel seuil ?", "F" * 1000, {"nom": "Projet X", "contexte": "C" * 1000}
+    )
+    assert question.splitlines()[0] == "Projet X — " + "C" * moteur.REQUETE_MAX_CONTEXTE_PROJET
+    assert question.splitlines()[1] == "F" * moteur.REQUETE_MAX_FEATURE
+    assert question.splitlines()[-1] == "quel seuil ?"
+
+
 def test_hypothese_deja_connue_non_dupliquee(brancher) -> None:
     script = [
         ("interview", None, "Ma Feature"),

@@ -8,6 +8,19 @@
 </h1>
 <p><a href="{{ racine }}/documents">← Mes documents</a></p>
 
+{# S3.17 : télécharger l'original / supprimer (base + fichiers — définitif). #}
+<div class="panneau">
+  <h2>Actions</h2>
+  <p><a class="fr-btn fr-btn--secondary" href="{{ racine }}/documents/{{ fiche.id }}/original" download="{{ fiche.nom }}">Télécharger l'original</a></p>
+  <form method="post" action="{{ racine }}/documents/{{ fiche.id }}/supprimer"
+        onsubmit="return confirm('Supprimer définitivement « {{ fiche.nom }} » ? Le fichier source, son parsing et ses chunks seront retirés du corpus et de la recherche.')">
+    <button class="fr-btn fr-btn--secondary" type="submit">Supprimer ce document</button>
+    <p><em>Suppression définitive : fichier source, dérivé markdown et chunks — le document
+      ne sera plus cité par la recherche. Ré-indexer ne le fera pas revenir (il faudrait
+      le déposer à nouveau).</em></p>
+  </form>
+</div>
+
 <div class="panneau">
   <h2>Identité</h2>
   <ul>

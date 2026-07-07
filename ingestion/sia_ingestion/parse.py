@@ -1,15 +1,16 @@
 """Nœud B du DAG d'ingestion (S1.8) : parsing docling -> markdown structuré.
 
-`make ingest-parse CORPUS=<dossier>` : pour chaque document docx/pdf inventorié
-par le scan (S1.7), convertit en markdown (hiérarchie de titres préservée,
-tableaux rendus en tableaux markdown — jamais détruits) et écrit le dérivé
-`derived/md/<sha256>.md` (hors repo). Reprise sur hash (D9) : un dérivé déjà
-présent pour le sha256 courant n'est pas reconverti. Les PDF sans couche texte
-sont marqués `ocr_requis` (OCR = sprint 2). Un document en échec n'interrompt
-pas le lot : statut `echec` en base, rapport `derived/rapport-parsing.csv`.
+`make ingest-parse CORPUS=<dossier>` : pour chaque document parsable inventorié
+par le scan (S1.7) — docx, pdf, et depuis S3.16 pptx, xlsx, eml —, convertit en
+markdown (hiérarchie de titres préservée, tableaux rendus en tableaux markdown
+— jamais détruits) et écrit le dérivé `derived/md/<sha256>.md` (hors repo).
+Reprise sur hash (D9) : un dérivé déjà présent pour le sha256 courant n'est pas
+reconverti. Les PDF sans couche texte sont marqués `ocr_requis`. Un document en
+échec n'interrompt pas le lot : statut `echec` en base, rapport CSV.
 
-docling est importé paresseusement (torch, lourd) : les TU injectent un faux
-convertisseur et ne le chargent jamais.
+docling (docx/pdf/pptx/xlsx) est importé paresseusement (torch, lourd) : les TU
+injectent un faux convertisseur et ne le chargent jamais. Les `.eml` passent
+par un convertisseur dédié (stdlib `email`) — docling ne les couvre pas.
 """
 
 import argparse
@@ -23,9 +24,11 @@ from pathlib import Path
 
 import psycopg
 
+from sia_api.documents import EXTENSIONS_PARSABLES
+
 DERIVES_PAR_DEFAUT = "derived/md"
 RAPPORT_PAR_DEFAUT = "derived/rapport-parsing.csv"
-EXTENSIONS_PARSEES = ("docx", "pdf")
+EXTENSIONS_PARSEES = EXTENSIONS_PARSABLES  # source unique : sia_api.documents (S3.16)
 
 REQUETE_A_PARSER = """
     SELECT chemin, sha256 FROM documents
@@ -75,6 +78,37 @@ def convertir_en_markdown(chemin: Path) -> str:
     return _convertisseur.convert(chemin).document.export_to_markdown()
 
 
+def convertir_eml_en_markdown(chemin: Path) -> str:
+    """Courriel .eml -> markdown (S3.16) — docling ne couvre pas ce format.
+
+    En-têtes utiles en tête (le RAG y trouve dates et interlocuteurs), corps
+    en texte (le HTML seul est dégradé en texte brut), pièces jointes LISTÉES
+    mais jamais extraites — un PJ pertinente se dépose comme document à part.
+    """
+    import re as _re
+    from email import policy
+    from email.parser import BytesParser
+
+    message = BytesParser(policy=policy.default).parse(chemin.open("rb"))
+    lignes = [f"# {message.get('Subject', '(sans objet)')}", ""]
+    for entete in ("From", "To", "Cc", "Date"):
+        if message.get(entete):
+            lignes.append(f"- **{entete}** : {message.get(entete)}")
+    lignes.append("")
+
+    corps = message.get_body(preferencelist=("plain", "html"))
+    texte = corps.get_content() if corps is not None else ""
+    if corps is not None and corps.get_content_type() == "text/html":
+        texte = _re.sub(r"<[^>]+>", " ", texte)  # dégradé assumé : texte brut
+    lignes.append(texte.strip())
+
+    pieces = [piece.get_filename() for piece in message.iter_attachments() if piece.get_filename()]
+    if pieces:
+        lignes += ["", "## Pièces jointes (non extraites)", ""]
+        lignes += [f"- {nom}" for nom in pieces]
+    return "\n".join(lignes)
+
+
 def est_pdf_sans_texte(chemin: Path) -> bool:
     """PDF « scanné » : aucune page ne porte de texte extractible."""
     from pypdf import PdfReader
@@ -103,7 +137,12 @@ def parser_lot(
             elif source.suffix.lower() == ".pdf" and pdf_sans_texte(source):
                 resultats.append(ResultatParsing(chemin_relatif, "ocr_requis"))
             else:
-                markdown = convertir(source)
+                # S3.16 : les .eml ont leur convertisseur dédié (stdlib) ; le
+                # reste (docx/pdf/pptx/xlsx) passe par docling.
+                if source.suffix.lower() == ".eml":
+                    markdown = convertir_eml_en_markdown(source)
+                else:
+                    markdown = convertir(source)
                 dossier_derives.mkdir(parents=True, exist_ok=True)
                 derive.write_text(markdown, encoding="utf-8")
                 resultats.append(ResultatParsing(chemin_relatif, "parse", str(derive)))

@@ -92,10 +92,18 @@ def test_assemblage_borne_a_15_candidats() -> None:
     assert len(retenus) == 15  # 8-15 chunks (E2)
 
 
-def test_assemblage_garde_toujours_le_premier_chunk() -> None:
-    contexte, retenus, _ = assembler_contexte([_chunk("gros.docx", nb_tokens=9000)])
-    assert len(retenus) == 1  # un chunk hors budget seul reste servi (tableau géant S2.1)
-    assert "[Source : gros.docx" in contexte
+def test_assemblage_tronque_le_premier_chunk_hors_budget() -> None:
+    # S3.20 (session 12) : fin du passe-droit — l'ancien comportement embarquait
+    # le premier chunk ENTIER même à ~235k tokens (chunk-tableau xlsx).
+    # (Remplace test_assemblage_garde_toujours_le_premier_chunk — objet du fix.)
+    geant = _chunk("gros.xlsx", nb_tokens=9000).model_copy(update={"contenu": "| ligne |" * 10_000})
+    suivant = _chunk("doc1.docx", nb_tokens=400)
+    contexte, retenus, total = assembler_contexte([geant, suivant], budget_tokens=1000)
+    assert len(retenus) == 1  # le budget est consommé par le tronqué, rien derrière
+    assert total == 1000
+    assert len(retenus[0].contenu) <= 1000 * 4 + 200  # tronqué à la borne (+ marqueur)
+    assert "extrait tronqué" in retenus[0].contenu and "9000 tokens" in retenus[0].contenu
+    assert "[Source : gros.xlsx" in contexte  # toujours cité, jamais servi entier
 
 
 # --- construire_contexte : bout en bout avec DB/Albert/HTTP simulés ---

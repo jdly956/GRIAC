@@ -51,16 +51,42 @@ def test_budget_max_respecte_hors_tableaux() -> None:
     assert all(chunk.nb_tokens <= TOKENS_MAX + 50 for chunk in chunks)  # marge chevauchement
 
 
-def test_tableau_geant_jamais_coupe() -> None:
+def test_tableau_geant_scinde_avec_entete_repete() -> None:
+    # S3.19 (session 12) : la règle « jamais coupé » est amendée — un tableau
+    # au-delà du budget est scindé par groupes de lignes, l'en-tête répété.
+    # (Remplace test_tableau_geant_jamais_coupe — objet même de la story.)
     lignes = ["| colonne A | colonne B |", "|---|---|"] + [
         f"| valeur {i} très détaillée pour gonfler la taille | seuil {i} |" for i in range(200)
     ]
     markdown = "# Annexe\n\n" + "\n".join(lignes) + "\n"
     chunks = chunker_markdown(markdown)
-    tableaux = [chunk for chunk in chunks if "| colonne A |" in chunk.contenu]
-    assert len(tableaux) == 1  # le tableau entier vit dans UN chunk
-    assert tableaux[0].contenu.count("| valeur") == 200  # aucune ligne perdue
-    assert tableaux[0].nb_tokens > TOKENS_MAX  # la règle prime sur le budget
+    tableaux = [chunk for chunk in chunks if "| valeur" in chunk.contenu]
+    assert len(tableaux) > 1  # plus de chunk géant
+    assert all(chunk.nb_tokens <= TOKENS_MAX + 50 for chunk in chunks)  # budget tenu
+    # Chaque morceau reste un tableau markdown complet : en-tête + séparateur.
+    for tableau in tableaux:
+        assert tableau.contenu.startswith("| colonne A | colonne B |\n|---|---|")
+    # Aucune ligne perdue, aucune coupée en deux.
+    total_lignes = sum(chunk.contenu.count("| valeur") for chunk in tableaux)
+    assert total_lignes == 200
+    for tableau in tableaux:
+        assert all(ligne.endswith("|") for ligne in tableau.contenu.splitlines())
+
+
+def test_lignes_de_tableau_compactees() -> None:
+    # S3.19 : docling padde les cellules xlsx à largeur fixe (3 600 chars/ligne
+    # sur la session 12 — ~75 % d'espaces) ; les runs d'espaces sont compactés.
+    markdown = (
+        "# Annexe\n\n"
+        "| Code      |              Libellé              |\n"
+        "|-----------|-----------------------------------|\n"
+        "| 1PORT_1   | Transmettre un acte               |     \n"
+    )
+    chunks = chunker_markdown(markdown)
+    assert len(chunks) == 1
+    assert "| Code | Libellé |" in chunks[0].contenu
+    assert "  " not in chunks[0].contenu  # plus aucun run d'espaces
+    assert "Transmettre un acte |" in chunks[0].contenu  # le contenu est intact
 
 
 def test_chevauchement_entre_chunks_consecutifs() -> None:

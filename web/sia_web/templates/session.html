@@ -26,7 +26,9 @@
     {% for source in dernier_resultat.sources %}
     <li>{{ source.nom }} — {{ source.section }}
       {% if source.extrait %}
-      <details><summary>extrait exact</summary><blockquote>{{ source.extrait }}</blockquote></details>
+      {# S3.20 : extrait borné à l'affichage — un extrait anormalement long
+         (session 12 : 940k chars) rendait la page inutilisable. #}
+      <details><summary>extrait exact</summary><blockquote>{{ source.extrait[:2000] }}{% if source.extrait | length > 2000 %}<br><em>[… affichage tronqué à 2 000 caractères sur {{ source.extrait | length }}]</em>{% endif %}</blockquote></details>
       {% endif %}
     </li>
     {% endfor %}
@@ -87,6 +89,16 @@
 <details class="panneau" {% if nb_levees_a_decider %}open{% endif %}>
   <summary><strong>Hypothèses à valider ({{ etat.nb_en_attente }} en attente{% if nb_levees_a_decider %}, dont {{ nb_levees_a_decider }} levée(s) proposée(s) à décider{% endif %})</strong></summary>
   <p>Chaque hypothèse se lève <strong>individuellement</strong> — une validation d'étape ne lève rien (A8).</p>
+  {% if nb_levees_a_decider %}
+  {# S3.21 (arbitrage 07/07) : le PO relit les propositions listées ci-dessous
+     et les applique d'un clic — sa décision, en lot. Seules les hypothèses
+     portant une proposition du moteur sont touchées. #}
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/appliquer-propositions"
+        onsubmit="return confirm('Appliquer les {{ nb_levees_a_decider }} levée(s) proposée(s) telles qu\'affichées (Confirmer/Rejeter) ? Les hypothèses sans proposition ne bougent pas.')">
+    <button class="fr-btn fr-btn--sm" type="submit">Appliquer les {{ nb_levees_a_decider }} levée(s) proposée(s)</button>
+    <span class="fr-hint-text">Relisez chaque proposition ci-dessous avant d'appliquer — vous pouvez aussi décider hypothèse par hypothèse.</span>
+  </form>
+  {% endif %}
   {% if etat.hypotheses %}
   <ul>
     {% for hypothese in etat.hypotheses %}

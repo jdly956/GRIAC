@@ -347,6 +347,47 @@ def test_decision_hypothese_inconnue_404(brancher) -> None:
     assert client.post("/workflows/7/hypotheses/99", json={"statut": "rejetee"}).status_code == 404
 
 
+def test_application_en_lot_des_levees_proposees(brancher) -> None:
+    # S3.21 (arbitrage 07/07, session 12) : le PO relit puis applique d'un clic
+    # TOUTES les levées proposées — et rien d'autre : une hypothèse sans
+    # proposition reste en_attente (l'esprit d'A8 : aucune levée silencieuse).
+    hypotheses_apres = [
+        (3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]", "modele", "confirmee", "confirmee", "PO : 10 Mo"),
+        (5, "SSO obligatoire [HYPOTHÈSE À VALIDER]", "modele", "rejetee", "rejetee", "PO : non"),
+        (8, "Jamais tranchée [HYPOTHÈSE À VALIDER]", "modele", "en_attente", None, None),
+    ]
+    connexion = brancher(
+        [
+            (7, "interview", None),  # _lire_session (garde 404)
+            [],  # ses hypothèses (peu importe ici)
+            [(3,), (5,)],  # UPDATE ... RETURNING id — 2 propositions appliquées
+            (7, "interview", None),  # _lire_session après
+            hypotheses_apres,
+        ]
+    )
+    reponse = client.post("/workflows/7/hypotheses/appliquer-propositions")
+    assert reponse.status_code == 200
+    corps = reponse.json()
+    statuts = {h["id"]: h["statut"] for h in corps["hypotheses"]}
+    assert statuts == {3: "confirmee", 5: "rejetee", 8: "en_attente"}
+    maj = [r for r, _ in connexion.curseur.requetes if "UPDATE workflow_hypotheses" in r]
+    assert "statut = statut_propose" in maj[0]  # jamais un statut inventé par la route
+    assert "statut_propose IS NOT NULL" in maj[0]  # jamais une hypothèse sans proposition
+    assert "statut = 'en_attente'" in maj[0]  # jamais une hypothèse déjà décidée
+
+
+def test_application_en_lot_sans_proposition_409(brancher) -> None:
+    brancher([(7, "interview", None), [], []])
+    reponse = client.post("/workflows/7/hypotheses/appliquer-propositions")
+    assert reponse.status_code == 409
+    assert "Aucune levée proposée" in reponse.json()["detail"]
+
+
+def test_application_en_lot_session_inconnue_404(brancher) -> None:
+    brancher([None])
+    assert client.post("/workflows/99/hypotheses/appliquer-propositions").status_code == 404
+
+
 def test_synthese_refusee_avant_l_etape_finale(brancher) -> None:
     brancher([(7, "redaction", None), []])
     reponse = client.get("/workflows/7/synthese")

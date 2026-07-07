@@ -127,6 +127,26 @@ def test_registre_replie_sauf_levee_proposee_a_decider(api) -> None:
     assert "1 levée(s) proposée(s) à décider" in texte
 
 
+def test_application_en_lot_des_levees_proposees(api) -> None:
+    # S3.21 : dès qu'une levée proposée attend, le registre offre l'application
+    # en lot (relue, confirmée par le PO) — les boutons individuels restent.
+    avec_proposition = dict(
+        ETAT_SESSION,
+        hypotheses=[dict(ETAT_SESSION["hypotheses"][0], statut_propose="confirmee")],
+    )
+    api.brancher("GET", "/workflows/1", 200, avec_proposition)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert 'action="/sessions/1/hypotheses/appliquer-propositions"' in texte
+    assert "Appliquer les 1 levée(s) proposée(s)" in texte
+    assert 'action="/sessions/1/hypotheses/3"' in texte  # décision individuelle intacte
+
+    api.brancher("POST", "/workflows/1/hypotheses/appliquer-propositions", 200, {})
+    reponse = client.post("/sessions/1/hypotheses/appliquer-propositions", follow_redirects=False)
+    assert reponse.status_code == 303
+    assert ("POST", "/workflows/1/hypotheses/appliquer-propositions", None) in api.appels
+
+
 def test_fil_replie_sauf_derniers_echanges(api) -> None:
     # S3.7 : la page ne s'allonge plus indéfiniment — seuls les 4 derniers
     # messages restent dépliés, les précédents vivent dans un bloc repliable.
@@ -427,29 +447,57 @@ def test_depot_et_indexation_depuis_mes_documents(api, monkeypatch: pytest.Monke
             }
         ],
     )
+    api.brancher("GET", "/documents/dossiers", 200, ["projet-alpha"])
     texte = client.get("/documents").text
     assert "Déposer un document" in texte
     assert "Indexation en cours…" in texte  # bouton désactivé pendant un run
     assert 'http-equiv="refresh"' in texte  # suivi en direct
     assert "scan : ok" in texte
+    # S3.18 : dossier obligatoire, dossiers existants proposés en datalist.
+    assert 'name="dossier"' in texte and "required" in texte
+    assert '<option value="projet-alpha">' in texte
 
-    envois: list[tuple[str, str]] = []
+    envois: list[tuple[str, str, dict | None]] = []
     monkeypatch.setattr(
         api_client,
         "envoyer_fichier",
-        lambda chemin, nom, contenu, ct: envois.append((chemin, nom)) or (201, {}),
+        lambda chemin, nom, contenu, ct, donnees=None: (
+            envois.append((chemin, nom, donnees)) or (201, {})
+        ),
     )
     reponse = client.post(
         "/documents/upload",
         files={"fichier": ("spec.docx", b"contenu", "application/msword")},
+        data={"dossier": "projet-alpha"},
         follow_redirects=False,
     )
     assert reponse.status_code == 303
-    assert envois == [("/documents/upload", "spec.docx")]
+    # Le dossier saisi est transmis à l'api avec le fichier (S3.18).
+    assert envois == [("/documents/upload", "spec.docx", {"dossier": "projet-alpha"})]
 
     api.brancher("POST", "/ingestion/lancer", 202, {"id": 3})
     assert client.post("/documents/indexer", follow_redirects=False).status_code == 303
     assert any(a[:2] == ("POST", "/ingestion/lancer") for a in api.appels)
+
+
+def test_extrait_anormalement_long_tronque_a_l_affichage(api) -> None:
+    # S3.20 (session 12) : un extrait de 940k chars (chunk-tableau xlsx) rendait
+    # la page inutilisable — l'affichage est borné, la mention l'explique.
+    messages = [
+        {
+            "role": "assistant",
+            "etape": "interview",
+            "contenu": "Réponse",
+            "sources": [{"nom": "gros.xlsx", "section": "Feuille1", "extrait": "| x |" * 3000}],
+            "avertissements": [],
+            "divergences": [],
+        }
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, messages)
+    texte = client.get("/sessions/1").text
+    assert "affichage tronqué à 2 000 caractères sur 15000" in texte
+    assert texte.count("| x |") < 1000  # la page ne porte plus l'extrait entier
 
 
 def test_traces_du_fil_avec_extrait_exact(api) -> None:
@@ -554,6 +602,67 @@ def test_fiche_document_affiche_le_traitement(api) -> None:
     assert "Spec &gt; Exigences" in texte or "Spec > Exigences" in texte
     assert "✅ vectorisé" in texte
     assert "contenu exact du chunk" in texte
+
+
+FICHE_MINIMALE = {
+    "id": 1,
+    "chemin": "pa/spec-v2.docx",
+    "nom": "spec-v2.docx",
+    "extension": "docx",
+    "taille_octets": 12345,
+    "sha256": "abc123def456ghij",
+    "statut_parsing": "parse",
+    "erreur_parsing": None,
+    "date_parsing": None,
+    "chemin_derive": None,
+    "derive_apercu": None,
+    "derive_tronque": False,
+    "est_reference": False,
+    "doublon_de": None,
+    "projet_suggere": None,
+    "version_no": None,
+    "groupe_version": None,
+    "chunks": [],
+    "nb_chunks": 0,
+    "nb_embarques": 0,
+}
+
+
+def test_fiche_document_actions_telecharger_et_supprimer(api) -> None:
+    # S3.17 : la fiche porte le téléchargement de l'original et la suppression
+    # (confirmée — l'action est définitive).
+    api.brancher("GET", "/documents/1", 200, FICHE_MINIMALE)
+    texte = client.get("/documents/1").text
+    assert 'href="/documents/1/original"' in texte
+    assert 'action="/documents/1/supprimer"' in texte
+    assert "confirm(" in texte  # garde-fou navigateur avant une action définitive
+
+
+def test_suppression_document_redirige_vers_l_inventaire(api) -> None:
+    api.brancher("DELETE", "/documents/1", 204, {})
+    reponse = client.post("/documents/1/supprimer", follow_redirects=False)
+    assert reponse.status_code == 303
+    assert reponse.headers["location"] == "/documents"
+    assert ("DELETE", "/documents/1", None) in api.appels
+
+
+def test_telechargement_original_proxifie_en_binaire(monkeypatch: pytest.MonkeyPatch) -> None:
+    # S3.17 : proxy BINAIRE (un .docx passé par .text serait corrompu) ; le
+    # Content-Disposition de l'api (nom du fichier) est propagé au navigateur.
+    monkeypatch.setattr(
+        api_client,
+        "telecharger_binaire",
+        lambda chemin: (
+            200,
+            b"\x50\x4b\x03\x04octets docx",
+            "application/octet-stream",
+            'attachment; filename="spec-v2.docx"',
+        ),
+    )
+    reponse = client.get("/documents/1/original")
+    assert reponse.status_code == 200
+    assert reponse.content == b"\x50\x4b\x03\x04octets docx"
+    assert reponse.headers["content-disposition"] == 'attachment; filename="spec-v2.docx"'
 
 
 def test_session_inconnue_page_erreur(api) -> None:

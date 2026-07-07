@@ -8,6 +8,7 @@ import pytest
 from sia_ingestion.parse import (
     EXTENSIONS_PARSEES,
     ResultatParsing,
+    convertir_eml_en_markdown,
     ecrire_rapport,
     enregistrer_resultats,
     est_pdf_sans_texte,
@@ -88,6 +89,61 @@ def test_reprise_sur_hash_ne_reconvertit_pas(tmp_path: Path) -> None:
     )
     assert resultats[0].statut == "inchange"
     assert appels == []  # aucune conversion : le dérivé du sha256 existe (D9)
+
+
+def _ecrire_eml(tmp_path: Path, corps_html_seul: bool = False) -> Path:
+    """Courriel de test réaliste (stdlib) : en-têtes, corps, pièce jointe."""
+    from email.message import EmailMessage
+
+    message = EmailMessage()
+    message["Subject"] = "Validation du périmètre RGPD"
+    message["From"] = "po@exemple.gouv.fr"
+    message["To"] = "referent@exemple.gouv.fr"
+    message["Date"] = "Mon, 06 Jul 2026 10:00:00 +0200"
+    if corps_html_seul:
+        message.add_alternative("<p>Bonjour, le <b>périmètre</b> est validé.</p>", subtype="html")
+    else:
+        message.set_content("Bonjour,\nle périmètre est validé.")
+    message.add_attachment(
+        b"%PDF-fictif", maintype="application", subtype="pdf", filename="annexe-rgpd.pdf"
+    )
+    chemin = tmp_path / "echange.eml"
+    chemin.write_bytes(message.as_bytes())
+    return chemin
+
+
+def test_conversion_eml_entetes_corps_et_pieces_jointes(tmp_path: Path) -> None:
+    markdown = convertir_eml_en_markdown(_ecrire_eml(tmp_path))
+    assert markdown.startswith("# Validation du périmètre RGPD")
+    assert "- **From** : po@exemple.gouv.fr" in markdown
+    assert "- **Date** : Mon, 06 Jul 2026 10:00:00 +0200" in markdown
+    assert "le périmètre est validé" in markdown
+    # La pièce jointe est LISTÉE, jamais extraite (elle se dépose à part).
+    assert "## Pièces jointes (non extraites)" in markdown
+    assert "- annexe-rgpd.pdf" in markdown
+    assert "%PDF" not in markdown
+
+
+def test_conversion_eml_html_seul_degrade_en_texte(tmp_path: Path) -> None:
+    markdown = convertir_eml_en_markdown(_ecrire_eml(tmp_path, corps_html_seul=True))
+    assert "périmètre" in markdown
+    assert "<p>" not in markdown and "<b>" not in markdown
+
+
+def test_routage_eml_ne_passe_pas_par_docling(tmp_path: Path) -> None:
+    racine = tmp_path / "corpus"
+    (racine / "alpha").mkdir(parents=True)
+    _ecrire_eml(racine / "alpha")
+    resultats = parser_lot(
+        [("alpha/echange.eml", "c" * 64)],
+        racine,
+        tmp_path / "derives",
+        convertir=lambda _: pytest.fail("un .eml ne doit jamais passer par docling"),
+        pdf_sans_texte=lambda _: False,
+    )
+    assert resultats[0].statut == "parse"
+    derive = Path(resultats[0].chemin_derive).read_text(encoding="utf-8")
+    assert derive.startswith("# Validation du périmètre RGPD")
 
 
 def test_detection_pdf_sans_texte_sur_fixtures_reelles() -> None:

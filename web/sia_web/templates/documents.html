@@ -13,8 +13,18 @@
 <div class="panneau">
   <h2>Ajouter des documents</h2>
   <form method="post" action="{{ racine }}/documents/upload" enctype="multipart/form-data">
-    <label class="fr-label" for="fichier">Déposer un document (docx, pdf, md, txt, odt — 50 Mo max)</label>
+    <label class="fr-label" for="fichier">Déposer un document (docx, pdf, pptx, xlsx, eml, md, txt, odt — 50 Mo max)</label>
     <input class="fr-input" type="file" id="fichier" name="fichier" required>
+    {# S3.18 : dossier OBLIGATOIRE — c'est lui qu'on associe à un projet (A6) ;
+       saisir un nom nouveau crée le dossier au dépôt. #}
+    <label class="fr-label" for="dossier">Dossier de destination (obligatoire)
+      <span class="fr-hint-text">C'est ce dossier qui est associé à un projet — choisir un
+        dossier existant ou taper un nouveau nom pour le créer.</span>
+    </label>
+    <input class="fr-input" id="dossier" name="dossier" list="dossiers-existants" required>
+    <datalist id="dossiers-existants">
+      {% for nom_dossier in dossiers %}<option value="{{ nom_dossier }}">{% endfor %}
+    </datalist>
     <button class="fr-btn" type="submit">Déposer</button>
   </form>
   <form method="post" action="{{ racine }}/documents/indexer" class="action-secondaire">

@@ -11,9 +11,11 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from sia_api.db import get_connexion
+from sia_api.ingestion import dossier_corpus
 
 router = APIRouter(tags=["documents"])
 
@@ -43,9 +45,15 @@ REQUETE_CHUNKS = """
 # Aperçu du dérivé markdown : assez pour juger le parsing, sans servir 2 Mo.
 TAILLE_APERCU_DERIVE = 8_000
 
-REQUETE_STATS = """
+# Formats que le pipeline sait convertir en markdown (S3.16) : docling pour
+# docx/pdf/pptx/xlsx, convertisseur eml dédié (stdlib) côté ingestion.
+# Source unique — `sia_ingestion.parse` importe cette constante.
+EXTENSIONS_PARSABLES = ("docx", "pdf", "pptx", "xlsx", "eml")
+_LISTE_PARSABLES = ", ".join(f"'{extension}'" for extension in EXTENSIONS_PARSABLES)
+
+REQUETE_STATS = f"""
     SELECT count(*) AS total,
-           count(*) FILTER (WHERE extension IN ('docx', 'pdf')) AS parsables,
+           count(*) FILTER (WHERE extension IN ({_LISTE_PARSABLES})) AS parsables,
            count(*) FILTER (WHERE statut_parsing = 'parse') AS parses,
            count(*) FILTER (WHERE statut_parsing = 'echec') AS echecs,
            count(*) FILTER (WHERE statut_parsing = 'ocr_requis') AS ocr_requis,
@@ -156,8 +164,26 @@ def stats_documents(connexion: Connexion) -> StatsDocuments:
     )
 
 
-# Enregistrée APRÈS /documents/stats : la route dynamique {document_id}
-# capturerait « stats » sinon (ordre de matching FastAPI).
+@router.get("/documents/dossiers")
+def lister_dossiers(connexion: Connexion) -> list[str]:
+    """S3.18 : dossiers existants du corpus, pour le champ de dépôt (datalist).
+
+    Union disque (dossiers créés, même pas encore indexés) + base (dossiers vus
+    par la qualification — couvre un corpus indexé depuis un autre chemin).
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "SELECT DISTINCT projet_suggere FROM documents WHERE projet_suggere IS NOT NULL"
+        )
+        en_base = {ligne[0] for ligne in curseur.fetchall()}
+    racine = dossier_corpus()
+    sur_disque = {p.name for p in racine.iterdir() if p.is_dir()} if racine.is_dir() else set()
+    return sorted(en_base | sur_disque)
+
+
+# Enregistrées APRÈS /documents/stats et /documents/dossiers : la route
+# dynamique {document_id} capturerait « stats »/« dossiers » sinon (ordre de
+# matching FastAPI).
 @router.get("/documents/{document_id}")
 def fiche_document(document_id: int, connexion: Connexion) -> FicheDocument:
     """S3.14 : tout le traitement d'un document — parsing/OCR, dérivé, chunks."""
@@ -194,3 +220,64 @@ def fiche_document(document_id: int, connexion: Connexion) -> FicheDocument:
         nb_chunks=len(chunks),
         nb_embarques=sum(1 for c in chunks if c.embarque),
     )
+
+
+def _source_dans_corpus(chemin: str) -> Path | None:
+    """Chemin (relatif au corpus, posé par le scan) -> fichier source, ou None.
+
+    Garde-fou : un chemin qui sortirait de la racine corpus (donnée corrompue)
+    est traité comme introuvable — jamais servi, jamais supprimé.
+    """
+    racine = dossier_corpus().resolve()
+    source = (racine / chemin).resolve()
+    if not source.is_relative_to(racine):
+        return None
+    return source if source.is_file() else None
+
+
+@router.get("/documents/{document_id}/original")
+def telecharger_original(document_id: int, connexion: Connexion) -> FileResponse:
+    """S3.17 : le fichier source tel que déposé dans le corpus (D9 : jamais modifié)."""
+    with connexion.cursor() as curseur:
+        curseur.execute("SELECT chemin, nom FROM documents WHERE id = %(id)s", {"id": document_id})
+        ligne = curseur.fetchone()
+    if ligne is None:
+        raise HTTPException(status_code=404, detail=f"Document {document_id} introuvable")
+    source = _source_dans_corpus(ligne[0])
+    if source is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Original « {ligne[0]} » absent du corpus de ce pod "
+            "(pod recréé ? le fichier source n'est pas dans le repo).",
+        )
+    return FileResponse(source, filename=ligne[1], media_type="application/octet-stream")
+
+
+@router.delete("/documents/{document_id}", status_code=204)
+def supprimer_document(document_id: int, connexion: Connexion) -> None:
+    """S3.17 : suppression complète — base (chunks en cascade) ET fichiers disque.
+
+    Le fichier source est retiré du corpus, sinon la prochaine indexation le
+    ré-inventorierait (D9). Les documents qui pointaient ce chemin comme
+    `doublon_de` sont repointés à NULL — la prochaine qualification retranche.
+    Fichiers supprimés APRÈS le commit : une erreur base ne détruit rien.
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "SELECT chemin, chemin_derive FROM documents WHERE id = %(id)s", {"id": document_id}
+        )
+        ligne = curseur.fetchone()
+        if ligne is None:
+            raise HTTPException(status_code=404, detail=f"Document {document_id} introuvable")
+        chemin, chemin_derive = ligne
+        curseur.execute(
+            "UPDATE documents SET doublon_de = NULL WHERE doublon_de = %(chemin)s",
+            {"chemin": chemin},
+        )
+        curseur.execute("DELETE FROM documents WHERE id = %(id)s", {"id": document_id})
+    connexion.commit()
+    source = _source_dans_corpus(chemin)
+    if source is not None:
+        source.unlink(missing_ok=True)
+    if chemin_derive:
+        Path(chemin_derive).unlink(missing_ok=True)

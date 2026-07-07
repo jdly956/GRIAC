@@ -120,7 +120,78 @@ Critères d'acceptation :
 - [ ] L'inventaire « Mes documents » pointe vers une **fiche par document** (`GET /documents/{id}`) : identité (taille, sha256, version détectée, doublon de, projet suggéré), **traitement** (statut, erreur de parsing/OCR, date, dérivé markdown **rendu** — aperçu 8 k, lu du disque, absence signalée sans échec), **chunks** (fil de titres, tokens, contenu exact, état d'embedding ✅/⏳, compteurs)
 - [ ] TU api (fiche complète, dérivé absent, 404 ; route `stats` enregistrée avant la route dynamique) + TU écran
 
-*Code livré le 06/07/2026 : `GET /documents/{id}` (+ `id` exposé à l'inventaire), lecture du dérivé `derived/md/<sha>.md`, écran `document.html` (badges, parsing rendu, chunks dépliables), liens depuis l'inventaire. 5 TU — 279 tests. Plan `docs/plans-test/s3.14-fiche-document.md`.*
+*Code livré le 06/07/2026 : `GET /documents/{id}` (+ `id` exposé à l'inventaire), lecture du dérivé `derived/md/<sha>.md`, écran `document.html` (badges, parsing rendu, chunks dépliables), liens depuis l'inventaire. 5 TU — 279 tests. Plan `docs/plans-test/s3.14-fiche-document.md`. Validé pod 07/07 (279 verts, écrans OK — photo terminal référent).*
+
+### S3.15 — Requête RAG contextualisée + éval retrieval — *go rendu le 07/07 (session 12)*
+
+> Constat (analyse chunking/scoring du 07/07, questions du référent — confirmé session 12 : **14 messages sur 26 sans source**) : la requête de recherche = le **dernier message PO seul** — ni le contexte projet (E8) ni la Feature en cours n'y entrent ; un message court (« oui », « continue ») produit une requête pauvre et le seuil de distance peut exclure des passages pertinents sans que rien ne le mesure.
+
+- [ ] Enrichir la requête de recherche (BM25 + vecteur) avec le contexte utile : nom/contexte projet, Feature en cours, étape — budget de contexte respecté
+- [ ] Jeu d'éval retrieval (questions annotées sur les fixtures puis le corpus réel, **recall@15**) pour mesurer avant/après — se branche sur les recalibrages S3.3 ; pas de tuning du seuil à l'aveugle
+
+*Code livré le 07/07/2026 : `construire_requete_recherche` (pure, `moteur.py`) — nom + contexte projet (borne 200) et début de Feature (borne 400) devant le message PO ; dégradée sans projet/Feature ; les endpoints `/recherche` et `/contexte` hors session sont inchangés. L'éval recall@15 reste **gated corpus réel** (S3.3). 2 TU — 302 tests. Plan : section 4 de `docs/plans-test/s3.19-correctifs-session-12.md`.*
+
+### S3.16 — Formats étendus : PowerPoint, Excel, courriels (.eml)
+
+> Demande référent (07/07/2026) : « peut-on étendre les formats acceptés pour gérer les powerpoint, les excels et les mails (.eml) ? »
+
+- [ ] Upload : `.pptx`, `.xlsx`, `.eml` acceptés (en plus de docx/pdf/md/txt/odt) — label de l'écran recalé
+- [ ] Parsing : `pptx`/`xlsx` via docling (même chemin que docx/pdf) ; `.eml` via un convertisseur dédié stdlib (docling ne couvre pas ce format) — objet en titre, en-têtes From/To/Cc/Date, corps texte (HTML seul dégradé en texte brut), pièces jointes **listées mais jamais extraites**
+- [ ] Extensions parsables en **source unique** (`sia_api.documents.EXTENSIONS_PARSABLES`, consommée par le nœud parse et les stats de couverture — plus deux listes à désynchroniser)
+- [ ] TU : conversion eml (en-têtes/corps/PJ, HTML dégradé), routage `.eml` sans docling, upload des trois formats
+
+*Code livré le 07/07/2026 : `EXTENSIONS_PARSABLES = (docx, pdf, pptx, xlsx, eml)` partagée api↔ingestion (`REQUETE_STATS` recalée), `convertir_eml_en_markdown` (stdlib `email`, `policy.default`), routage `.eml` dans `parser_lot`, `EXTENSIONS_ACCEPTEES` upload + label écran étendus. Limites assumées : `.odt` reste accepté à l'upload mais non parsé (inchangé) ; premier `pptx`/`xlsx` indexé sur un pod = téléchargement des modèles docling (une fois). 4 TU — 283 tests. Plan `docs/plans-test/s3.16-formats-etendus.md`.*
+
+### S3.17 — Supprimer un document / télécharger l'original
+
+> Demande référent (07/07/2026) : « ajoute la possibilité de supprimer les documents et de télécharger l'original ».
+
+- [ ] **Télécharger l'original** : `GET /documents/{id}/original` sert le fichier source tel que déposé (nom d'origine, binaire) ; proxy web binaire (l'api n'est pas exposée au navigateur) ; fichier disparu (pod recréé) → 404 explicite, garde-fou anti-traversée (un chemin hors racine corpus n'est jamais servi)
+- [ ] **Supprimer** : `DELETE /documents/{id}` — ligne en base (chunks en cascade FK), `doublon_de` des autres documents repointé à NULL (requalifié au prochain run), **fichier source retiré du corpus** (sinon ré-inventorié au prochain scan, D9) + dérivé markdown ; fichiers supprimés APRÈS le commit (une erreur base ne détruit rien)
+- [ ] Écran fiche : panneau « Actions » (bouton télécharger + suppression avec `confirm()` navigateur — l'action est définitive et l'écran le dit)
+- [ ] TU api (téléchargement, 404 fichier absent, garde-fou traversée, suppression base+fichiers, 404) + TU écran (actions affichées, redirection, proxy binaire)
+
+*Code livré le 07/07/2026 : `GET /documents/{id}/original` (FileResponse, `_source_dans_corpus` en garde-fou partagé) + `DELETE /documents/{id}` dans `sia_api/documents.py` ; `telecharger_binaire` dans le client web (un .docx passé par `.text` serait corrompu — Content-Disposition propagé) ; panneau « Actions » sur la fiche. Choix assumé : pas de corbeille ni d'archivage — suppression définitive assumée à l'écran (contrairement aux sessions S3.13, archivées jamais détruites : un document se redépose, une session ne se rejoue pas). 8 TU — 291 tests. Plan `docs/plans-test/s3.17-suppression-original.md`. **Validé pod 07/07 (« fonctionnel ! » référent, avec S3.16).**
+
+### S3.18 — Dépôt dans un dossier obligatoire (fix du bug d'association A6)
+
+> Bug référent (07/07/2026, validation pod S3.16/S3.17) : « l'association du projet, qui me demande le nom d'un dossier, avec les documents ingérés ». Diagnostic : l'upload S3.10 déposait **à la racine du corpus** → `projet_suggere = NULL` (qualification S1.9 : 1er segment de chemin) → jamais dans les suggestions de dossiers, jamais associable à un projet, et **exclu des recherches filtrées projet** (`recherche.py`). Arbitrage rendu : **dossier obligatoire** (pas de pseudo-dossier « racine », pas de champ optionnel — plus aucun document orphelin possible).
+
+- [ ] Le dépôt exige un **dossier de destination** : champ obligatoire, dossiers existants proposés (datalist = union disque + base), un nom nouveau **crée le dossier au dépôt** ; nom neutralisé (dernier segment, un seul niveau — pas de traversée) ; refus 422 explicite si absent/vide
+- [ ] `GET /documents/dossiers` (enregistrée avant la route dynamique `{document_id}`) ; le fichier atterrit dans `corpus/<dossier>/<nom>` → la qualification infère le dossier, les suggestions A6 et le filtre RAG projet le voient — zéro changement côté qualification/recherche
+- [ ] TU api (dépôt dans le dossier, 422 sans dossier, neutralisation `../evil`, liste des dossiers) + TU écran (champ requis + datalist, dossier transmis)
+
+*Code livré le 07/07/2026 : `dossier: Form()` obligatoire sur `POST /documents/upload` (créé au premier dépôt), `GET /documents/dossiers` (union disque+base), champ requis + datalist sur l'écran, `envoyer_fichier(donnees=...)` côté client web. Les TU d'upload existantes ont été recalées au nouveau contrat (objet de la story, validé par le go). Documents déjà à la racine du pod : **pas de script de rattrapage** — supprimer via S3.17, redéposer dans un dossier, ré-indexer. 4 TU nouvelles — 294 tests. Plan `docs/plans-test/s3.18-depot-dossier.md`.*
+
+## Correctifs session réelle 12 (07/07/2026) — S3.19 / S3.20 / S3.21
+
+> Session 12 analysée sur capture : **26 appels, 312 060 tokens entrée** (session sur `openweight-large`), un appel estimé à ~239 814 tokens. Cause racine : le xlsx des macro-fonctionnalités = **UN chunk de ~940k caractères** (« tableaux jamais coupés » sans borne + padding docling ~75 % d'espaces), embarqué ENTIER par le passe-droit du premier chunk de l'assemblage E2, rerank tué au passage, moteur qui signale le dépassement sans tronquer, extrait persisté qui alourdit chaque page (1,2 Mo). Et 16 hypothèses en attente en fin de session. Go référent sur les 3 correctifs + S3.15.
+
+### S3.19 — Tableaux géants scindés au chunking (fix pipeline, cause racine)
+
+- [ ] Règle amendée : jamais couper une LIGNE ni la séparer de son en-tête — un tableau > budget est **scindé par groupes de lignes, l'en-tête (titres + séparateur) répété** ; chaque morceau reste un tableau markdown citable
+- [ ] Lignes de tableau **compactées** (runs d'espaces → un espace — le padding docling xlsx)
+- [ ] TU scission (aucune ligne perdue ni coupée, budget tenu, en-tête partout) + compactage
+
+*Code livré le 07/07/2026 : `_scinder_tableau` + `_compacter_ligne_tableau` (`chunk.py`), docstring recalée (⚠️ corollaire documenté : la reprise sur hash ne re-chunke pas un algorithme changé — propagation par suppression S3.17 + redépôt + ré-indexation, pas de script). TU `test_tableau_geant_jamais_coupe` réécrite en scission (objet de la story, arbitré). 302 tests.*
+
+### S3.20 — Garde-fous chunk géant : assemblage E2 borné, affichage tronqué
+
+- [ ] `assembler_contexte` : **fin du passe-droit du premier chunk** (l'ancien `if retenus and…` embarquait le premier chunk entier quel que soit sa taille) — un chunk seul au-delà du budget est tronqué à la borne avec marqueur explicite (c'est aussi ce qui part en traçabilité S3.9)
+- [ ] Écrans : « extrait exact » borné à 2 000 caractères à l'affichage, mention du volume total
+- [ ] TU assemblage (troncature, rien empilé derrière) + affichage
+
+*Code livré le 07/07/2026 : `recherche.py` (troncature + marqueur « document à re-chunker »), `session.html`/`_message.html` (affichage borné). TU `test_assemblage_garde_toujours_le_premier_chunk` réécrite en troncature (objet du fix). 302 tests.*
+
+### S3.21 — Application en lot des levées proposées (arbitrage A8 assoupli)
+
+> Arbitrage référent 07/07 : le PO **relit** la liste des levées proposées (S2.13) et les applique **d'un clic** — sa décision, en lot. L'esprit d'A8 tient : jamais de levée silencieuse, jamais une hypothèse sans proposition.
+
+- [ ] `POST /workflows/{id}/hypotheses/appliquer-propositions` : `SET statut = statut_propose` UNIQUEMENT sur `en_attente` AVEC proposition (jamais de statut inventé par la route) ; 409 si rien à appliquer
+- [ ] Écran : bouton « Appliquer les N levée(s) proposée(s) » dans le registre (confirmation + rappel de relecture) ; la décision individuelle reste
+- [ ] TU api (lot appliqué, hypothèse sans proposition intacte, 409, 404) + écran
+
+*Code livré le 07/07/2026 : route enregistrée avant `/hypotheses/{id}` (capture dynamique), bouton conditionné aux levées à décider. 5 TU. 302 tests. Plan commun du lot : `docs/plans-test/s3.19-correctifs-session-12.md`.*
 
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 
