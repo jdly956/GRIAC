@@ -132,17 +132,19 @@ class SessionResume(BaseModel):
 
 
 @router.get("/workflows")
-def lister_sessions(connexion: Connexion) -> list[SessionResume]:
+def lister_sessions(connexion: Connexion, archivees: bool = False) -> list[SessionResume]:
     """Liste des sessions — l'accueil E4 permet de RETROUVER une session en cours.
 
     Constaté en session de validation (06/07/2026) : sans liste, une session
-    perdue de vue ne se retrouve que par URL devinée. Les sessions archivées
-    (S3.13) sont masquées — jamais supprimées.
+    perdue de vue ne se retrouve que par URL devinée. Par défaut les sessions
+    archivées (S3.13) sont masquées — jamais supprimées ; `?archivees=true`
+    liste le versant archivé (R7 : consultation et désarchivage depuis l'UI).
     """
     with connexion.cursor() as curseur:
         curseur.execute(
             "SELECT id, etape, projet_id, feature, titre FROM workflow_sessions "
-            "WHERE NOT archivee ORDER BY modifie_le DESC, id DESC"
+            "WHERE archivee = %(archivees)s ORDER BY modifie_le DESC, id DESC",
+            {"archivees": archivees},
         )
         return [
             SessionResume(

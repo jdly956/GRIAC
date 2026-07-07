@@ -224,6 +224,17 @@ def test_liste_des_sessions_pour_l_accueil(brancher) -> None:
     assert corps[1]["titre"] == "Mon nom"  # nom libre (S3.13)
 
 
+def test_liste_des_sessions_archivees(brancher) -> None:
+    # R7 (UX8) : ?archivees=true liste le versant archivé — consultation et
+    # désarchivage depuis l'UI ; le défaut reste les sessions actives.
+    connexion = brancher([[(5, "synthese", None, "Feature", "Vieille session")]])
+    corps = client.get("/workflows", params={"archivees": "true"}).json()
+    assert [s["id"] for s in corps] == [5]
+    requete, parametres = connexion.curseur.requetes[0]
+    assert "archivee = %(archivees)s" in requete
+    assert parametres == {"archivees": True}
+
+
 def test_renommer_et_archiver_une_session(brancher) -> None:
     # S3.13 : renommer (titre libre) et archiver (masquée, jamais supprimée).
     connexion = brancher([(7, "Priorisation actes", False)])

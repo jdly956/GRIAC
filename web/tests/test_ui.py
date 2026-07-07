@@ -1195,6 +1195,75 @@ def test_lot_sans_selection_ne_touche_pas_l_api(api) -> None:
     assert not any("decider-lot" in chemin for _, chemin, _ in api.appels)
 
 
+# --- R7 : accueil orienté reprise + sessions archivées (UX10/UX8) ---
+
+
+def test_accueil_oriente_reprise_avec_actions(api) -> None:
+    # R7 (UX10) : tableau des sessions avec projet et actions archiver/supprimer,
+    # création repliée derrière « + Nouvelle session », lien vers les archivées.
+    api.brancher(
+        "GET",
+        "/projects",
+        200,
+        [{"id": 1, "nom": "Téléservice X", "contexte": "", "nfrs": [], "dossiers": []}],
+    )
+    api.brancher(
+        "GET",
+        "/workflows",
+        200,
+        [
+            {
+                "id": 7,
+                "etape": "interview",
+                "projet_id": 1,
+                "apercu_feature": "Feature : connexion",
+                "titre": None,
+            }
+        ],
+    )
+    api.brancher(
+        "GET",
+        "/workflows?archivees=true",
+        200,
+        [{"id": 5, "etape": "synthese", "projet_id": None, "apercu_feature": "x", "titre": "V"}],
+    )
+    texte = client.get("/").text
+    assert "+ Nouvelle session" in texte  # création repliée (details)
+    assert 'action="/sessions/7/gerer"' in texte  # archiver depuis la liste
+    assert 'action="/sessions/7/supprimer"' in texte  # supprimer (confirmé)
+    assert "Téléservice X" in texte  # nom du projet sur la ligne ET dans le select
+    assert "Voir les sessions archivées (1)" in texte
+
+
+def test_ecran_sessions_archivees_et_desarchivage(api) -> None:
+    # R7 (UX8) : l'archivage devient réversible depuis l'UI — désarchiver
+    # renvoie la session à l'accueil (PATCH archivee=False).
+    api.brancher(
+        "GET",
+        "/workflows?archivees=true",
+        200,
+        [
+            {
+                "id": 5,
+                "etape": "synthese",
+                "projet_id": None,
+                "apercu_feature": "x",
+                "titre": "Vieille session",
+            }
+        ],
+    )
+    texte = client.get("/sessions/archivees").text
+    assert "Vieille session" in texte
+    assert 'name="desarchiver"' in texte
+
+    api.brancher("PATCH", "/workflows/5", 200, {})
+    reponse = client.post("/sessions/5/gerer", data={"desarchiver": "1"}, follow_redirects=False)
+    assert reponse.status_code == 303
+    assert reponse.headers["location"] == "/sessions/archivees"
+    patch = next(a for a in api.appels if a[0] == "PATCH")
+    assert patch[2] == {"archivee": False}
+
+
 # --- R6 : suppression définitive d'une session (UX8) ---
 
 

@@ -290,14 +290,37 @@ def _fragment_echange(
 def index(request: Request) -> HTMLResponse:
     statut, projets = api_client.appeler("GET", "/projects")
     statut_sessions, sessions = api_client.appeler("GET", "/workflows")
+    # R7 : compteur des archivées — le lien « voir les archivées » dit combien.
+    statut_archivees, archivees = api_client.appeler("GET", "/workflows?archivees=true")
+    erreur = None if statut == 200 else projets.get("detail")
+    projets = projets if statut == 200 else []
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
-            "projets": projets if statut == 200 else [],
+            "projets": projets,
             "sessions": sessions if statut_sessions == 200 else [],
+            "noms_projets": {p["id"]: p["nom"] for p in projets},
+            "nb_archivees": (
+                len(archivees) if statut_archivees == 200 and isinstance(archivees, list) else 0
+            ),
             "libelles_etapes": ETAPES_LIBELLES,
-            "erreur": None if statut == 200 else projets.get("detail"),
+            "erreur": erreur,
+        },
+    )
+
+
+# Enregistrée avant la route dynamique /sessions/{session_id}.
+@app.get("/sessions/archivees", response_class=HTMLResponse)
+def sessions_archivees(request: Request) -> HTMLResponse:
+    """R7 (UX8) : le versant archivé — consultation, désarchivage, suppression."""
+    statut, archivees = api_client.appeler("GET", "/workflows?archivees=true")
+    return templates.TemplateResponse(
+        request=request,
+        name="archivees.html",
+        context={
+            "sessions": archivees if statut == 200 and isinstance(archivees, list) else [],
+            "libelles_etapes": ETAPES_LIBELLES,
         },
     )
 
@@ -422,8 +445,12 @@ def gerer_session_web(
     session_id: int,
     titre: Annotated[str, Form()] = "",
     archiver: Annotated[str, Form()] = "",
+    desarchiver: Annotated[str, Form()] = "",
 ) -> RedirectResponse:
-    """S3.13 : renommer / archiver (l'archivage masque de l'accueil, sans détruire)."""
+    """S3.13 : renommer / archiver ; R7 : désarchiver depuis l'écran des archivées."""
+    if desarchiver:
+        api_client.appeler("PATCH", f"/workflows/{session_id}", json={"archivee": False})
+        return _rediriger(request, "/sessions/archivees")
     if archiver:
         api_client.appeler("PATCH", f"/workflows/{session_id}", json={"archivee": True})
         return _rediriger(request, "/")

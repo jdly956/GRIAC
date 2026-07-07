@@ -90,6 +90,16 @@
       .fil { max-height: 55vh; }
       .rail { position: static; max-height: none; }
     }
+    /* R7 : accueil orienté reprise — création repliée, actions en ligne. */
+    .entete-page { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+    .nouvelle-session { margin-bottom: 1rem; }
+    .nouvelle-session > summary { list-style: none; cursor: pointer; }
+    .nouvelle-session > summary::-webkit-details-marker { display: none; }
+    .nouvelle-session__corps { border: 1px solid var(--border-default-grey, #ccc);
+      border-radius: .25rem; padding: .75rem; margin-top: .5rem; max-width: 48rem;
+      background: var(--background-default-grey, #fff); }
+    .action-en-ligne { display: inline; }
+    .actions-ligne { white-space: nowrap; }
   </style>
 </head>
 <body>
