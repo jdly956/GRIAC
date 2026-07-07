@@ -30,12 +30,22 @@ def appeler(methode: str, chemin: str, json: Any = None) -> tuple[int, Any]:
         return reponse.status_code, {"brut": reponse.text}
 
 
-def envoyer_fichier(chemin: str, nom: str, contenu: bytes, content_type: str) -> tuple[int, Any]:
-    """POST multipart (dépôt de document, S3.10) — même contrat que `appeler`."""
+def envoyer_fichier(
+    chemin: str,
+    nom: str,
+    contenu: bytes,
+    content_type: str,
+    donnees: dict[str, str] | None = None,
+) -> tuple[int, Any]:
+    """POST multipart (dépôt de document, S3.10) — même contrat que `appeler`.
+
+    `donnees` : champs de formulaire joints au fichier (S3.18 : le dossier).
+    """
     try:
         reponse = httpx.post(
             url_api() + chemin,
             files={"fichier": (nom, contenu, content_type or "application/octet-stream")},
+            data=donnees,
             timeout=DELAI_S,
         )
     except httpx.HTTPError as erreur:

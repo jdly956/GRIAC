@@ -160,6 +160,19 @@ def test_fiche_document_inconnue_404(brancher) -> None:
     assert client.get("/documents/99").status_code == 404
 
 
+def test_liste_dossiers_union_disque_et_base(brancher, tmp_path, monkeypatch) -> None:
+    # S3.18 : la datalist du dépôt fusionne les dossiers du disque (créés,
+    # même pas encore indexés) et ceux vus par la qualification (base).
+    monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path))
+    (tmp_path / "projet-alpha").mkdir()
+    (tmp_path / "tout-nouveau").mkdir()
+    (tmp_path / "un-fichier.txt").write_text("pas un dossier", encoding="utf-8")
+    brancher([[("projet-alpha",), ("projet-beta",)]])
+    reponse = client.get("/documents/dossiers")
+    assert reponse.status_code == 200  # la route dynamique {id} ne capture pas « dossiers »
+    assert reponse.json() == ["projet-alpha", "projet-beta", "tout-nouveau"]
+
+
 def test_telechargement_original(brancher, tmp_path, monkeypatch) -> None:
     # S3.17 : l'original est servi tel que déposé, sous son nom.
     monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path))

@@ -149,7 +149,17 @@ Critères d'acceptation :
 - [ ] Écran fiche : panneau « Actions » (bouton télécharger + suppression avec `confirm()` navigateur — l'action est définitive et l'écran le dit)
 - [ ] TU api (téléchargement, 404 fichier absent, garde-fou traversée, suppression base+fichiers, 404) + TU écran (actions affichées, redirection, proxy binaire)
 
-*Code livré le 07/07/2026 : `GET /documents/{id}/original` (FileResponse, `_source_dans_corpus` en garde-fou partagé) + `DELETE /documents/{id}` dans `sia_api/documents.py` ; `telecharger_binaire` dans le client web (un .docx passé par `.text` serait corrompu — Content-Disposition propagé) ; panneau « Actions » sur la fiche. Choix assumé : pas de corbeille ni d'archivage — suppression définitive assumée à l'écran (contrairement aux sessions S3.13, archivées jamais détruites : un document se redépose, une session ne se rejoue pas). 8 TU — 291 tests. Plan `docs/plans-test/s3.17-suppression-original.md`.*
+*Code livré le 07/07/2026 : `GET /documents/{id}/original` (FileResponse, `_source_dans_corpus` en garde-fou partagé) + `DELETE /documents/{id}` dans `sia_api/documents.py` ; `telecharger_binaire` dans le client web (un .docx passé par `.text` serait corrompu — Content-Disposition propagé) ; panneau « Actions » sur la fiche. Choix assumé : pas de corbeille ni d'archivage — suppression définitive assumée à l'écran (contrairement aux sessions S3.13, archivées jamais détruites : un document se redépose, une session ne se rejoue pas). 8 TU — 291 tests. Plan `docs/plans-test/s3.17-suppression-original.md`. **Validé pod 07/07 (« fonctionnel ! » référent, avec S3.16).**
+
+### S3.18 — Dépôt dans un dossier obligatoire (fix du bug d'association A6)
+
+> Bug référent (07/07/2026, validation pod S3.16/S3.17) : « l'association du projet, qui me demande le nom d'un dossier, avec les documents ingérés ». Diagnostic : l'upload S3.10 déposait **à la racine du corpus** → `projet_suggere = NULL` (qualification S1.9 : 1er segment de chemin) → jamais dans les suggestions de dossiers, jamais associable à un projet, et **exclu des recherches filtrées projet** (`recherche.py`). Arbitrage rendu : **dossier obligatoire** (pas de pseudo-dossier « racine », pas de champ optionnel — plus aucun document orphelin possible).
+
+- [ ] Le dépôt exige un **dossier de destination** : champ obligatoire, dossiers existants proposés (datalist = union disque + base), un nom nouveau **crée le dossier au dépôt** ; nom neutralisé (dernier segment, un seul niveau — pas de traversée) ; refus 422 explicite si absent/vide
+- [ ] `GET /documents/dossiers` (enregistrée avant la route dynamique `{document_id}`) ; le fichier atterrit dans `corpus/<dossier>/<nom>` → la qualification infère le dossier, les suggestions A6 et le filtre RAG projet le voient — zéro changement côté qualification/recherche
+- [ ] TU api (dépôt dans le dossier, 422 sans dossier, neutralisation `../evil`, liste des dossiers) + TU écran (champ requis + datalist, dossier transmis)
+
+*Code livré le 07/07/2026 : `dossier: Form()` obligatoire sur `POST /documents/upload` (créé au premier dépôt), `GET /documents/dossiers` (union disque+base), champ requis + datalist sur l'écran, `envoyer_fichier(donnees=...)` côté client web. Les TU d'upload existantes ont été recalées au nouveau contrat (objet de la story, validé par le go). Documents déjà à la racine du pod : **pas de script de rattrapage** — supprimer via S3.17, redéposer dans un dossier, ré-indexer. 4 TU nouvelles — 294 tests. Plan `docs/plans-test/s3.18-depot-dossier.md`.*
 
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 

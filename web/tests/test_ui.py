@@ -427,25 +427,33 @@ def test_depot_et_indexation_depuis_mes_documents(api, monkeypatch: pytest.Monke
             }
         ],
     )
+    api.brancher("GET", "/documents/dossiers", 200, ["projet-alpha"])
     texte = client.get("/documents").text
     assert "Déposer un document" in texte
     assert "Indexation en cours…" in texte  # bouton désactivé pendant un run
     assert 'http-equiv="refresh"' in texte  # suivi en direct
     assert "scan : ok" in texte
+    # S3.18 : dossier obligatoire, dossiers existants proposés en datalist.
+    assert 'name="dossier"' in texte and "required" in texte
+    assert '<option value="projet-alpha">' in texte
 
-    envois: list[tuple[str, str]] = []
+    envois: list[tuple[str, str, dict | None]] = []
     monkeypatch.setattr(
         api_client,
         "envoyer_fichier",
-        lambda chemin, nom, contenu, ct: envois.append((chemin, nom)) or (201, {}),
+        lambda chemin, nom, contenu, ct, donnees=None: (
+            envois.append((chemin, nom, donnees)) or (201, {})
+        ),
     )
     reponse = client.post(
         "/documents/upload",
         files={"fichier": ("spec.docx", b"contenu", "application/msword")},
+        data={"dossier": "projet-alpha"},
         follow_redirects=False,
     )
     assert reponse.status_code == 303
-    assert envois == [("/documents/upload", "spec.docx")]
+    # Le dossier saisi est transmis à l'api avec le fichier (S3.18).
+    assert envois == [("/documents/upload", "spec.docx", {"dossier": "projet-alpha"})]
 
     api.brancher("POST", "/ingestion/lancer", 202, {"id": 3})
     assert client.post("/documents/indexer", follow_redirects=False).status_code == 303

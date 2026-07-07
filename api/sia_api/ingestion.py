@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from sia_api.db import get_connexion
@@ -47,11 +47,27 @@ class Run(BaseModel):
 
 
 @router.post("/documents/upload", status_code=201)
-async def deposer_document(fichier: UploadFile) -> DocumentDepose:
-    """Dépose un document dans le dossier corpus — indexé au prochain run."""
+async def deposer_document(fichier: UploadFile, dossier: Annotated[str, Form()]) -> DocumentDepose:
+    """Dépose un document dans un DOSSIER du corpus — indexé au prochain run.
+
+    S3.18 : le dossier est OBLIGATOIRE — un fichier à la racine du corpus n'a
+    pas de `projet_suggere` (qualification S1.9 : 1er segment de chemin), donc
+    jamais associable à un projet (A6) et exclu des recherches filtrées projet.
+    Le dossier est créé au premier dépôt s'il n'existe pas.
+    """
     nom = Path(fichier.filename or "").name  # neutralise tout chemin relatif
     if not nom:
         raise HTTPException(status_code=422, detail="Nom de fichier manquant.")
+    nom_dossier = Path(
+        dossier.strip()
+    ).name  # neutralisé aussi ("." / ".." / chemins -> dernier segment)
+    if not nom_dossier:
+        raise HTTPException(
+            status_code=422,
+            detail="Dossier de destination obligatoire — c'est lui qui est associé "
+            "à un projet (A6) ; un document à la racine du corpus serait invisible "
+            "des recherches filtrées par projet.",
+        )
     extension = Path(nom).suffix.lower()
     if extension not in EXTENSIONS_ACCEPTEES:
         raise HTTPException(
@@ -62,7 +78,7 @@ async def deposer_document(fichier: UploadFile) -> DocumentDepose:
     contenu = await fichier.read()
     if len(contenu) > TAILLE_MAX_OCTETS:
         raise HTTPException(status_code=413, detail="Fichier > 50 Mo refusé.")
-    destination = dossier_corpus() / nom
+    destination = dossier_corpus() / nom_dossier / nom
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(contenu)
     return DocumentDepose(chemin=str(destination), taille=len(contenu))

@@ -58,16 +58,19 @@ def brancher():
 
 
 def test_depot_de_document(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # S3.18 : le dépôt exige un dossier de destination — le fichier atterrit dedans.
     monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path / "corpus"))
     reponse = client.post(
         "/documents/upload",
         files={"fichier": ("spec ../v2.docx", b"contenu docx", "application/msword")},
+        data={"dossier": "projet-alpha"},
     )
     assert reponse.status_code == 201
     corps = reponse.json()
     assert corps["taille"] == len(b"contenu docx")
-    # Le nom est neutralisé (aucune traversée de chemin) et le fichier écrit.
-    assert (tmp_path / "corpus" / "v2.docx").read_bytes() == b"contenu docx"
+    # Le nom est neutralisé (aucune traversée de chemin) et le fichier écrit
+    # dans le dossier demandé (créé au premier dépôt).
+    assert (tmp_path / "corpus" / "projet-alpha" / "v2.docx").read_bytes() == b"contenu docx"
 
 
 def test_depot_formats_etendus_s316(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,18 +83,56 @@ def test_depot_formats_etendus_s316(tmp_path, monkeypatch: pytest.MonkeyPatch) -
         ("echange.eml", "message/rfc822"),
     )
     for nom, mime in formats:
-        reponse = client.post("/documents/upload", files={"fichier": (nom, b"contenu", mime)})
+        reponse = client.post(
+            "/documents/upload",
+            files={"fichier": (nom, b"contenu", mime)},
+            data={"dossier": "pa"},
+        )
         assert reponse.status_code == 201, nom
-        assert (tmp_path / nom).read_bytes() == b"contenu"
+        assert (tmp_path / "pa" / nom).read_bytes() == b"contenu"
 
 
 def test_depot_extension_refusee(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path))
     reponse = client.post(
-        "/documents/upload", files={"fichier": ("script.exe", b"x", "application/x-dosexec")}
+        "/documents/upload",
+        files={"fichier": ("script.exe", b"x", "application/x-dosexec")},
+        data={"dossier": "pa"},
     )
     assert reponse.status_code == 422
     assert "refusée" in reponse.json()["detail"]
+
+
+def test_depot_sans_dossier_refuse(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # S3.18 : sans dossier, le document serait orphelin (jamais associable A6,
+    # exclu des recherches filtrées projet) — refus explicite.
+    monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path))
+    sans_champ = client.post(
+        "/documents/upload", files={"fichier": ("spec.docx", b"x", "application/msword")}
+    )
+    assert sans_champ.status_code == 422  # champ absent : validation FastAPI
+    vide = client.post(
+        "/documents/upload",
+        files={"fichier": ("spec.docx", b"x", "application/msword")},
+        data={"dossier": "   "},
+    )
+    assert vide.status_code == 422
+    assert "obligatoire" in vide.json()["detail"]
+    assert list(tmp_path.iterdir()) == []  # rien n'a été écrit
+
+
+def test_depot_dossier_neutralise(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Un dossier « ../evil » ou « a/b » est ramené à son dernier segment —
+    # aucune traversée hors du corpus, un seul niveau de profondeur.
+    monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path / "corpus"))
+    reponse = client.post(
+        "/documents/upload",
+        files={"fichier": ("spec.docx", b"x", "application/msword")},
+        data={"dossier": "../evil"},
+    )
+    assert reponse.status_code == 201
+    assert (tmp_path / "corpus" / "evil" / "spec.docx").exists()
+    assert not (tmp_path / "evil").exists()
 
 
 def test_lancement_du_pipeline(brancher, monkeypatch: pytest.MonkeyPatch) -> None:

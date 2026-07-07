@@ -498,6 +498,9 @@ def ecran_documents(request: Request) -> HTMLResponse:
     # S3.10 : suivi des runs d'ingestion — l'écran reste servi sans l'endpoint.
     statut_runs, runs = api_client.appeler("GET", "/ingestion/runs")
     runs = runs if statut_runs == 200 and isinstance(runs, list) else []
+    # S3.18 : dossiers existants pour la datalist du dépôt — dégradé en liste vide.
+    statut_dossiers, dossiers = api_client.appeler("GET", "/documents/dossiers")
+    dossiers = dossiers if statut_dossiers == 200 and isinstance(dossiers, list) else []
     return templates.TemplateResponse(
         request=request,
         name="documents.html",
@@ -510,6 +513,7 @@ def ecran_documents(request: Request) -> HTMLResponse:
             "runs": runs,
             "run_en_cours": any(r.get("statut") == "en_cours" for r in runs),
             "erreur_ingestion": request.query_params.get("erreur"),
+            "dossiers": dossiers,
         },
     )
 
@@ -528,11 +532,17 @@ def ecran_document(request: Request, document_id: int) -> HTMLResponse:
 
 
 @app.post("/documents/upload")
-async def deposer_document(request: Request, fichier: UploadFile) -> RedirectResponse:
-    """S3.10 : dépôt → dossier corpus (statut « en attente d'indexation »)."""
+async def deposer_document(
+    request: Request, fichier: UploadFile, dossier: Annotated[str, Form()]
+) -> RedirectResponse:
+    """S3.10/S3.18 : dépôt → un DOSSIER du corpus (celui qu'on associe à un projet)."""
     contenu = await fichier.read()
     statut, corps = api_client.envoyer_fichier(
-        "/documents/upload", fichier.filename or "", contenu, fichier.content_type or ""
+        "/documents/upload",
+        fichier.filename or "",
+        contenu,
+        fichier.content_type or "",
+        donnees={"dossier": dossier},
     )
     if statut != 201:
         return _rediriger(request, f"/documents?erreur={corps.get('detail', 'dépôt refusé')}")

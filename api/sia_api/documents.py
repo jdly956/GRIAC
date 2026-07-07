@@ -164,8 +164,26 @@ def stats_documents(connexion: Connexion) -> StatsDocuments:
     )
 
 
-# Enregistrée APRÈS /documents/stats : la route dynamique {document_id}
-# capturerait « stats » sinon (ordre de matching FastAPI).
+@router.get("/documents/dossiers")
+def lister_dossiers(connexion: Connexion) -> list[str]:
+    """S3.18 : dossiers existants du corpus, pour le champ de dépôt (datalist).
+
+    Union disque (dossiers créés, même pas encore indexés) + base (dossiers vus
+    par la qualification — couvre un corpus indexé depuis un autre chemin).
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "SELECT DISTINCT projet_suggere FROM documents WHERE projet_suggere IS NOT NULL"
+        )
+        en_base = {ligne[0] for ligne in curseur.fetchall()}
+    racine = dossier_corpus()
+    sur_disque = {p.name for p in racine.iterdir() if p.is_dir()} if racine.is_dir() else set()
+    return sorted(en_base | sur_disque)
+
+
+# Enregistrées APRÈS /documents/stats et /documents/dossiers : la route
+# dynamique {document_id} capturerait « stats »/« dossiers » sinon (ordre de
+# matching FastAPI).
 @router.get("/documents/{document_id}")
 def fiche_document(document_id: int, connexion: Connexion) -> FicheDocument:
     """S3.14 : tout le traitement d'un document — parsing/OCR, dérivé, chunks."""

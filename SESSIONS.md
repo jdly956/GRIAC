@@ -4,7 +4,7 @@
 
 ## État stratégique
 
-**Voie active (07/07/2026)** : **LE LOT PRÉ-PILOTE EST ENTIÈREMENT MERGÉ ET VALIDÉ SUR POD** — PRs #31/#32/#33/#34 (S3.6→S3.14 : rendu markdown, écran réorganisé, htmx, traçabilité A3 persistée avec extrait exact, corpus depuis l'UI + pipeline + suivi, tokens + jauge tpd, modèle changeable depuis Paramètres, édition/renommage/copie, fiche document) — **283 tests verts**, pod validé par le référent (279 verts + écrans OK, photo terminal 07/07). En cours : **PR #35** (demandes référent du 07/07) — **S3.16 formats étendus (pptx/xlsx/eml)** + **S3.17 suppression de documents / téléchargement de l'original** (291 tests). Notée mais pas lancée : **S3.15 requête RAG contextualisée + éval retrieval recall@15** (issue de l'analyse chunking/scoring du 07/07 : la requête de recherche = dernier message PO seul). En attente référent : dépendances externes §7 (snapshot corpus → S3.1/S3.3, gold → S3.4, panel → S3.5), protection de branche `main`. Reste mineur : compteur télémétrique des stories éditées. Détail : `docs/sprint-3-backlog.md`.
+**Voie active (07/07/2026)** : **LE LOT PRÉ-PILOTE EST ENTIÈREMENT MERGÉ ET VALIDÉ SUR POD** — PRs #31/#32/#33/#34 (S3.6→S3.14 : rendu markdown, écran réorganisé, htmx, traçabilité A3 persistée avec extrait exact, corpus depuis l'UI + pipeline + suivi, tokens + jauge tpd, modèle changeable depuis Paramètres, édition/renommage/copie, fiche document) — **283 tests verts**, pod validé par le référent (279 verts + écrans OK, photo terminal 07/07). En cours : **PR #35** (demandes référent du 07/07) — **S3.16 formats étendus (pptx/xlsx/eml)** + **S3.17 suppression / téléchargement de l'original** (toutes deux **validées pod**, « fonctionnel ! ») + **S3.18 fix du bug d'association A6** (l'upload UI déposait à la racine du corpus → document jamais associable à un projet et exclu des recherches filtrées ; désormais dossier de destination **obligatoire**, datalist des dossiers existants, création au dépôt) — 294 tests. Notée mais pas lancée : **S3.15 requête RAG contextualisée + éval retrieval recall@15** (issue de l'analyse chunking/scoring du 07/07 : la requête de recherche = dernier message PO seul). En attente référent : dépendances externes §7 (snapshot corpus → S3.1/S3.3, gold → S3.4, panel → S3.5), protection de branche `main`. Reste mineur : compteur télémétrique des stories éditées. Détail : `docs/sprint-3-backlog.md`.
 
 *Voie précédente (06/07/2026, nuit)* : **la PR #30 est MERGÉE** (S2.13 validée stack-live, S2.14, S2.15, S3.2, 6 correctifs sessions réelles, cadrage sprint 3 — 232 tests). **Le lot pré-pilote S3.6→S3.13 est en cours** (cadré avec le référent : UI markdown/navigation/htmx, upload + pipeline depuis l'UI, modèle en Paramètres, comptabilité tokens, traçabilité A3 complète, édition des stories) — une story = une petite PR depuis `main` ; S3.6 (rendu markdown) livrée en premier (session 28). En attente référent : dépendances externes §7 (snapshot corpus, gold, panel PO), protection de branche, plans s2.15/s3.2/s3.6 à jouer sur pod. Détail : `docs/sprint-3-backlog.md`.
 
@@ -22,7 +22,7 @@
 
 ---
 
-## Session 07/07/2026 (29) — analyses chunking/RAG + S3.16 formats étendus + S3.17 suppression/original (PR #35)
+## Session 07/07/2026 (29) — analyses chunking/RAG + S3.16/S3.17/S3.18 (PR #35 : formats étendus, suppression/original, fix association A6)
 
 **Contexte** : suite de la session 28 sur la même branche (repartie de `main` après le merge de la PR #34 — le lot pré-pilote S3.6→S3.14 est entièrement mergé et validé pod : 279 verts + écrans OK, photo terminal du référent).
 
@@ -46,9 +46,18 @@
 - Écran fiche : panneau « Actions » — téléchargement + suppression derrière `confirm()` navigateur, avec l'avertissement « définitif » explicite. Choix assumé : **pas de corbeille** (un document se redépose ; les sessions S3.13, elles, s'archivent sans destruction).
 - **8 TU** (5 api : téléchargement, 404 absent, garde-fou traversée, suppression base+fichiers, 404 ; 3 web : actions, redirection, proxy binaire) — **291 tests verts** (283 → 291). Plan `docs/plans-test/s3.17-suppression-original.md` (contre-épreuves : chunks à 0, RAG « aucune source », ré-indexation sans résurrection).
 
+**S3.16/S3.17 validées pod** (« fonctionnel ! » du référent). Dans la foulée, **bug remonté : l'association projet ↔ dossiers ne voit pas les documents ingérés depuis l'UI**. Diagnostic : l'upload S3.10 déposait **à la racine du corpus** → `projet_suggere = NULL` (qualification S1.9 = 1er segment de chemin) → jamais dans `GET /dossiers/suggestions` (filtre `IS NOT NULL`), jamais associable (A6), et **exclu des recherches filtrées projet** (`recherche.py` : `projet_suggere = ANY(dossiers)`). Trou de conception S3.10↔A6, pas une régression.
+
+**S3.18 — dépôt dans un dossier obligatoire** (arbitrage référent : obligatoire, pas d'optionnel ni de pseudo-dossier racine ; question posée en passant : « créer des dossiers depuis Mes documents ? » → oui, implicitement — la saisie libre crée le dossier au dépôt, pas de bouton dédié) :
+- api : `dossier: Form()` obligatoire sur l'upload (422 explicite sinon, nom neutralisé au dernier segment — un seul niveau, pas de traversée), fichier écrit dans `corpus/<dossier>/<nom>`, dossier créé au premier dépôt ; `GET /documents/dossiers` (union disque + base, enregistrée avant la route dynamique) ;
+- web : champ requis + **datalist des dossiers existants** + aide « c'est ce dossier qui est associé à un projet » ; `envoyer_fichier` transmet les champs de formulaire ;
+- **zéro changement** côté qualification/suggestions/filtre RAG : le fix est à la source, tout l'existant fonctionne alors tel quel ;
+- documents historiques à la racine du pod : **pas de script de rattrapage** — S3.17 (supprimer) + redépôt dans un dossier + ré-indexation ;
+- **4 TU nouvelles** (dépôt dans le dossier, 422, neutralisation `../evil`, liste des dossiers) + TU upload existantes **recalées au nouveau contrat** (objet de la story, validé par le go) — **294 tests verts** (291 → 294). Plan `docs/plans-test/s3.18-depot-dossier.md` (le cœur : chaîne A6 réparée de bout en bout — suggestion → association → citation RAG filtrée).
+
 **Mini-récap** :
-- ✅ Fait : analyses chunking/scoring/contexte (aucun code) ; S3.16 formats étendus (283 tests) + S3.17 suppression/téléchargement (291 tests) sur la PR #35 ; backlog sprint 3 recalé (S3.15 candidate + S3.16 + S3.17) ; en-tête stratégique recalé (lot pré-pilote mergé)
-- ⏳ Référent : revue/merge de la PR #35 ; plans s3.16 + s3.17 sur pod ; « go » éventuel sur S3.15
+- ✅ Fait : analyses chunking/scoring/contexte (aucun code) ; S3.16 formats étendus + S3.17 suppression/téléchargement (validées pod) + S3.18 fix association A6 (dossier obligatoire au dépôt) sur la PR #35 — 294 tests ; backlog sprint 3 recalé (S3.15 candidate + S3.16→S3.18)
+- ⏳ Référent : revue/merge de la PR #35 ; plan s3.18 sur pod (chaîne A6 de bout en bout) ; « go » éventuel sur S3.15
 - ⏳ Ensuite : dépendances externes §7 (snapshot corpus, gold, panel PO)
 
 ---
