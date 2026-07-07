@@ -120,7 +120,25 @@ Critères d'acceptation :
 - [ ] L'inventaire « Mes documents » pointe vers une **fiche par document** (`GET /documents/{id}`) : identité (taille, sha256, version détectée, doublon de, projet suggéré), **traitement** (statut, erreur de parsing/OCR, date, dérivé markdown **rendu** — aperçu 8 k, lu du disque, absence signalée sans échec), **chunks** (fil de titres, tokens, contenu exact, état d'embedding ✅/⏳, compteurs)
 - [ ] TU api (fiche complète, dérivé absent, 404 ; route `stats` enregistrée avant la route dynamique) + TU écran
 
-*Code livré le 06/07/2026 : `GET /documents/{id}` (+ `id` exposé à l'inventaire), lecture du dérivé `derived/md/<sha>.md`, écran `document.html` (badges, parsing rendu, chunks dépliables), liens depuis l'inventaire. 5 TU — 279 tests. Plan `docs/plans-test/s3.14-fiche-document.md`.*
+*Code livré le 06/07/2026 : `GET /documents/{id}` (+ `id` exposé à l'inventaire), lecture du dérivé `derived/md/<sha>.md`, écran `document.html` (badges, parsing rendu, chunks dépliables), liens depuis l'inventaire. 5 TU — 279 tests. Plan `docs/plans-test/s3.14-fiche-document.md`. Validé pod 07/07 (279 verts, écrans OK — photo terminal référent).*
+
+### S3.15 — Requête RAG contextualisée + éval retrieval (candidate — notée le 07/07/2026, pas encore « go »)
+
+> Constat (analyse chunking/scoring du 07/07, questions du référent) : la requête de recherche = le **dernier message PO seul** — ni le contexte projet (E8) ni la Feature en cours n'y entrent ; un message court (« oui », « continue ») produit une requête pauvre et le seuil de distance peut exclure des passages pertinents sans que rien ne le mesure.
+
+- [ ] Enrichir la requête de recherche (BM25 + vecteur) avec le contexte utile : nom/contexte projet, Feature en cours, étape — budget de contexte respecté
+- [ ] Jeu d'éval retrieval (questions annotées sur les fixtures puis le corpus réel, **recall@15**) pour mesurer avant/après — se branche sur les recalibrages S3.3 ; pas de tuning du seuil à l'aveugle
+
+### S3.16 — Formats étendus : PowerPoint, Excel, courriels (.eml)
+
+> Demande référent (07/07/2026) : « peut-on étendre les formats acceptés pour gérer les powerpoint, les excels et les mails (.eml) ? »
+
+- [ ] Upload : `.pptx`, `.xlsx`, `.eml` acceptés (en plus de docx/pdf/md/txt/odt) — label de l'écran recalé
+- [ ] Parsing : `pptx`/`xlsx` via docling (même chemin que docx/pdf) ; `.eml` via un convertisseur dédié stdlib (docling ne couvre pas ce format) — objet en titre, en-têtes From/To/Cc/Date, corps texte (HTML seul dégradé en texte brut), pièces jointes **listées mais jamais extraites**
+- [ ] Extensions parsables en **source unique** (`sia_api.documents.EXTENSIONS_PARSABLES`, consommée par le nœud parse et les stats de couverture — plus deux listes à désynchroniser)
+- [ ] TU : conversion eml (en-têtes/corps/PJ, HTML dégradé), routage `.eml` sans docling, upload des trois formats
+
+*Code livré le 07/07/2026 : `EXTENSIONS_PARSABLES = (docx, pdf, pptx, xlsx, eml)` partagée api↔ingestion (`REQUETE_STATS` recalée), `convertir_eml_en_markdown` (stdlib `email`, `policy.default`), routage `.eml` dans `parser_lot`, `EXTENSIONS_ACCEPTEES` upload + label écran étendus. Limites assumées : `.odt` reste accepté à l'upload mais non parsé (inchangé) ; premier `pptx`/`xlsx` indexé sur un pod = téléchargement des modèles docling (une fois). 4 TU — 283 tests. Plan `docs/plans-test/s3.16-formats-etendus.md`.*
 
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 

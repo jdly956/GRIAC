@@ -70,6 +70,21 @@ def test_depot_de_document(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert (tmp_path / "corpus" / "v2.docx").read_bytes() == b"contenu docx"
 
 
+def test_depot_formats_etendus_s316(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """S3.16 : pptx, xlsx et eml sont acceptés au dépôt (parsés à l'indexation)."""
+    monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path))
+    # Le type MIME est indifférent : le filtre porte sur l'extension.
+    formats = (
+        ("slides.pptx", "application/octet-stream"),
+        ("classeur.xlsx", "application/octet-stream"),
+        ("echange.eml", "message/rfc822"),
+    )
+    for nom, mime in formats:
+        reponse = client.post("/documents/upload", files={"fichier": (nom, b"contenu", mime)})
+        assert reponse.status_code == 201, nom
+        assert (tmp_path / nom).read_bytes() == b"contenu"
+
+
 def test_depot_extension_refusee(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path))
     reponse = client.post(

@@ -43,9 +43,15 @@ REQUETE_CHUNKS = """
 # Aperçu du dérivé markdown : assez pour juger le parsing, sans servir 2 Mo.
 TAILLE_APERCU_DERIVE = 8_000
 
-REQUETE_STATS = """
+# Formats que le pipeline sait convertir en markdown (S3.16) : docling pour
+# docx/pdf/pptx/xlsx, convertisseur eml dédié (stdlib) côté ingestion.
+# Source unique — `sia_ingestion.parse` importe cette constante.
+EXTENSIONS_PARSABLES = ("docx", "pdf", "pptx", "xlsx", "eml")
+_LISTE_PARSABLES = ", ".join(f"'{extension}'" for extension in EXTENSIONS_PARSABLES)
+
+REQUETE_STATS = f"""
     SELECT count(*) AS total,
-           count(*) FILTER (WHERE extension IN ('docx', 'pdf')) AS parsables,
+           count(*) FILTER (WHERE extension IN ({_LISTE_PARSABLES})) AS parsables,
            count(*) FILTER (WHERE statut_parsing = 'parse') AS parses,
            count(*) FILTER (WHERE statut_parsing = 'echec') AS echecs,
            count(*) FILTER (WHERE statut_parsing = 'ocr_requis') AS ocr_requis,

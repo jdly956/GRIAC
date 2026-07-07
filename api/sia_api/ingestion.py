@@ -24,7 +24,7 @@ router = APIRouter(tags=["ingestion"])
 
 Connexion = Annotated[Any, Depends(get_connexion)]
 
-EXTENSIONS_ACCEPTEES = {".docx", ".pdf", ".md", ".txt", ".odt"}
+EXTENSIONS_ACCEPTEES = {".docx", ".pdf", ".md", ".txt", ".odt", ".pptx", ".xlsx", ".eml"}
 TAILLE_MAX_OCTETS = 50 * 1024 * 1024  # au-delà, docling souffrira de toute façon
 
 
