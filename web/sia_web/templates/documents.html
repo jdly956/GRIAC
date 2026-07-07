@@ -82,7 +82,7 @@
     <tbody>
       {% for document in documents %}
       <tr>
-        <td>{{ document.chemin }}</td>
+        <td><a href="{{ racine }}/documents/{{ document.id }}">{{ document.chemin }}</a></td>
         <td>{{ libelles.get(document.statut_parsing, document.statut_parsing) }}</td>
         <td>{{ "✔ référence" if document.est_reference else "—" }}</td>
         <td>{{ "doublon" if document.doublon else "—" }}</td>

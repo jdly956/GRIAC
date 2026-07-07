@@ -42,9 +42,11 @@
 - **S3.9 traçabilité A3 complète** (`d1e8db0`) : migration 0014 (`message_traces`), `SourceCitee.extrait` = contenu exact du chunk, traces persistées par message (sous-requête max(id) — zéro churn), le fil restitue sources/extraits/avertissements/divergences au rechargement — **fin de la « v1 assumée » S2.8** ;
 - **S3.13 confort PO** : migration 0015 (`story_editions` + titre/archivee), **édition des stories** (promesse E4 enfin livrée — la version éditée GAGNE à l'export), renommer/archiver les sessions (masque, ne détruit jamais), copier une story. Reste mineur : compteur télémétrique des stories éditées.
 
+**Le lot est validé « fonctionnel » sur pod par le référent** (branche PR #34 testée au navigateur). Demande dans la foulée → **S3.14 fiche document** : l'inventaire « Mes documents » pointe vers `GET /documents/{id}` — identité (taille, sha256, version, doublon de, projet suggéré), **traitement** (statut, erreur parsing/OCR, **dérivé markdown docling rendu** — aperçu 8 k lu du disque, absence signalée sans échec — piège d'ordre de routes : `stats` enregistrée avant `{document_id}`), **chunks** (fil de titres, tokens, contenu exact, ✅/⏳ embedding, compteurs). 5 TU — **279 tests verts**. Plan `docs/plans-test/s3.14-fiche-document.md`.
+
 **Mini-récap** :
-- ✅ Fait : **LE LOT PRÉ-PILOTE EST COMPLET** — S3.6/S3.7 mergées (PRs #31/#32), S3.8 + S3.11 + S3.12 + S3.10 + S3.9 + S3.13 sur la PR en cours ; migrations 0011→0015 ; **275 tests verts** (239 → 275)
-- ⏳ Référent : revue/merge de la PR du lot ; sur pod : migrations 0011→0015 puis plans s3.8→s3.13 (une session de contrôle couvre tout) ; `export SIA_CORPUS_DIR=~/work/corpus` avant `make pod-up`
+- ✅ Fait : **LE LOT PRÉ-PILOTE EST COMPLET ET VALIDÉ FONCTIONNEL SUR POD** — S3.6/S3.7 mergées (PRs #31/#32), S3.8→S3.13 + **S3.14 fiche document** sur la PR #34 ; migrations 0011→0015 ; **279 tests verts** (239 → 279)
+- ⏳ Référent : revue/merge PR #34 ; `git pull` sur le pod pour S3.14 (aucune migration)
 - ⏳ Ensuite : dépendances externes §7 (snapshot corpus → S3.1/S3.3, gold → S3.4, panel → S3.5) — le code n'attend plus qu'elles
 
 ---

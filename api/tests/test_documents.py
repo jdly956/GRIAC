@@ -57,9 +57,9 @@ def test_liste_documents_expose_statuts_reference_doublon(brancher) -> None:
     brancher(
         [
             [
-                ("pa/spec-v2.docx", "spec-v2.docx", "docx", "parse", True, False, "pa"),
-                ("pa/spec-v1.docx", "spec-v1.docx", "docx", "parse", False, True, "pa"),
-                ("divers/scan.pdf", "scan.pdf", "pdf", "ocr_requis", False, False, None),
+                (1, "pa/spec-v2.docx", "spec-v2.docx", "docx", "parse", True, False, "pa"),
+                (2, "pa/spec-v1.docx", "spec-v1.docx", "docx", "parse", False, True, "pa"),
+                (3, "divers/scan.pdf", "scan.pdf", "pdf", "ocr_requis", False, False, None),
             ]
         ]
     )
@@ -68,6 +68,7 @@ def test_liste_documents_expose_statuts_reference_doublon(brancher) -> None:
     corps = reponse.json()
     assert len(corps) == 3
     assert corps[0] == {
+        "id": 1,  # S3.14 : l'inventaire pointe vers la fiche /documents/{id}
         "chemin": "pa/spec-v2.docx",
         "nom": "spec-v2.docx",
         "extension": "docx",
@@ -79,6 +80,80 @@ def test_liste_documents_expose_statuts_reference_doublon(brancher) -> None:
     assert corps[1]["doublon"] is True
     assert corps[2]["statut_parsing"] == "ocr_requis"
     assert corps[2]["projet_suggere"] is None
+
+
+def test_fiche_document_traitement_complet(brancher, tmp_path) -> None:
+    # S3.14 : la fiche restitue le parsing (dérivé markdown lu du disque) et
+    # les chunks avec leur état d'embedding.
+    derive = tmp_path / "abc.md"
+    derive.write_text("# Titre parsé\n\ncontenu du dérivé", encoding="utf-8")
+    brancher(
+        [
+            (
+                1,
+                "pa/spec-v2.docx",
+                "spec-v2.docx",
+                "docx",
+                12_345,
+                "abc123",
+                "parse",
+                None,
+                "2026-07-06 22:00",
+                str(derive),
+                True,
+                None,
+                "pa",
+                2,
+                "spec",
+            ),
+            [
+                (0, "Spec > Exigences", 640, "contenu du chunk 0", True),
+                (1, "Spec > CA", 512, "contenu du chunk 1", False),
+            ],
+        ]
+    )
+    corps = client.get("/documents/1").json()
+    assert corps["derive_apercu"].startswith("# Titre parsé")
+    assert corps["derive_tronque"] is False
+    assert corps["nb_chunks"] == 2 and corps["nb_embarques"] == 1
+    assert corps["chunks"][0]["section"] == "Spec > Exigences"
+    assert corps["chunks"][1]["embarque"] is False
+    assert corps["version_no"] == 2 and corps["est_reference"] is True
+
+
+def test_fiche_document_derive_absent_reste_consultable(brancher) -> None:
+    # Pod recréé : le fichier dérivé a disparu — la fiche le dit sans échouer.
+    brancher(
+        [
+            (
+                1,
+                "divers/scan.pdf",
+                "scan.pdf",
+                "pdf",
+                999,
+                "def456",
+                "ocr_requis",
+                "PDF scanné : OCR Albert requis",
+                None,
+                "/parti/avec/le/pod.md",
+                False,
+                None,
+                None,
+                None,
+                None,
+            ),
+            [],
+        ]
+    )
+    corps = client.get("/documents/1").json()
+    assert corps["derive_apercu"] is None
+    assert corps["erreur_parsing"] == "PDF scanné : OCR Albert requis"
+    assert corps["nb_chunks"] == 0
+
+
+def test_fiche_document_inconnue_404(brancher) -> None:
+    brancher([None])
+    assert client.get("/documents/99").status_code == 404
 
 
 def test_stats_documents_calcule_la_couverture(brancher) -> None:

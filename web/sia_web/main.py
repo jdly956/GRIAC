@@ -514,6 +514,19 @@ def ecran_documents(request: Request) -> HTMLResponse:
     )
 
 
+@app.get("/documents/{document_id}", response_class=HTMLResponse)
+def ecran_document(request: Request, document_id: int) -> HTMLResponse:
+    """S3.14 : la fiche d'un document — tout ce que le pipeline en a fait."""
+    statut, fiche = api_client.appeler("GET", f"/documents/{document_id}")
+    if statut != 200:
+        return _page_erreur(request, statut, fiche)
+    return templates.TemplateResponse(
+        request=request,
+        name="document.html",
+        context={"fiche": fiche, "libelles": STATUTS_PARSING_LIBELLES},
+    )
+
+
 @app.post("/documents/upload")
 async def deposer_document(request: Request, fichier: UploadFile) -> RedirectResponse:
     """S3.10 : dépôt → dossier corpus (statut « en attente d'indexation »)."""

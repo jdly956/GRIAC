@@ -113,6 +113,15 @@ Critères d'acceptation :
 
 *Code livré le 06/07/2026 : migration 0015 (`story_editions` UNIQUE(session, titre) + `workflow_sessions.titre/archivee`), `sia_api/stories.py` (`GET /workflows/{id}/stories/contenus` — version éditée prioritaire — et `PUT …/stories/edition` en upsert), **l'édition gagne à l'export** (surcouche dans `_charger_session` E5), `PATCH /workflows/{id}` (renommer/archiver — l'accueil masque les archivées, rien n'est détruit), panneaux web « Stories — éditer / copier » (badge + bouton copier clipboard) et « Gérer la session ». Le rattachement télémétrique du taux d'édition réel reste à câbler (comptage `story_editions` — mineur). 10 TU — 275 tests. Plan `docs/plans-test/s3.13-confort-po.md`.*
 
+### S3.14 — Fiche document : voir le traitement du pipeline, document par document
+
+> Demande référent post-validation du lot (06/07/2026) : « accéder à chaque document depuis l'UI et voir le résultat du traitement (OCR, chunks, etc.) ».
+
+- [ ] L'inventaire « Mes documents » pointe vers une **fiche par document** (`GET /documents/{id}`) : identité (taille, sha256, version détectée, doublon de, projet suggéré), **traitement** (statut, erreur de parsing/OCR, date, dérivé markdown **rendu** — aperçu 8 k, lu du disque, absence signalée sans échec), **chunks** (fil de titres, tokens, contenu exact, état d'embedding ✅/⏳, compteurs)
+- [ ] TU api (fiche complète, dérivé absent, 404 ; route `stats` enregistrée avant la route dynamique) + TU écran
+
+*Code livré le 06/07/2026 : `GET /documents/{id}` (+ `id` exposé à l'inventaire), lecture du dérivé `derived/md/<sha>.md`, écran `document.html` (badges, parsing rendu, chunks dépliables), liens depuis l'inventaire. 5 TU — 279 tests. Plan `docs/plans-test/s3.14-fiche-document.md`.*
+
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 
 Critères d'acceptation :

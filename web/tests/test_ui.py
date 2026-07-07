@@ -509,6 +509,53 @@ def test_edition_et_gestion_de_session(api) -> None:
     assert patch[2] == {"archivee": True}
 
 
+def test_fiche_document_affiche_le_traitement(api) -> None:
+    # S3.14 : depuis « Mes documents », chaque document a sa fiche — parsing,
+    # dérivé markdown rendu, chunks avec état d'embedding.
+    api.brancher(
+        "GET",
+        "/documents/1",
+        200,
+        {
+            "id": 1,
+            "chemin": "pa/spec-v2.docx",
+            "nom": "spec-v2.docx",
+            "extension": "docx",
+            "taille_octets": 12345,
+            "sha256": "abc123def456ghij",
+            "statut_parsing": "parse",
+            "erreur_parsing": None,
+            "date_parsing": "2026-07-06 22:00",
+            "chemin_derive": "derived/md/abc.md",
+            "derive_apercu": "# Titre parsé\n\n| A | B |\n|---|---|\n| 1 | 2 |",
+            "derive_tronque": False,
+            "est_reference": True,
+            "doublon_de": None,
+            "projet_suggere": "pa",
+            "version_no": 2,
+            "groupe_version": "spec",
+            "chunks": [
+                {
+                    "ordinal": 0,
+                    "section": "Spec > Exigences",
+                    "nb_tokens": 640,
+                    "contenu": "contenu exact du chunk",
+                    "embarque": True,
+                }
+            ],
+            "nb_chunks": 1,
+            "nb_embarques": 1,
+        },
+    )
+    texte = client.get("/documents/1").text
+    assert "Voir le résultat du parsing" in texte
+    assert "<table>" in texte  # le dérivé markdown est rendu
+    assert "Chunks (E1, nœud D) — 1, dont 1 vectorisé(s)" in texte
+    assert "Spec &gt; Exigences" in texte or "Spec > Exigences" in texte
+    assert "✅ vectorisé" in texte
+    assert "contenu exact du chunk" in texte
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")
