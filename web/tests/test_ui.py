@@ -556,6 +556,67 @@ def test_fiche_document_affiche_le_traitement(api) -> None:
     assert "contenu exact du chunk" in texte
 
 
+FICHE_MINIMALE = {
+    "id": 1,
+    "chemin": "pa/spec-v2.docx",
+    "nom": "spec-v2.docx",
+    "extension": "docx",
+    "taille_octets": 12345,
+    "sha256": "abc123def456ghij",
+    "statut_parsing": "parse",
+    "erreur_parsing": None,
+    "date_parsing": None,
+    "chemin_derive": None,
+    "derive_apercu": None,
+    "derive_tronque": False,
+    "est_reference": False,
+    "doublon_de": None,
+    "projet_suggere": None,
+    "version_no": None,
+    "groupe_version": None,
+    "chunks": [],
+    "nb_chunks": 0,
+    "nb_embarques": 0,
+}
+
+
+def test_fiche_document_actions_telecharger_et_supprimer(api) -> None:
+    # S3.17 : la fiche porte le téléchargement de l'original et la suppression
+    # (confirmée — l'action est définitive).
+    api.brancher("GET", "/documents/1", 200, FICHE_MINIMALE)
+    texte = client.get("/documents/1").text
+    assert 'href="/documents/1/original"' in texte
+    assert 'action="/documents/1/supprimer"' in texte
+    assert "confirm(" in texte  # garde-fou navigateur avant une action définitive
+
+
+def test_suppression_document_redirige_vers_l_inventaire(api) -> None:
+    api.brancher("DELETE", "/documents/1", 204, {})
+    reponse = client.post("/documents/1/supprimer", follow_redirects=False)
+    assert reponse.status_code == 303
+    assert reponse.headers["location"] == "/documents"
+    assert ("DELETE", "/documents/1", None) in api.appels
+
+
+def test_telechargement_original_proxifie_en_binaire(monkeypatch: pytest.MonkeyPatch) -> None:
+    # S3.17 : proxy BINAIRE (un .docx passé par .text serait corrompu) ; le
+    # Content-Disposition de l'api (nom du fichier) est propagé au navigateur.
+    monkeypatch.setattr(
+        api_client,
+        "telecharger_binaire",
+        lambda chemin: (
+            200,
+            b"\x50\x4b\x03\x04octets docx",
+            "application/octet-stream",
+            'attachment; filename="spec-v2.docx"',
+        ),
+    )
+    reponse = client.get("/documents/1/original")
+    assert reponse.status_code == 200
+    assert reponse.content == b"\x50\x4b\x03\x04octets docx"
+    assert reponse.headers["content-disposition"] == 'attachment; filename="spec-v2.docx"'
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")

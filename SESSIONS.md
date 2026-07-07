@@ -4,7 +4,7 @@
 
 ## État stratégique
 
-**Voie active (07/07/2026)** : **LE LOT PRÉ-PILOTE EST ENTIÈREMENT MERGÉ ET VALIDÉ SUR POD** — PRs #31/#32/#33/#34 (S3.6→S3.14 : rendu markdown, écran réorganisé, htmx, traçabilité A3 persistée avec extrait exact, corpus depuis l'UI + pipeline + suivi, tokens + jauge tpd, modèle changeable depuis Paramètres, édition/renommage/copie, fiche document) — **283 tests verts**, pod validé par le référent (279 verts + écrans OK, photo terminal 07/07). En cours : **S3.16 formats étendus (pptx/xlsx/eml)** — demande référent du 07/07, sur une nouvelle PR depuis `main`. Notée mais pas lancée : **S3.15 requête RAG contextualisée + éval retrieval recall@15** (issue de l'analyse chunking/scoring du 07/07 : la requête de recherche = dernier message PO seul). En attente référent : dépendances externes §7 (snapshot corpus → S3.1/S3.3, gold → S3.4, panel → S3.5), protection de branche `main`. Reste mineur : compteur télémétrique des stories éditées. Détail : `docs/sprint-3-backlog.md`.
+**Voie active (07/07/2026)** : **LE LOT PRÉ-PILOTE EST ENTIÈREMENT MERGÉ ET VALIDÉ SUR POD** — PRs #31/#32/#33/#34 (S3.6→S3.14 : rendu markdown, écran réorganisé, htmx, traçabilité A3 persistée avec extrait exact, corpus depuis l'UI + pipeline + suivi, tokens + jauge tpd, modèle changeable depuis Paramètres, édition/renommage/copie, fiche document) — **283 tests verts**, pod validé par le référent (279 verts + écrans OK, photo terminal 07/07). En cours : **PR #35** (demandes référent du 07/07) — **S3.16 formats étendus (pptx/xlsx/eml)** + **S3.17 suppression de documents / téléchargement de l'original** (291 tests). Notée mais pas lancée : **S3.15 requête RAG contextualisée + éval retrieval recall@15** (issue de l'analyse chunking/scoring du 07/07 : la requête de recherche = dernier message PO seul). En attente référent : dépendances externes §7 (snapshot corpus → S3.1/S3.3, gold → S3.4, panel → S3.5), protection de branche `main`. Reste mineur : compteur télémétrique des stories éditées. Détail : `docs/sprint-3-backlog.md`.
 
 *Voie précédente (06/07/2026, nuit)* : **la PR #30 est MERGÉE** (S2.13 validée stack-live, S2.14, S2.15, S3.2, 6 correctifs sessions réelles, cadrage sprint 3 — 232 tests). **Le lot pré-pilote S3.6→S3.13 est en cours** (cadré avec le référent : UI markdown/navigation/htmx, upload + pipeline depuis l'UI, modèle en Paramètres, comptabilité tokens, traçabilité A3 complète, édition des stories) — une story = une petite PR depuis `main` ; S3.6 (rendu markdown) livrée en premier (session 28). En attente référent : dépendances externes §7 (snapshot corpus, gold, panel PO), protection de branche, plans s2.15/s3.2/s3.6 à jouer sur pod. Détail : `docs/sprint-3-backlog.md`.
 
@@ -22,7 +22,7 @@
 
 ---
 
-## Session 07/07/2026 (29) — analyses chunking/RAG + S3.16 formats étendus (pptx, xlsx, eml)
+## Session 07/07/2026 (29) — analyses chunking/RAG + S3.16 formats étendus + S3.17 suppression/original (PR #35)
 
 **Contexte** : suite de la session 28 sur la même branche (repartie de `main` après le merge de la PR #34 — le lot pré-pilote S3.6→S3.14 est entièrement mergé et validé pod : 279 verts + écrans OK, photo terminal du référent).
 
@@ -40,9 +40,15 @@
 
 **Validation en session** : lint vert, **283 tests verts** (TNR complet). Validation stack-live = plan `docs/plans-test/s3.16-formats-etendus.md` (dépôt réel des 3 formats sur pod, indexation, fiche document, RAG sourcé).
 
+**S3.17 — supprimer un document / télécharger l'original** (« ajoute la possibilité de supprimer les documents et de télécharger l'original » — empilée sur la PR #35, un commit par story) :
+- **Télécharger** : `GET /documents/{id}/original` (FileResponse sous le nom d'origine) ; côté web, `telecharger_binaire` — un .docx passé par `.text` serait corrompu — avec Content-Disposition propagé ; fichier disparu (pod recréé) → 404 explicite ;
+- **Supprimer** : `DELETE /documents/{id}` — ligne en base (chunks en **cascade FK** 0006), `doublon_de` des autres documents repointé NULL, **fichier source retiré du corpus** (sinon ré-inventorié au prochain scan — D9) + dérivé markdown ; fichiers supprimés **après** le commit (une erreur base ne détruit rien) ; garde-fou partagé `_source_dans_corpus` (un chemin hors racine corpus n'est jamais servi ni supprimé) ;
+- Écran fiche : panneau « Actions » — téléchargement + suppression derrière `confirm()` navigateur, avec l'avertissement « définitif » explicite. Choix assumé : **pas de corbeille** (un document se redépose ; les sessions S3.13, elles, s'archivent sans destruction).
+- **8 TU** (5 api : téléchargement, 404 absent, garde-fou traversée, suppression base+fichiers, 404 ; 3 web : actions, redirection, proxy binaire) — **291 tests verts** (283 → 291). Plan `docs/plans-test/s3.17-suppression-original.md` (contre-épreuves : chunks à 0, RAG « aucune source », ré-indexation sans résurrection).
+
 **Mini-récap** :
-- ✅ Fait : analyses chunking/scoring/contexte (aucun code) ; S3.16 livrée (source unique, convertisseur eml, upload) — 283 tests ; backlog sprint 3 recalé (S3.15 candidate + S3.16) ; en-tête stratégique recalé (lot pré-pilote mergé)
-- ⏳ Référent : revue/merge de la PR S3.16 ; plan s3.16 sur pod ; « go » éventuel sur S3.15
+- ✅ Fait : analyses chunking/scoring/contexte (aucun code) ; S3.16 formats étendus (283 tests) + S3.17 suppression/téléchargement (291 tests) sur la PR #35 ; backlog sprint 3 recalé (S3.15 candidate + S3.16 + S3.17) ; en-tête stratégique recalé (lot pré-pilote mergé)
+- ⏳ Référent : revue/merge de la PR #35 ; plans s3.16 + s3.17 sur pod ; « go » éventuel sur S3.15
 - ⏳ Ensuite : dépendances externes §7 (snapshot corpus, gold, panel PO)
 
 ---

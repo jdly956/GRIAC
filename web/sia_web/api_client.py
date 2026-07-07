@@ -53,3 +53,21 @@ def telecharger(chemin: str) -> tuple[int, str, str]:
     except httpx.HTTPError as erreur:
         return 599, f"API injoignable : {type(erreur).__name__}", "text/plain"
     return reponse.status_code, reponse.text, reponse.headers.get("content-type", "text/plain")
+
+
+def telecharger_binaire(chemin: str) -> tuple[int, bytes, str, str | None]:
+    """(statut, octets, content-type, content-disposition) — originaux S3.17.
+
+    Variante binaire de `telecharger` : un .docx/.pdf passé par `.text` serait
+    corrompu. Le Content-Disposition de l'api (nom de fichier) est propagé.
+    """
+    try:
+        reponse = httpx.get(url_api() + chemin, timeout=DELAI_S)
+    except httpx.HTTPError as erreur:
+        return 599, f"API injoignable : {type(erreur).__name__}".encode(), "text/plain", None
+    return (
+        reponse.status_code,
+        reponse.content,
+        reponse.headers.get("content-type", "application/octet-stream"),
+        reponse.headers.get("content-disposition"),
+    )

@@ -37,9 +37,13 @@ class FauxCurseur:
 class FausseConnexion:
     def __init__(self, resultats: list) -> None:
         self.curseur = FauxCurseur(deque(resultats))
+        self.commits = 0
 
     def cursor(self) -> FauxCurseur:
         return self.curseur
+
+    def commit(self) -> None:
+        self.commits += 1
 
 
 @pytest.fixture
@@ -154,6 +158,61 @@ def test_fiche_document_derive_absent_reste_consultable(brancher) -> None:
 def test_fiche_document_inconnue_404(brancher) -> None:
     brancher([None])
     assert client.get("/documents/99").status_code == 404
+
+
+def test_telechargement_original(brancher, tmp_path, monkeypatch) -> None:
+    # S3.17 : l'original est servi tel que déposé, sous son nom.
+    monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path))
+    (tmp_path / "pa").mkdir()
+    (tmp_path / "pa" / "spec-v2.docx").write_bytes(b"contenu original")
+    brancher([("pa/spec-v2.docx", "spec-v2.docx")])
+    reponse = client.get("/documents/1/original")
+    assert reponse.status_code == 200
+    assert reponse.content == b"contenu original"
+    assert "spec-v2.docx" in reponse.headers["content-disposition"]
+
+
+def test_telechargement_original_fichier_absent_404(brancher, tmp_path, monkeypatch) -> None:
+    # Pod recréé : la ligne existe mais le fichier source a disparu — 404 explicite.
+    monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path))
+    brancher([("pa/parti.docx", "parti.docx")])
+    reponse = client.get("/documents/1/original")
+    assert reponse.status_code == 404
+    assert "absent du corpus" in reponse.json()["detail"]
+
+
+def test_telechargement_original_chemin_hors_corpus_404(brancher, tmp_path, monkeypatch) -> None:
+    # Garde-fou : un chemin qui sort de la racine corpus n'est jamais servi.
+    monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path / "corpus"))
+    (tmp_path / "corpus").mkdir()
+    (tmp_path / "secret.txt").write_text("hors corpus", encoding="utf-8")
+    brancher([("../secret.txt", "secret.txt")])
+    assert client.get("/documents/1/original").status_code == 404
+
+
+def test_suppression_document_base_et_fichiers(brancher, tmp_path, monkeypatch) -> None:
+    # S3.17 : suppression = ligne (chunks en cascade), doublons repointés,
+    # fichier source ET dérivé retirés du disque (sinon ré-inventoriés, D9).
+    monkeypatch.setenv("SIA_CORPUS_DIR", str(tmp_path / "corpus"))
+    source = tmp_path / "corpus" / "pa" / "spec-v2.docx"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"original")
+    derive = tmp_path / "derives" / "abc.md"
+    derive.parent.mkdir()
+    derive.write_text("# dérivé", encoding="utf-8")
+    connexion = brancher([("pa/spec-v2.docx", str(derive))])
+    reponse = client.delete("/documents/1")
+    assert reponse.status_code == 204
+    assert not source.exists() and not derive.exists()
+    requetes = " ; ".join(connexion.curseur.requetes)
+    assert "SET doublon_de = NULL" in requetes
+    assert "DELETE FROM documents" in requetes
+    assert connexion.commits == 1
+
+
+def test_suppression_document_inconnu_404(brancher) -> None:
+    brancher([None])
+    assert client.delete("/documents/99").status_code == 404
 
 
 def test_stats_documents_calcule_la_couverture(brancher) -> None:

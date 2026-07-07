@@ -21,7 +21,7 @@ racine (prod Helm, dev compose), root_path vide = comportement inchangé.
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi import FastAPI, Form, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -551,6 +551,32 @@ def lancer_indexation(request: Request) -> RedirectResponse:
 @app.post("/documents/runs/{run_id}/echec")
 def debloquer_run(request: Request, run_id: int) -> RedirectResponse:
     api_client.appeler("POST", f"/ingestion/runs/{run_id}/echec")
+    return _rediriger(request, "/documents")
+
+
+@app.get("/documents/{document_id}/original")
+def telecharger_original(document_id: int) -> Response:
+    """S3.17 : proxy binaire de l'original (l'api n'est pas exposée au navigateur)."""
+    statut, contenu, content_type, disposition = api_client.telecharger_binaire(
+        f"/documents/{document_id}/original"
+    )
+    entetes = {"content-disposition": disposition} if disposition else {}
+    return Response(
+        content=contenu,
+        status_code=statut if statut != 599 else 502,
+        media_type=content_type,
+        headers=entetes,
+    )
+
+
+@app.post("/documents/{document_id}/supprimer")
+def supprimer_document(request: Request, document_id: int) -> RedirectResponse:
+    """S3.17 : suppression complète (base + fichiers) — confirmée côté écran."""
+    statut, corps = api_client.appeler("DELETE", f"/documents/{document_id}")
+    if statut not in (200, 204):
+        return _rediriger(
+            request, f"/documents?erreur={corps.get('detail', 'suppression refusée')}"
+        )
     return _rediriger(request, "/documents")
 
 

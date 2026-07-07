@@ -140,6 +140,17 @@ Critères d'acceptation :
 
 *Code livré le 07/07/2026 : `EXTENSIONS_PARSABLES = (docx, pdf, pptx, xlsx, eml)` partagée api↔ingestion (`REQUETE_STATS` recalée), `convertir_eml_en_markdown` (stdlib `email`, `policy.default`), routage `.eml` dans `parser_lot`, `EXTENSIONS_ACCEPTEES` upload + label écran étendus. Limites assumées : `.odt` reste accepté à l'upload mais non parsé (inchangé) ; premier `pptx`/`xlsx` indexé sur un pod = téléchargement des modèles docling (une fois). 4 TU — 283 tests. Plan `docs/plans-test/s3.16-formats-etendus.md`.*
 
+### S3.17 — Supprimer un document / télécharger l'original
+
+> Demande référent (07/07/2026) : « ajoute la possibilité de supprimer les documents et de télécharger l'original ».
+
+- [ ] **Télécharger l'original** : `GET /documents/{id}/original` sert le fichier source tel que déposé (nom d'origine, binaire) ; proxy web binaire (l'api n'est pas exposée au navigateur) ; fichier disparu (pod recréé) → 404 explicite, garde-fou anti-traversée (un chemin hors racine corpus n'est jamais servi)
+- [ ] **Supprimer** : `DELETE /documents/{id}` — ligne en base (chunks en cascade FK), `doublon_de` des autres documents repointé à NULL (requalifié au prochain run), **fichier source retiré du corpus** (sinon ré-inventorié au prochain scan, D9) + dérivé markdown ; fichiers supprimés APRÈS le commit (une erreur base ne détruit rien)
+- [ ] Écran fiche : panneau « Actions » (bouton télécharger + suppression avec `confirm()` navigateur — l'action est définitive et l'écran le dit)
+- [ ] TU api (téléchargement, 404 fichier absent, garde-fou traversée, suppression base+fichiers, 404) + TU écran (actions affichées, redirection, proxy binaire)
+
+*Code livré le 07/07/2026 : `GET /documents/{id}/original` (FileResponse, `_source_dans_corpus` en garde-fou partagé) + `DELETE /documents/{id}` dans `sia_api/documents.py` ; `telecharger_binaire` dans le client web (un .docx passé par `.text` serait corrompu — Content-Disposition propagé) ; panneau « Actions » sur la fiche. Choix assumé : pas de corbeille ni d'archivage — suppression définitive assumée à l'écran (contrairement aux sessions S3.13, archivées jamais détruites : un document se redépose, une session ne se rejoue pas). 8 TU — 291 tests. Plan `docs/plans-test/s3.17-suppression-original.md`.*
+
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 
 Critères d'acceptation :
