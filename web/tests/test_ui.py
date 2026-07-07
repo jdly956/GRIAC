@@ -1145,3 +1145,51 @@ def test_valider_htmx_fragment_avec_stepper_a_jour(api) -> None:
     assert "Étape validée (Oui)" in texte  # la décision PO apparaît dans le fil
     assert 'id="stepper"' in texte and 'hx-swap-oob="true"' in texte
     assert 'data-fr-current-step="3"' in texte  # stories_candidates = 3e étape
+
+
+# --- R4 : sélection en masse des hypothèses (H5, arbitrage UX1) ---
+
+
+def test_selection_en_masse_des_hypotheses(api) -> None:
+    # R4 : cases rattachées au formulaire de lot par l'attribut form (pas
+    # d'imbrication de formulaires) ; le statut envoyé est celui du bouton
+    # cliqué par le PO (A8) ; seules les en_attente sont cochables.
+    etat = dict(
+        ETAT_SESSION,
+        hypotheses=[
+            dict(ETAT_SESSION["hypotheses"][0]),
+            {
+                "id": 4,
+                "texte": "SSO requis [HYPOTHÈSE À VALIDER]",
+                "origine": "modele",
+                "statut": "en_attente",
+            },
+            {"id": 5, "texte": "Déjà levée", "origine": "po", "statut": "confirmee"},
+        ],
+        nb_en_attente=2,
+    )
+    api.brancher("GET", "/workflows/1", 200, etat)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert texte.count('form="form-lot-hypotheses"') == 2  # 2 en_attente cochables, pas la levée
+    assert "Confirmer la sélection" in texte and "Rejeter la sélection" in texte
+    assert "Tout sélectionner" in texte
+
+    api.brancher("POST", "/workflows/1/hypotheses/decider-lot", 200, {})
+    reponse = client.post(
+        "/sessions/1/hypotheses/decider-lot",
+        data={"statut": "rejetee", "hypothese_ids": ["3", "4"]},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    appel = next(a for a in api.appels if "decider-lot" in a[1])
+    assert appel[2] == {"ids": [3, 4], "statut": "rejetee"}
+
+
+def test_lot_sans_selection_ne_touche_pas_l_api(api) -> None:
+    # A8 : aucune case cochée → aucun appel api — jamais de décision implicite.
+    reponse = client.post(
+        "/sessions/1/hypotheses/decider-lot", data={"statut": "confirmee"}, follow_redirects=False
+    )
+    assert reponse.status_code == 303
+    assert not any("decider-lot" in chemin for _, chemin, _ in api.appels)

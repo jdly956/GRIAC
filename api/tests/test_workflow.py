@@ -388,6 +388,61 @@ def test_application_en_lot_session_inconnue_404(brancher) -> None:
     assert client.post("/workflows/99/hypotheses/appliquer-propositions").status_code == 404
 
 
+def test_decision_en_lot_applique_le_statut_du_po(brancher) -> None:
+    # R4 (refonte UX/UI, H5 — arbitrage UX1 « sélection en masse ») : le PO
+    # coche puis choisit Confirmer OU Rejeter — le statut appliqué est LE SIEN ;
+    # seules les hypothèses cochées encore en_attente bougent.
+    hypotheses_apres = [
+        (3, "Seuil 10 Mo [HYPOTHÈSE À VALIDER]", "modele", "rejetee", None, None),
+        (5, "SSO obligatoire [HYPOTHÈSE À VALIDER]", "modele", "rejetee", None, None),
+        (8, "Pas cochée [HYPOTHÈSE À VALIDER]", "modele", "en_attente", None, None),
+    ]
+    connexion = brancher(
+        [
+            (7, "interview", None),  # _lire_session (garde 404)
+            [],  # ses hypothèses (peu importe ici)
+            [(3,), (5,)],  # UPDATE ... RETURNING id — 2 cochées décidées
+            (7, "interview", None),  # _lire_session après
+            hypotheses_apres,
+        ]
+    )
+    reponse = client.post(
+        "/workflows/7/hypotheses/decider-lot", json={"ids": [3, 5], "statut": "rejetee"}
+    )
+    assert reponse.status_code == 200
+    statuts = {h["id"]: h["statut"] for h in reponse.json()["hypotheses"]}
+    assert statuts == {3: "rejetee", 5: "rejetee", 8: "en_attente"}
+    requete, parametres = next(
+        (r, p) for r, p in connexion.curseur.requetes if "UPDATE workflow_hypotheses" in r
+    )
+    assert parametres == {"sid": 7, "statut": "rejetee", "ids": [3, 5]}
+    assert "statut = 'en_attente'" in requete  # jamais une hypothèse déjà décidée
+    assert "id = ANY" in requete  # jamais une hypothèse hors sélection
+
+
+def test_decision_en_lot_sans_correspondance_409(brancher) -> None:
+    # Sélection périmée (déjà décidées entre-temps) ou ids d'une autre session.
+    brancher([(7, "interview", None), [], []])
+    reponse = client.post(
+        "/workflows/7/hypotheses/decider-lot", json={"ids": [99], "statut": "confirmee"}
+    )
+    assert reponse.status_code == 409
+    assert "Aucune hypothèse en attente" in reponse.json()["detail"]
+
+
+def test_decision_en_lot_contrat_ferme(brancher) -> None:
+    # Le contrat refuse la sélection vide et tout statut inventé (A8) ; la
+    # session inconnue reste un 404.
+    brancher([])
+    corps_vide = {"ids": [], "statut": "confirmee"}
+    assert client.post("/workflows/7/hypotheses/decider-lot", json=corps_vide).status_code == 422
+    corps_statut = {"ids": [3], "statut": "levee"}
+    assert client.post("/workflows/7/hypotheses/decider-lot", json=corps_statut).status_code == 422
+    brancher([None])
+    corps = {"ids": [3], "statut": "confirmee"}
+    assert client.post("/workflows/99/hypotheses/decider-lot", json=corps).status_code == 404
+
+
 def test_synthese_refusee_avant_l_etape_finale(brancher) -> None:
     brancher([(7, "redaction", None), []])
     reponse = client.get("/workflows/7/synthese")

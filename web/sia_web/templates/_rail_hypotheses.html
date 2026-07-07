@@ -15,9 +15,31 @@
     </form>
     {% endif %}
     {% if etat.hypotheses %}
+    {% set en_attente = etat.hypotheses | selectattr("statut", "equalto", "en_attente") | list %}
+    {% if en_attente %}
+    {# R4 (H5, arbitrage UX1 « sélection en masse ») : les cases sont rattachées
+       à CE formulaire par l'attribut form (pas d'imbrication) ; le statut
+       appliqué est celui du bouton cliqué par le PO — A8 tient. #}
+    <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/decider-lot"
+          id="form-lot-hypotheses" class="lot-hypotheses"
+          onsubmit="return confirm('Appliquer votre décision (le bouton cliqué) aux hypothèses cochées ?')">
+      <label class="fr-hint-text lot-hypotheses__tout">
+        <input type="checkbox"
+          onclick="document.querySelectorAll('.coche-hypo').forEach(c => { c.checked = this.checked })">
+        Tout sélectionner
+      </label>
+      <button class="fr-btn fr-btn--sm" name="statut" value="confirmee" type="submit">Confirmer la sélection</button>
+      <button class="fr-btn fr-btn--sm fr-btn--secondary" name="statut" value="rejetee" type="submit">Rejeter la sélection</button>
+      <span class="fr-hint-text">Cochez des hypothèses puis appliquez votre décision au lot — sans case cochée, rien ne bouge (A8).</span>
+    </form>
+    {% endif %}
     <ul class="liste-hypotheses">
       {% for hypothese in etat.hypotheses %}
       <li>
+        {% if hypothese.statut == "en_attente" %}
+        <input type="checkbox" class="coche-hypo" name="hypothese_ids" value="{{ hypothese.id }}"
+          form="form-lot-hypotheses" aria-label="Sélectionner l'hypothèse n°{{ hypothese.id }}">
+        {% endif %}
         <em>[{{ hypothese.origine }}]</em> {{ hypothese.texte }} — <strong>{{ hypothese.statut }}</strong>
         {% if hypothese.statut == "en_attente" %}
         {% if hypothese.statut_propose %}

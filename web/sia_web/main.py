@@ -438,6 +438,28 @@ def appliquer_levees_proposees(request: Request, session_id: int) -> RedirectRes
     return _rediriger(request, f"/sessions/{session_id}")
 
 
+# Enregistrée avant la route dynamique /hypotheses/{hypothese_id}.
+@app.post("/sessions/{session_id}/hypotheses/decider-lot")
+def decider_hypotheses_lot(
+    request: Request,
+    session_id: int,
+    statut: Annotated[str, Form()],
+    hypothese_ids: Annotated[list[int] | None, Form()] = None,
+) -> RedirectResponse:
+    """R4 (H5) : applique la décision du PO (Confirmer OU Rejeter) au lot coché.
+
+    Sans sélection, aucun appel api — simple retour à l'écran : jamais de
+    décision implicite (A8).
+    """
+    if hypothese_ids:
+        api_client.appeler(
+            "POST",
+            f"/workflows/{session_id}/hypotheses/decider-lot",
+            json={"ids": hypothese_ids, "statut": statut},
+        )
+    return _rediriger(request, f"/sessions/{session_id}")
+
+
 @app.post("/sessions/{session_id}/hypotheses/{hypothese_id}")
 def decider_hypothese(
     request: Request, session_id: int, hypothese_id: int, statut: Annotated[str, Form()]

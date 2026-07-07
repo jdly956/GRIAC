@@ -336,6 +336,45 @@ def appliquer_levees_proposees(session_id: int, connexion: Connexion) -> EtatSes
     return etat
 
 
+class DecisionLotEntree(BaseModel):
+    ids: list[int] = Field(min_length=1, description="Hypothèses cochées par le PO")
+    statut: Literal["confirmee", "rejetee"]  # LA décision du PO, appliquée au lot
+
+
+# Enregistrée AVANT /hypotheses/{hypothese_id} (capture dynamique), comme
+# « appliquer-propositions » ci-dessus.
+@router.post("/workflows/{session_id}/hypotheses/decider-lot")
+def decider_hypotheses_en_lot(
+    session_id: int, entree: DecisionLotEntree, connexion: Connexion
+) -> EtatSession:
+    """R4 (refonte UX/UI, H5) : décision en MASSE sur une sélection relue.
+
+    Arbitrage UX1 du 07/07/2026 (« la sélection en masse doit être possible ») :
+    le PO coche des hypothèses puis choisit Confirmer OU Rejeter — le statut
+    appliqué est LE SIEN, jamais inventé par la route ; seules les hypothèses
+    de la session, encore en_attente ET sélectionnées, bougent. L'esprit d'A8
+    tient : un geste explicite du PO, aucune levée silencieuse.
+    """
+    with connexion.cursor() as curseur:
+        if _lire_session(curseur, session_id) is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
+        curseur.execute(
+            "UPDATE workflow_hypotheses SET statut = %(statut)s, decidee_le = now() "
+            "WHERE session_id = %(sid)s AND statut = 'en_attente' "
+            "AND id = ANY(%(ids)s) RETURNING id",
+            {"sid": session_id, "statut": entree.statut, "ids": entree.ids},
+        )
+        decidees = curseur.fetchall()
+        if not decidees:
+            raise HTTPException(
+                status_code=409,
+                detail="Aucune hypothèse en attente ne correspond à la sélection.",
+            )
+        etat = _lire_session(curseur, session_id)
+    connexion.commit()
+    return etat
+
+
 @router.post("/workflows/{session_id}/hypotheses/{hypothese_id}")
 def decider_hypothese(
     session_id: int, hypothese_id: int, entree: DecisionEntree, connexion: Connexion
