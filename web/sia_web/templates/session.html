@@ -26,7 +26,9 @@
     {% for source in dernier_resultat.sources %}
     <li>{{ source.nom }} — {{ source.section }}
       {% if source.extrait %}
-      <details><summary>extrait exact</summary><blockquote>{{ source.extrait }}</blockquote></details>
+      {# S3.20 : extrait borné à l'affichage — un extrait anormalement long
+         (session 12 : 940k chars) rendait la page inutilisable. #}
+      <details><summary>extrait exact</summary><blockquote>{{ source.extrait[:2000] }}{% if source.extrait | length > 2000 %}<br><em>[… affichage tronqué à 2 000 caractères sur {{ source.extrait | length }}]</em>{% endif %}</blockquote></details>
       {% endif %}
     </li>
     {% endfor %}

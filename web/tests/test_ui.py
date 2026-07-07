@@ -460,6 +460,26 @@ def test_depot_et_indexation_depuis_mes_documents(api, monkeypatch: pytest.Monke
     assert any(a[:2] == ("POST", "/ingestion/lancer") for a in api.appels)
 
 
+def test_extrait_anormalement_long_tronque_a_l_affichage(api) -> None:
+    # S3.20 (session 12) : un extrait de 940k chars (chunk-tableau xlsx) rendait
+    # la page inutilisable — l'affichage est borné, la mention l'explique.
+    messages = [
+        {
+            "role": "assistant",
+            "etape": "interview",
+            "contenu": "Réponse",
+            "sources": [{"nom": "gros.xlsx", "section": "Feuille1", "extrait": "| x |" * 3000}],
+            "avertissements": [],
+            "divergences": [],
+        }
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, messages)
+    texte = client.get("/sessions/1").text
+    assert "affichage tronqué à 2 000 caractères sur 15000" in texte
+    assert texte.count("| x |") < 1000  # la page ne porte plus l'extrait entier
+
+
 def test_traces_du_fil_avec_extrait_exact(api) -> None:
     # S3.9 : au rechargement, chaque message assistant garde ses sources —
     # l'extrait exact du chunk est consultable (la promesse A3).

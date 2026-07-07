@@ -216,11 +216,27 @@ class ContexteResultat(BaseModel):
 def assembler_contexte(
     chunks: list[ChunkTrouve], budget_tokens: int = BUDGET_CONTEXTE_TOKENS
 ) -> tuple[str, list[ChunkTrouve], int]:
-    """8–15 chunks max dans le budget ; chaque bloc porte sa citation (traçabilité)."""
+    """8–15 chunks max dans le budget ; chaque bloc porte sa citation (traçabilité).
+
+    S3.20 (session 12) : plus de passe-droit du premier chunk — l'ancien
+    `if retenus and …` embarquait TOUJOURS le premier chunk, même à ~235k
+    tokens (chunk-tableau xlsx). Un chunk qui dépasse à lui seul le budget est
+    tronqué à la borne et marqué ; le chunking S3.19 borne désormais les
+    tableaux, ceci est la ceinture de sécurité côté E2 (l'extrait tronqué est
+    aussi ce qui part en traçabilité S3.9 — les pages restent légères).
+    """
     retenus: list[ChunkTrouve] = []
     total = 0
     for chunk in chunks[:NB_CANDIDATS_RERANK]:
-        if retenus and total + chunk.nb_tokens > budget_tokens:
+        if not retenus and chunk.nb_tokens > budget_tokens:
+            contenu = chunk.contenu[: budget_tokens * 4].rstrip() + (
+                f"\n[… extrait tronqué : chunk de {chunk.nb_tokens} tokens > budget "
+                f"{budget_tokens} — document à re-chunker (S3.19)]"
+            )
+            retenus.append(chunk.model_copy(update={"contenu": contenu}))
+            total = budget_tokens
+            break  # le budget est consommé — inutile d'empiler derrière
+        if total + chunk.nb_tokens > budget_tokens:
             break
         retenus.append(chunk)
         total += chunk.nb_tokens
