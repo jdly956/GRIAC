@@ -1,0 +1,40 @@
+{# Registre A8 : toujours sous les yeux (UX4) — chaque levée reste un geste
+   explicite du PO ; la sélection en masse arrive en R4. Out-of-band en R3. #}
+<details class="panneau-rail" open id="hypotheses"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <summary>Hypothèses à valider ({{ etat.nb_en_attente }} en attente{% if nb_levees_a_decider %}, dont {{ nb_levees_a_decider }} levée(s) proposée(s) à décider{% endif %})</summary>
+  <div class="panneau-rail__corps">
+    <p class="fr-hint-text">Chaque hypothèse se lève <strong>individuellement</strong> — une validation d'étape ne lève rien (A8).</p>
+    {% if nb_levees_a_decider %}
+    {# S3.21 (arbitrage 07/07) : le PO relit les propositions listées ci-dessous
+       et les applique d'un clic — sa décision, en lot. Seules les hypothèses
+       portant une proposition du moteur sont touchées. #}
+    <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/appliquer-propositions"
+          onsubmit="return confirm('Appliquer les {{ nb_levees_a_decider }} levée(s) proposée(s) telles qu\'affichées (Confirmer/Rejeter) ? Les hypothèses sans proposition ne bougent pas.')">
+      <button class="fr-btn fr-btn--sm" type="submit">Appliquer les {{ nb_levees_a_decider }} levée(s) proposée(s)</button>
+      <span class="fr-hint-text">Relisez chaque proposition ci-dessous avant d'appliquer — vous pouvez aussi décider hypothèse par hypothèse.</span>
+    </form>
+    {% endif %}
+    {% if etat.hypotheses %}
+    <ul class="liste-hypotheses">
+      {% for hypothese in etat.hypotheses %}
+      <li>
+        <em>[{{ hypothese.origine }}]</em> {{ hypothese.texte }} — <strong>{{ hypothese.statut }}</strong>
+        {% if hypothese.statut == "en_attente" %}
+        {% if hypothese.statut_propose %}
+        <span class="fr-badge fr-badge--new">Levée proposée : {{ "Confirmer" if hypothese.statut_propose == "confirmee" else "Rejeter" }}</span>
+        {% if hypothese.justification_proposee %}<em>{{ hypothese.justification_proposee }}</em>{% endif %}
+        — c'est vous qui décidez (A8) :
+        {% endif %}
+        <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/{{ hypothese.id }}" style="display:inline">
+          <button class="fr-btn fr-btn--sm" name="statut" value="confirmee">Confirmer</button>
+          <button class="fr-btn fr-btn--sm fr-btn--secondary" name="statut" value="rejetee">Rejeter</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>Aucune hypothèse enregistrée pour l'instant.</p>
+    {% endif %}
+  </div>
+</details>

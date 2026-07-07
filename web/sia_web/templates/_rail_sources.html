@@ -1,0 +1,23 @@
+{# A3/H6 : sources de la DERNIÈRE réponse à portée de main — l'historique
+   complet reste dans le fil, message par message. Out-of-band en R3. #}
+<details class="panneau-rail" open id="sources-rail"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <summary>Sources de la dernière réponse ({{ sources_dernier | length }})</summary>
+  <div class="panneau-rail__corps">
+    {% if sources_dernier %}
+    <ul>
+      {% for source in sources_dernier %}
+      <li>{{ source.nom }} — {{ source.section }}
+        {% if source.extrait %}
+        {# S3.20 : extrait borné à l'affichage. #}
+        <details><summary>extrait exact</summary><blockquote>{{ source.extrait[:2000] }}{% if source.extrait | length > 2000 %}<br><em>[… affichage tronqué à 2 000 caractères sur {{ source.extrait | length }}]</em>{% endif %}</blockquote></details>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="fr-hint-text">L'historique complet des sources reste dans le fil, message par message (A3).</p>
+    {% else %}
+    <p>Aucune source mobilisée sur la dernière réponse — quand le corpus ne
+      couvre pas, la génération le signale (anti-invention).</p>
+    {% endif %}
+  </div>
+</details>

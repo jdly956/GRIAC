@@ -1,12 +1,12 @@
 """Interface web du SIA PO — conversation (E4.1, S2.8), écrans projets et
 « mes documents » (E4.2/E4.3, S2.9).
 
-Front volontairement simple (CLAUDE.md) : formulaires HTML classiques, aucun
-JavaScript requis — htmx pourra enrichir plus tard. Le DSFR est chargé par CDN
-au MVP (à vendorer pour la prod, E7) avec des styles de repli locaux : la page
-reste utilisable hors ligne. v1 assumée : les sources/avertissements du dernier
-échange sont affichés dans la réponse du POST (non persistés côté UI) — au
-rechargement, seul le fil (persisté par l'api) demeure.
+Front volontairement simple (CLAUDE.md) : formulaires HTML classiques en socle,
+enrichis par htmx en fragments ciblés (R3/H7 : un POST htmx ajoute les bulles au
+fil et met à jour rail/stepper/conso en out-of-band ; sans JavaScript, les mêmes
+routes rendent la page complète — repli H14). Le DSFR (CSS + JS) est chargé par
+CDN au MVP (à vendorer pour la prod, E7) avec des styles de repli locaux : la
+page reste utilisable hors ligne.
 
 Préfixe de chemin : les LIENS portent le `root_path` ASGI (`{{ racine }}`
 dans les templates), pour servir l'app derrière un proxy à préfixe — cas
@@ -145,16 +145,11 @@ def _page_erreur(request: Request, statut: int, corps: dict) -> HTMLResponse:
     )
 
 
-def _page_session(
-    request: Request,
-    session_id: int,
-    dernier_resultat: dict | None = None,
-    erreur: str | None = None,
-) -> HTMLResponse:
+def _contexte_session(session_id: int) -> tuple[int, dict, dict | None]:
+    """R3 : contexte commun à l'écran complet et au fragment htmx (hors fil)."""
     statut_etat, etat = api_client.appeler("GET", f"/workflows/{session_id}")
     if statut_etat != 200:
-        return _page_erreur(request, statut_etat, etat)
-    _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
+        return statut_etat, etat, None
     _, stories = api_client.appeler("GET", f"/workflows/{session_id}/stories")
     statut_conso, conso = api_client.appeler("GET", f"/workflows/{session_id}/conso")
     statut_parametres, parametres = api_client.appeler("GET", "/parametres")
@@ -167,12 +162,61 @@ def _page_session(
         for h in etat.get("hypotheses", [])
         if h.get("statut") == "en_attente" and h.get("statut_propose")
     )
-    messages = messages if isinstance(messages, list) else []
     # R2 : panneau Stories du rail — contenus S3.13 en priorité, sinon repli
     # sur les seuls titres (l'endpoint contenus peut manquer, jamais bloquant).
     stories_affichees = stories_contenus if statut_contenus == 200 and stories_contenus else []
     if not stories_affichees and isinstance(stories, list):
         stories_affichees = [{"titre": t, "contenu": "", "editee": False} for t in stories]
+    contexte = {
+        "etat": etat,
+        "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
+        "etape_index": (ETAPES_ORDRE.index(etat["etape"]) if etat["etape"] in ETAPES_ORDRE else 0),
+        "etapes_total": len(ETAPES_ORDRE),
+        "nb_levees_a_decider": nb_levees_a_decider,
+        # S3.11 : conso de la session (None si l'api ne répond pas — simple
+        # indication, jamais bloquant). S3.12 : le PO sait quel modèle écrit.
+        "conso": conso if statut_conso == 200 else None,
+        "modele_actif": parametres.get("modele_actif") if statut_parametres == 200 else None,
+        "stories_affichees": stories_affichees,
+    }
+    return 200, etat, contexte
+
+
+def _construire_message_assistant(dernier_resultat: dict, etape_defaut: str) -> dict:
+    """R2 (UX6) : le résultat d'un POST devient une bulle du fil ; les signaux
+    A8 (hypothèses ajoutées, levées proposées) rejoignent ses avertissements."""
+    notices = list(dernier_resultat.get("avertissements") or [])
+    if dernier_resultat.get("hypotheses_ajoutees"):
+        notices.append(
+            f"{len(dernier_resultat['hypotheses_ajoutees'])} hypothèse(s) ajoutée(s) "
+            "au registre — à décider dans le panneau Hypothèses (A8)."
+        )
+    if dernier_resultat.get("levees_proposees"):
+        notices.append(
+            f"{len(dernier_resultat['levees_proposees'])} levée(s) d'hypothèse "
+            "proposée(s) — la décision vous revient, panneau Hypothèses (A8)."
+        )
+    return {
+        "role": "assistant",
+        "etape": dernier_resultat.get("etape", etape_defaut),
+        "contenu": dernier_resultat.get("reponse", ""),
+        "sources": dernier_resultat.get("sources") or [],
+        "avertissements": notices,
+        "divergences": dernier_resultat.get("divergences") or [],
+    }
+
+
+def _page_session(
+    request: Request,
+    session_id: int,
+    dernier_resultat: dict | None = None,
+    erreur: str | None = None,
+) -> HTMLResponse:
+    statut, etat, contexte = _contexte_session(session_id)
+    if contexte is None:
+        return _page_erreur(request, statut, etat)
+    _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
+    messages = messages if isinstance(messages, list) else []
     # R2 (UX6) : le résultat d'un POST rejoint le BAS du fil comme un message —
     # sauf s'il y figure déjà (stack réelle : persisté par l'api, S3.9).
     dernier_message = None
@@ -183,25 +227,7 @@ def _page_session(
             and messages[-1].get("contenu") == dernier_resultat.get("reponse")
         )
         if not deja_dans_fil:
-            notices = list(dernier_resultat.get("avertissements") or [])
-            if dernier_resultat.get("hypotheses_ajoutees"):
-                notices.append(
-                    f"{len(dernier_resultat['hypotheses_ajoutees'])} hypothèse(s) ajoutée(s) "
-                    "au registre — à décider dans le panneau Hypothèses (A8)."
-                )
-            if dernier_resultat.get("levees_proposees"):
-                notices.append(
-                    f"{len(dernier_resultat['levees_proposees'])} levée(s) d'hypothèse "
-                    "proposée(s) — la décision vous revient, panneau Hypothèses (A8)."
-                )
-            dernier_message = {
-                "role": "assistant",
-                "etape": dernier_resultat.get("etape", etat["etape"]),
-                "contenu": dernier_resultat.get("reponse", ""),
-                "sources": dernier_resultat.get("sources") or [],
-                "avertissements": notices,
-                "divergences": dernier_resultat.get("divergences") or [],
-            }
+            dernier_message = _construire_message_assistant(dernier_resultat, etat["etape"])
     # R2 (H6) : panneau « sources de la dernière réponse » — celles du POST,
     # sinon celles du dernier message assistant tracé (S3.9).
     sources_dernier = (dernier_resultat or {}).get("sources") or []
@@ -210,29 +236,53 @@ def _page_session(
             if message.get("role") == "assistant" and message.get("sources"):
                 sources_dernier = message["sources"]
                 break
-    return templates.TemplateResponse(
-        request=request,
-        name="session.html",
-        context={
-            "etat": etat,
+    contexte.update(
+        {
             "messages": messages,
-            "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
-            "etape_index": (
-                ETAPES_ORDRE.index(etat["etape"]) if etat["etape"] in ETAPES_ORDRE else 0
-            ),
-            "etapes_total": len(ETAPES_ORDRE),
             "dernier_message": dernier_message,
             "sources_dernier": sources_dernier,
-            "nb_levees_a_decider": nb_levees_a_decider,
-            # S3.11 : conso de la session (None si l'api ne répond pas — simple
-            # indication, jamais bloquant).
-            "conso": conso if statut_conso == 200 else None,
-            # S3.12 : le PO sait quel modèle écrit.
-            "modele_actif": parametres.get("modele_actif") if statut_parametres == 200 else None,
-            # S3.13 : édition/copie des stories (version éditée gagnante à l'export).
-            "stories_affichees": stories_affichees,
             "erreur": erreur,
-        },
+        }
+    )
+    return templates.TemplateResponse(request=request, name="session.html", context=contexte)
+
+
+def _est_htmx(request: Request) -> bool:
+    """R3 (H7) : un POST htmx reçoit un fragment ; le même POST sans JavaScript
+    reçoit la page complète (repli H14)."""
+    return request.headers.get("hx-request") == "true"
+
+
+def _fragment_echange(
+    request: Request,
+    session_id: int,
+    message_po: str | None = None,
+    dernier_resultat: dict | None = None,
+    erreur: str | None = None,
+) -> HTMLResponse:
+    """R3 (H7) : bulles ajoutées au fil + rail/stepper/conso en out-of-band.
+
+    Sur erreur, seule l'alerte est ajoutée (pas d'OOB) : l'écran garde l'état
+    du dernier succès — le prochain échange réussi resynchronise tout.
+    """
+    statut, etat, contexte = _contexte_session(session_id)
+    if contexte is None:
+        contexte = {"etat": None}
+        erreur = erreur or etat.get("detail", "session introuvable")
+    contexte.update(
+        {
+            "message_po": message_po,
+            "dernier_message": (
+                _construire_message_assistant(dernier_resultat, contexte["etat"]["etape"])
+                if dernier_resultat and contexte.get("etat")
+                else None
+            ),
+            "sources_dernier": (dernier_resultat or {}).get("sources") or [],
+            "erreur": erreur,
+        }
+    )
+    return templates.TemplateResponse(
+        request=request, name="_fragment_echange.html", context=contexte
     )
 
 
@@ -275,6 +325,10 @@ def envoyer_message(
     statut, resultat = api_client.appeler(
         "POST", f"/workflows/{session_id}/message", json={"message": message}
     )
+    if _est_htmx(request):
+        if statut != 200:
+            return _fragment_echange(request, session_id, erreur=resultat.get("detail"))
+        return _fragment_echange(request, session_id, message_po=message, dernier_resultat=resultat)
     if statut != 200:
         return _page_session(request, session_id, erreur=resultat.get("detail"))
     return _page_session(request, session_id, dernier_resultat=resultat)
@@ -301,6 +355,8 @@ def valider_etape(
         json={"valide": valide == "oui", "commentaire": commentaire},
     )
     if statut != 200:
+        if _est_htmx(request):
+            return _fragment_echange(request, session_id, erreur=resultat.get("detail"))
         return _page_session(request, session_id, erreur=resultat.get("detail"))
     message = (
         "Étape validée (Oui) — poursuis le workflow sur l'étape courante."
@@ -310,6 +366,12 @@ def valider_etape(
     statut_moteur, reponse_moteur = api_client.appeler(
         "POST", f"/workflows/{session_id}/message", json={"message": message}
     )
+    if _est_htmx(request):
+        if statut_moteur != 200:
+            return _fragment_echange(request, session_id, erreur=reponse_moteur.get("detail"))
+        return _fragment_echange(
+            request, session_id, message_po=message, dernier_resultat=reponse_moteur
+        )
     if statut_moteur != 200:
         return _page_session(request, session_id, erreur=reponse_moteur.get("detail"))
     return _page_session(request, session_id, dernier_resultat=reponse_moteur)
@@ -321,15 +383,18 @@ def story_suivante(request: Request, session_id: int) -> HTMLResponse:
     contrôle DoR » — ce bouton enchaîne sur la story suivante SANS toucher la
     machine à états (le « Oui — étape suivante » reste le geste explicite du PO
     quand toutes les stories sont couvertes ; badge A5 fidèle)."""
-    statut, resultat = api_client.appeler(
-        "POST",
-        f"/workflows/{session_id}/message",
-        json={
-            "message": "Story validée — enchaîne sur la STORY SUIVANTE de la liste des "
-            "candidates (rédaction complète puis contrôle DoR), sans changer d'étape. "
-            "S'il ne reste aucune story à rédiger, dis-le explicitement."
-        },
+    message = (
+        "Story validée — enchaîne sur la STORY SUIVANTE de la liste des "
+        "candidates (rédaction complète puis contrôle DoR), sans changer d'étape. "
+        "S'il ne reste aucune story à rédiger, dis-le explicitement."
     )
+    statut, resultat = api_client.appeler(
+        "POST", f"/workflows/{session_id}/message", json={"message": message}
+    )
+    if _est_htmx(request):
+        if statut != 200:
+            return _fragment_echange(request, session_id, erreur=resultat.get("detail"))
+        return _fragment_echange(request, session_id, message_po=message, dernier_resultat=resultat)
     if statut != 200:
         return _page_session(request, session_id, erreur=resultat.get("detail"))
     return _page_session(request, session_id, dernier_resultat=resultat)

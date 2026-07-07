@@ -13,18 +13,8 @@
     <a class="fr-link fr-link--sm" href="{{ racine }}/">← Sessions</a>
     <h1 class="fr-h6">{{ etat.titre or "Session " ~ etat.id }}</h1>
   </div>
-  <div class="fr-stepper barre-session__stepper">
-    <p class="fr-stepper__title">{{ libelle_etape }}
-      <span class="fr-stepper__state">Étape {{ etape_index + 1 }} sur {{ etapes_total }}</span>
-    </p>
-    <div class="fr-stepper__steps" data-fr-current-step="{{ etape_index + 1 }}" data-fr-steps="{{ etapes_total }}"></div>
-  </div>
-  <p class="barre-session__meta fr-hint-text">
-  {% if modele_actif %}Modèle : <strong>{{ modele_actif }}</strong>{% endif %}
-  {% if conso and conso.appels %}{% if modele_actif %} — {% endif %}Consommation de la session : {{ conso.appels }} appel(s),
-    {{ "{:,}".format(conso.tokens_entree).replace(",", " ") }} tokens entrée /
-    {{ "{:,}".format(conso.tokens_sortie).replace(",", " ") }} sortie{% endif %}
-  </p>
+  {% include "_stepper.html" %}
+  {% include "_meta_session.html" %}
   <div class="barre-session__actions">
     <a class="fr-btn fr-btn--secondary fr-btn--sm" href="{{ racine }}/sessions/{{ etat.id }}/export/csv"
       title="Export autorisé même avec des hypothèses non levées — le récapitulatif les accompagne (A8)">CSV Jira</a>
@@ -52,7 +42,10 @@
 <div class="fr-grid-row fr-grid-row--gutters">
   <div class="fr-col-12 fr-col-lg-8">
     {# UX6 : chat classique — fil chronologique COMPLET (H2) à défilement
-       interne, les nouveaux messages arrivent en bas, saisie fixée en bas. #}
+       interne, les nouveaux messages arrivent en bas, saisie fixée en bas.
+       R3 (H7) : les POST htmx ajoutent les bulles au fil (beforeend) et
+       mettent à jour les panneaux en out-of-band — sans JavaScript, les
+       mêmes formulaires rendent la page complète (H14). #}
     <section class="chat" aria-label="Fil de la conversation">
       <div class="fil" id="fil">
         {% for message in messages %}
@@ -71,7 +64,8 @@
         <div class="actions-etape">
           {% if etat.etape in ("redaction", "controle_dor") %}
           <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/story-suivante"
-                hx-boost="true" hx-disabled-elt="find button">
+                hx-post="{{ racine }}/sessions/{{ etat.id }}/story-suivante"
+                hx-target="#fil" hx-swap="beforeend" hx-disabled-elt="find button">
             <button class="fr-btn fr-btn--secondary fr-btn--sm" type="submit"
               title="Une story = rédaction + contrôle DoR — ce bouton enchaîne sans changer d'étape.">Story suivante</button>
             <span class="htmx-indicator" role="status">⏳ Génération en cours…</span>
@@ -79,7 +73,8 @@
           <span class="fr-hint-text">enchaîne la story suivante <strong>sans changer d'étape</strong></span>
           {% endif %}
           <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/valider" class="valider-etape"
-                hx-boost="true" hx-disabled-elt="find button">
+                hx-post="{{ racine }}/sessions/{{ etat.id }}/valider"
+                hx-target="#fil" hx-swap="beforeend" hx-disabled-elt="find button">
             <span class="fr-hint-text"><strong>Valider l'étape ? (règle 5)</strong>
             {% if etat.etape in ("redaction", "controle_dor") %}
             « Oui » quand <strong>toutes les stories candidates sont couvertes</strong>.
@@ -93,7 +88,9 @@
           </form>
         </div>
         <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/message"
-              hx-boost="true" hx-disabled-elt="find button">
+              hx-post="{{ racine }}/sessions/{{ etat.id }}/message"
+              hx-target="#fil" hx-swap="beforeend" hx-disabled-elt="find button"
+              hx-on::after-request="if (event.detail.successful) this.reset()">
           <p class="fr-hint-text">Réponse d'interview, correction, ou <strong>question documentaire libre</strong> — même fil (A2).
             Rappel : pas de données personnelles (D15).</p>
           <div class="saisie">
@@ -106,11 +103,15 @@
     </section>
     <script>
       /* R2 : le fil démarre en bas (chat) — sans JavaScript, on scrolle
-         manuellement (repli H14). Ré-exécuté par htmx après un hx-boost. */
+         manuellement (repli H14). R3 : re-scroll après chaque ajout htmx. */
       (function () {
         var fil = document.getElementById("fil");
         if (fil) { fil.scrollTop = fil.scrollHeight; }
       })();
+      document.body.addEventListener("htmx:afterSwap", function () {
+        var fil = document.getElementById("fil");
+        if (fil) { fil.scrollTop = fil.scrollHeight; }
+      });
     </script>
   </div>
 
@@ -119,113 +120,9 @@
        `details` plutôt que l'accordéon DSFR : le repli sans JavaScript est un
        invariant (H14) — les composants internes restent DSFR (UX13). #}
     <aside class="rail" aria-label="Panneaux de travail">
-
-      {% if stories_affichees %}
-      <details class="panneau-rail" open>
-        <summary>Stories produites ({{ stories_affichees | length }}) — le livrable</summary>
-        <div class="panneau-rail__corps">
-          <p class="fr-hint-text">La version éditée gagne à l'export ; la note 1–5 alimente la télémétrie (E4.4).</p>
-          {% for story in stories_affichees %}
-          <details class="story-bloc">
-            <summary><strong>{{ story.titre }}</strong>
-              {% if story.editee %}<span class="fr-badge fr-badge--new">éditée — cette version part à l'export</span>{% endif %}
-            </summary>
-            <div class="story-bloc__corps">
-              {% if story.contenu %}
-              <div class="contenu-md">{{ story.contenu | markdown | safe }}</div>
-              {% endif %}
-              <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/stories/edition">
-                <input type="hidden" name="titre" value="{{ story.titre }}">
-                <label class="fr-label" for="edition-{{ loop.index }}">Éditer (markdown)</label>
-                <textarea class="fr-input" id="edition-{{ loop.index }}" name="contenu" rows="6">{{ story.contenu }}</textarea>
-                <button class="fr-btn fr-btn--sm" type="submit">Enregistrer l'édition</button>
-                <button class="fr-btn fr-btn--sm fr-btn--secondary" type="button"
-                  onclick="navigator.clipboard.writeText(this.closest('form').querySelector('textarea').value)">Copier</button>
-              </form>
-              <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/feedback" class="action-secondaire">
-                <input type="hidden" name="story_titre" value="{{ story.titre }}">
-                <label class="fr-label" for="note-{{ loop.index }}">Noter cette story</label>
-                <select class="fr-select" id="note-{{ loop.index }}" name="note" aria-label="Note de « {{ story.titre }} »">
-                  {% for note in [5, 4, 3, 2, 1] %}
-                  <option value="{{ note }}">{{ note }}</option>
-                  {% endfor %}
-                </select>
-                <input class="fr-input" name="commentaire" placeholder="Commentaire (optionnel)"
-                  aria-label="Commentaire sur « {{ story.titre }} »">
-                <button class="fr-btn fr-btn--sm" type="submit">Noter</button>
-              </form>
-            </div>
-          </details>
-          {% endfor %}
-        </div>
-      </details>
-      {% endif %}
-
-      {# Registre A8 : toujours sous les yeux (UX4) — chaque levée reste un
-         geste explicite du PO ; la sélection en masse arrive en R4. #}
-      <details class="panneau-rail" open id="hypotheses">
-        <summary>Hypothèses à valider ({{ etat.nb_en_attente }} en attente{% if nb_levees_a_decider %}, dont {{ nb_levees_a_decider }} levée(s) proposée(s) à décider{% endif %})</summary>
-        <div class="panneau-rail__corps">
-          <p class="fr-hint-text">Chaque hypothèse se lève <strong>individuellement</strong> — une validation d'étape ne lève rien (A8).</p>
-          {% if nb_levees_a_decider %}
-          {# S3.21 (arbitrage 07/07) : le PO relit les propositions listées ci-dessous
-             et les applique d'un clic — sa décision, en lot. Seules les hypothèses
-             portant une proposition du moteur sont touchées. #}
-          <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/appliquer-propositions"
-                onsubmit="return confirm('Appliquer les {{ nb_levees_a_decider }} levée(s) proposée(s) telles qu\'affichées (Confirmer/Rejeter) ? Les hypothèses sans proposition ne bougent pas.')">
-            <button class="fr-btn fr-btn--sm" type="submit">Appliquer les {{ nb_levees_a_decider }} levée(s) proposée(s)</button>
-            <span class="fr-hint-text">Relisez chaque proposition ci-dessous avant d'appliquer — vous pouvez aussi décider hypothèse par hypothèse.</span>
-          </form>
-          {% endif %}
-          {% if etat.hypotheses %}
-          <ul class="liste-hypotheses">
-            {% for hypothese in etat.hypotheses %}
-            <li>
-              <em>[{{ hypothese.origine }}]</em> {{ hypothese.texte }} — <strong>{{ hypothese.statut }}</strong>
-              {% if hypothese.statut == "en_attente" %}
-              {% if hypothese.statut_propose %}
-              <span class="fr-badge fr-badge--new">Levée proposée : {{ "Confirmer" if hypothese.statut_propose == "confirmee" else "Rejeter" }}</span>
-              {% if hypothese.justification_proposee %}<em>{{ hypothese.justification_proposee }}</em>{% endif %}
-              — c'est vous qui décidez (A8) :
-              {% endif %}
-              <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/hypotheses/{{ hypothese.id }}" style="display:inline">
-                <button class="fr-btn fr-btn--sm" name="statut" value="confirmee">Confirmer</button>
-                <button class="fr-btn fr-btn--sm fr-btn--secondary" name="statut" value="rejetee">Rejeter</button>
-              </form>
-              {% endif %}
-            </li>
-            {% endfor %}
-          </ul>
-          {% else %}
-          <p>Aucune hypothèse enregistrée pour l'instant.</p>
-          {% endif %}
-        </div>
-      </details>
-
-      {# A3 : les sources de la DERNIÈRE réponse à portée de main — l'historique
-         complet reste dans le fil, message par message (H6). #}
-      <details class="panneau-rail" open>
-        <summary>Sources de la dernière réponse ({{ sources_dernier | length }})</summary>
-        <div class="panneau-rail__corps">
-          {% if sources_dernier %}
-          <ul>
-            {% for source in sources_dernier %}
-            <li>{{ source.nom }} — {{ source.section }}
-              {% if source.extrait %}
-              {# S3.20 : extrait borné à l'affichage. #}
-              <details><summary>extrait exact</summary><blockquote>{{ source.extrait[:2000] }}{% if source.extrait | length > 2000 %}<br><em>[… affichage tronqué à 2 000 caractères sur {{ source.extrait | length }}]</em>{% endif %}</blockquote></details>
-              {% endif %}
-            </li>
-            {% endfor %}
-          </ul>
-          <p class="fr-hint-text">L'historique complet des sources reste dans le fil, message par message (A3).</p>
-          {% else %}
-          <p>Aucune source mobilisée sur la dernière réponse — quand le corpus ne
-            couvre pas, la génération le signale (anti-invention).</p>
-          {% endif %}
-        </div>
-      </details>
-
+      {% include "_rail_stories.html" %}
+      {% include "_rail_hypotheses.html" %}
+      {% include "_rail_sources.html" %}
     </aside>
   </div>
 </div>

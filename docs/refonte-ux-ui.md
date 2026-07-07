@@ -133,9 +133,9 @@ Une page à deux sections ancrées : Télémétrie (indicateurs + jauge tpd) et 
 | H4 | Les 3 formulaires fusionnent dans le composeur ; le commentaire « Non — itérer » se révèle à la demande (toujours visible sans JavaScript — repli) | à valider |
 | H5 | ⚙ Sélection en masse = nouvel endpoint `POST /workflows/{id}/hypotheses/decider-lot` (liste d'ids + statut unique, refus si vide) — distinct du lot « levées proposées » S3.21 qui reste ; jamais de statut inventé (A8) | à valider |
 | H6 | Le panneau Sources du rail montre la **dernière réponse** seulement ; l'historique par message reste dans le fil (A3) | à valider |
-| H7 | ⚙ Dynamisme = htmx **ciblé avec routes fragments** (le message s'ajoute au fil, panneaux mis à jour en out-of-band) — revient sur le choix « zéro route fragment » de S3.8, assumé ; repli sans JS = POST pleine page | à valider |
+| H7 | ⚙ Dynamisme = htmx **ciblé avec routes fragments** (le message s'ajoute au fil, panneaux mis à jour en out-of-band) — revient sur le choix « zéro route fragment » de S3.8, assumé ; repli sans JS = POST pleine page | **validée PO (07/07)** |
 | H8 | Stepper : 6 segments + libellé, libellés = ceux de la machine à états réelle | à valider |
-| H9 | ⚙ Suppression d'un projet : les sessions existantes survivent (référence projet → NULL, « projet supprimé » affiché). Alternative : blocage tant que des sessions non archivées y sont liées | à trancher |
+| H9 | ⚙ Suppression d'un projet : les sessions existantes survivent (référence projet → NULL, « projet supprimé » affiché). Alternative : blocage tant que des sessions non archivées y sont liées | **tranchée PO (07/07) : suppression libre** — sessions orphelines assumées (badge « projet supprimé », le moteur continue sans contexte/NFR projet) |
 | H10 | ⚙ « Marquer obsolète » un document = exclusion des recherches (filtre statut) sans destruction, réversible — champ/statut à vérifier en base (migration si absent) | à valider |
 | H11 | Notation intégrée au panneau Stories (étoiles + commentaire) ; le bloc bas de page disparaît ; télémétrie inchangée | à valider |
 | H12 | « Suivi & réglages » = une page, deux sections ancrées ; anciennes routes redirigées | à valider |

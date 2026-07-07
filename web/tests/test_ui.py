@@ -308,9 +308,9 @@ def test_story_suivante_appelle_le_moteur_sans_avancer(api) -> None:
 
 
 def test_htmx_vendore_et_branche_en_progressive_enhancement(api) -> None:
-    # S3.8 : htmx est servi par l'app (pas de CDN) et les formulaires longs
-    # portent hx-boost + anti double-envoi + indicateur — tout en restant des
-    # POST classiques sans JavaScript.
+    # S3.8 (recalée R3/H7, validée PO 07/07) : htmx est servi par l'app (pas de
+    # CDN) et les formulaires longs POSTent en fragments ciblés vers le fil
+    # (anti double-envoi + indicateur) — POST classiques intacts sans JavaScript.
     statique = client.get("/static/htmx.min.js")
     assert statique.status_code == 200
     assert statique.text.startswith("var htmx=")
@@ -318,7 +318,8 @@ def test_htmx_vendore_et_branche_en_progressive_enhancement(api) -> None:
     api.brancher("GET", "/workflows/1/messages", 200, [])
     texte = client.get("/sessions/1").text
     assert 'src="/static/htmx.min.js"' in texte
-    assert texte.count('hx-boost="true"') == 3  # message, story suivante, valider
+    assert texte.count('hx-post="/sessions/1/') == 3  # message, story suivante, valider
+    assert texte.count('hx-target="#fil"') == 3
     assert texte.count('hx-disabled-elt="find button"') == 3
     assert "Génération en cours" in texte
     assert 'action="/sessions/1/message"' in texte  # le repli sans JS demeure
@@ -1067,3 +1068,80 @@ def test_rail_sources_de_la_derniere_reponse(api) -> None:
     texte = client.get("/sessions/1").text
     assert "Sources de la dernière réponse (0)" in texte
     assert "Aucune source mobilisée sur la dernière réponse" in texte
+
+
+# --- R3 : dynamisme htmx en fragments ciblés (H7, validée PO 07/07) ---
+
+REPONSE_MOTEUR = {
+    "reponse": "**Frag**",
+    "etape": "interview",
+    "sources": [{"nom": "spec.docx", "section": "Spec > CA", "extrait": "30 jours"}],
+    "hypotheses_ajoutees": ["Seuil 10 Mo [HYPOTHÈSE À VALIDER]"],
+    "levees_proposees": [],
+    "divergences": [],
+    "avertissements": [],
+}
+
+
+def test_envoi_htmx_renvoie_fragment_bulles_et_oob(api) -> None:
+    # R3 : un POST htmx reçoit un FRAGMENT — bulles PO + assistant à ajouter au
+    # fil, panneaux du rail / stepper / conso en out-of-band. Pas de page.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("POST", "/workflows/1/message", 200, REPONSE_MOTEUR)
+    reponse = client.post(
+        "/sessions/1/message", data={"message": "ma question"}, headers={"HX-Request": "true"}
+    )
+    texte = reponse.text
+    assert "fr-header" not in texte  # un fragment, pas la page complète
+    assert "ma question" in texte  # bulle PO ajoutée au fil
+    assert "<strong>Frag</strong>" in texte  # bulle assistant rendue markdown
+    assert 'id="dernier-echange"' in texte
+    assert "1 hypothèse(s) ajoutée(s)" in texte  # signal A8 dans la bulle
+    assert texte.count('hx-swap-oob="true"') == 5  # stepper, conso, 3 panneaux du rail
+    assert 'id="stepper"' in texte and 'id="sources-rail"' in texte
+    assert "Sources de la dernière réponse (1)" in texte
+
+
+def test_envoi_sans_javascript_reste_pleine_page(api) -> None:
+    # H14 : le même POST sans en-tête HX-Request rend la page complète.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
+    api.brancher("POST", "/workflows/1/message", 200, REPONSE_MOTEUR)
+    texte = client.post("/sessions/1/message", data={"message": "go"}).text
+    assert "fr-header" in texte  # page complète (repli)
+
+
+def test_erreur_moteur_en_fragment_sans_oob(api) -> None:
+    # R3 : sur erreur, le fragment ne porte que l'alerte — pas d'out-of-band
+    # (l'écran garde l'état du dernier succès), pas de bulle PO orpheline.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("POST", "/workflows/1/message", 429, {"detail": "quota Albert atteint"})
+    reponse = client.post(
+        "/sessions/1/message", data={"message": "go"}, headers={"HX-Request": "true"}
+    )
+    texte = reponse.text
+    assert "quota Albert atteint" in texte and "fr-alert--error" in texte
+    assert "hx-swap-oob" not in texte
+    assert 'id="dernier-echange"' not in texte
+
+
+def test_valider_htmx_fragment_avec_stepper_a_jour(api) -> None:
+    # R3 : la validation d'étape en htmx renvoie la décision (bulle PO), la
+    # réponse du moteur et le stepper OOB — l'étape affichée suit (A5).
+    api.brancher("POST", "/workflows/1/avancer", 200, {})
+    api.brancher(
+        "POST",
+        "/workflows/1/message",
+        200,
+        dict(REPONSE_MOTEUR, reponse="Étape suivante…", etape="stories_candidates"),
+    )
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, etape="stories_candidates"))
+    reponse = client.post(
+        "/sessions/1/valider",
+        data={"valide": "oui", "commentaire": ""},
+        headers={"HX-Request": "true"},
+    )
+    texte = reponse.text
+    assert "Étape validée (Oui)" in texte  # la décision PO apparaît dans le fil
+    assert 'id="stepper"' in texte and 'hx-swap-oob="true"' in texte
+    assert 'data-fr-current-step="3"' in texte  # stories_candidates = 3e étape
