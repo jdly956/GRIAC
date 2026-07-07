@@ -110,20 +110,20 @@ def test_prefixe_root_path_porte_liens_mais_pas_les_redirections(api) -> None:
     assert redirection.headers["location"] == "/sessions/7"
 
 
-def test_registre_replie_sauf_levee_proposee_a_decider(api) -> None:
-    # S3.7 : le registre est replié par défaut ; il ne se déplie tout seul que
-    # si une levée proposée (S2.13) attend la décision du PO.
+def test_panneau_hypotheses_toujours_visible_dans_le_rail(api) -> None:
+    # R2 (UX4/UX5, recale S3.7) : le registre vit dans le rail droit, OUVERT en
+    # permanence — compteur et levées proposées (S2.13) restent sous les yeux.
     api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)  # 1 en attente, sans proposition
     api.brancher("GET", "/workflows/1/messages", 200, [])
     texte = client.get("/sessions/1").text
-    assert '<details class="panneau" >' in texte and "Hypothèses à valider (1 en attente)" in texte
+    assert '<details class="panneau-rail" open id="hypotheses">' in texte
+    assert "Hypothèses à valider (1 en attente)" in texte
     avec_proposition = dict(
         ETAT_SESSION,
         hypotheses=[dict(ETAT_SESSION["hypotheses"][0], statut_propose="confirmee")],
     )
     api.brancher("GET", "/workflows/1", 200, avec_proposition)
     texte = client.get("/sessions/1").text
-    assert '<details class="panneau" open>' in texte
     assert "1 levée(s) proposée(s) à décider" in texte
 
 
@@ -147,26 +147,26 @@ def test_application_en_lot_des_levees_proposees(api) -> None:
     assert ("POST", "/workflows/1/hypotheses/appliquer-propositions", None) in api.appels
 
 
-def test_fil_replie_sauf_derniers_echanges(api) -> None:
-    # S3.7 : la page ne s'allonge plus indéfiniment — seuls les 4 derniers
-    # messages restent dépliés, les précédents vivent dans un bloc repliable.
+def test_fil_complet_charge_dans_le_chat(api) -> None:
+    # R2 (H2, recale S3.7) : le fil charge l'historique COMPLET — le chat a son
+    # propre défilement, plus de bloc « voir les échanges précédents ».
     six_messages = [
         {"role": "po", "etape": "interview", "contenu": f"message numéro {i}"} for i in range(6)
     ]
     api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
     api.brancher("GET", "/workflows/1/messages", 200, six_messages)
     texte = client.get("/sessions/1").text
-    assert "Voir les 2 échanges précédents" in texte
-    assert "message numéro 5" in texte  # les récents sont toujours là
-    api.brancher("GET", "/workflows/1/messages", 200, six_messages[:2])
-    assert "Voir les" not in client.get("/sessions/1").text  # ≤ 4 messages : rien à replier
+    assert "Voir les" not in texte
+    for i in range(6):
+        assert f"message numéro {i}" in texte  # tous les messages sont dans le fil
 
 
-def test_derniere_reponse_affichee_en_haut_apres_envoi(api) -> None:
-    # S3.7 : après un envoi, la réponse (rendue) et sa traçabilité sont en haut
-    # de page — plus besoin de scroller jusqu'au fil.
+def test_reponse_du_post_rejoint_le_bas_du_fil(api) -> None:
+    # R2 (UX6/H3, recale S3.7) : après un envoi, la réponse est le DERNIER
+    # message du fil (chat classique, ancre #dernier-echange) — le panneau
+    # « Dernière réponse » séparé a disparu.
     api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
-    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
     api.brancher(
         "POST",
         "/workflows/1/message",
@@ -183,7 +183,18 @@ def test_derniere_reponse_affichee_en_haut_apres_envoi(api) -> None:
     )
     texte = client.post("/sessions/1/message", data={"message": "go"}).text
     assert 'id="dernier-echange"' in texte
-    assert "<strong>Voici la story</strong>" in texte  # rendue markdown, en haut
+    assert "<strong>Voici la story</strong>" in texte  # rendue markdown
+    assert texte.index("Q1 ? Q2 ?") < texte.index("Voici la story")  # au BAS du fil
+    # Stack réelle : la réponse est déjà persistée dans le fil (S3.9) — le bloc
+    # d'appoint est sauté, pas de doublon.
+    api.brancher(
+        "GET",
+        "/workflows/1/messages",
+        200,
+        MESSAGES + [{"role": "assistant", "etape": "interview", "contenu": "**Voici la story**"}],
+    )
+    texte = client.post("/sessions/1/message", data={"message": "go"}).text
+    assert texte.count("Voici la story") == 1  # une seule occurrence
 
 
 def test_messages_assistant_rendus_en_markdown(api) -> None:
@@ -535,10 +546,10 @@ def test_edition_et_gestion_de_session(api) -> None:
         [{"titre": "Consulter mon dossier", "contenu": "**US — …**", "editee": True}],
     )
     texte = client.get("/sessions/1").text
-    assert "Stories — éditer / copier (1)" in texte
+    assert "Stories produites (1)" in texte  # R2 : le panneau du rail
     assert "éditée — cette version part à l'export" in texte
     assert "navigator.clipboard.writeText" in texte  # bouton copier (dégradé sans JS : textarea)
-    assert "Gérer la session" in texte
+    assert "Gérer la session" in texte  # R2 : dans la barre de session
 
     api.brancher("PUT", "/workflows/1/stories/edition", 200, {})
     reponse = client.post(
@@ -746,14 +757,17 @@ def test_decision_hypothese_et_redirection(api) -> None:
 # --- S2.10 : feedback par story + télémétrie (E4.4) ---
 
 
-def test_panneau_de_notation_quand_des_stories_existent(api) -> None:
+def test_panneau_stories_du_rail_porte_la_notation(api) -> None:
+    # R2 (H11) : la notation E4.4 vit dans le panneau « Stories produites » du
+    # rail — repli sur les seuls titres si l'endpoint contenus manque.
     api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
     api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)
     api.brancher("GET", "/workflows/1/stories", 200, ["Consulter mon dossier"])
     reponse = client.get("/sessions/1")
     assert reponse.status_code == 200
-    assert "Noter les stories" in reponse.text
+    assert "Stories produites (1)" in reponse.text
     assert "Consulter mon dossier" in reponse.text
+    assert 'aria-label="Note de « Consulter mon dossier »"' in reponse.text
 
 
 def test_pas_de_panneau_sans_stories(api) -> None:
@@ -762,7 +776,7 @@ def test_pas_de_panneau_sans_stories(api) -> None:
     api.brancher("GET", "/workflows/1/stories", 200, [])
     reponse = client.get("/sessions/1")
     assert reponse.status_code == 200
-    assert "Noter les stories" not in reponse.text
+    assert "Stories produites" not in reponse.text
 
 
 def test_notation_envoie_le_feedback_et_redirige(api) -> None:
@@ -1017,3 +1031,39 @@ def test_fil_ariane_sur_les_fiches(api) -> None:
     api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
     api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
     assert 'class="fr-breadcrumb"' in client.get("/projets/1").text
+
+
+# --- R2 : écran session — barre, chat, rail (refonte UX/UI, vague 1) ---
+
+
+def test_barre_session_stepper_et_actions(api) -> None:
+    # R2 : la barre de session porte le stepper d'étape (A5/H8), les exports
+    # (H13) et la gestion de session — plus de blocs en bas de page.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert "Étape 2 sur 6" in texte  # interview = 2e étape du workflow 0→5
+    assert 'data-fr-current-step="2" data-fr-steps="6"' in texte
+    assert 'href="/sessions/1/export/csv"' in texte  # exports dans la barre (H13)
+    assert "Gérer la session" in texte
+
+
+def test_rail_sources_de_la_derniere_reponse(api) -> None:
+    # R2 (H6) : le rail montre les sources du dernier message assistant tracé
+    # (S3.9) — l'historique complet reste dans le fil.
+    messages = MESSAGES + [
+        {
+            "role": "assistant",
+            "etape": "interview",
+            "contenu": "Réponse sourcée",
+            "sources": [{"nom": "spec.docx", "section": "Spec > CA", "extrait": "30 jours"}],
+        }
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, messages)
+    texte = client.get("/sessions/1").text
+    assert "Sources de la dernière réponse (1)" in texte
+    api.brancher("GET", "/workflows/1/messages", 200, MESSAGES)  # aucun message sourcé
+    texte = client.get("/sessions/1").text
+    assert "Sources de la dernière réponse (0)" in texte
+    assert "Aucune source mobilisée sur la dernière réponse" in texte

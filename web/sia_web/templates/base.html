@@ -42,6 +42,54 @@
     .jauge-remplie { background: #000091; height: 100%; }
     /* R1 : repli navigation si le CSS DSFR manque (liens espacés, lisibles). */
     .fr-nav__list { list-style: none; display: flex; flex-wrap: wrap; gap: .25rem; margin: 0; padding: 0; }
+    /* R2 : écran session — chat + rail (couleurs par tokens DSFR, replis locaux).
+       Le DSFR n'a pas de composant conversation : mise en page maison, composants
+       internes (badges, boutons, formulaires, stepper) DSFR (UX13). */
+    .barre-session { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; align-items: center;
+      padding: .5rem .75rem; margin-bottom: 1rem; border: 1px solid var(--border-default-grey, #ddd);
+      border-radius: .25rem; background: var(--background-default-grey, #fff); }
+    .barre-session__titre h1 { margin: 0; }
+    .barre-session .fr-stepper { margin: 0; min-width: 15rem; }
+    .barre-session .fr-stepper__title { margin: 0; font-size: .85rem; }
+    .barre-session__meta { margin: 0; flex: 1 1 14rem; }
+    .barre-session__actions { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; margin-left: auto; }
+    .gerer-session { position: relative; }
+    .gerer-session > summary { list-style: none; cursor: pointer; }
+    .gerer-session > summary::-webkit-details-marker { display: none; }
+    .gerer-session[open] > .gerer-session__menu { position: absolute; right: 0; top: calc(100% + .25rem);
+      z-index: 20; width: 20rem; padding: .75rem; background: var(--background-default-grey, #fff);
+      border: 1px solid var(--border-default-grey, #ccc); border-radius: .25rem;
+      box-shadow: 0 2px 6px rgba(0, 0, 18, .16); }
+    .chat { display: flex; flex-direction: column; height: calc(100vh - 21rem); min-height: 28rem;
+      border: 1px solid var(--border-default-grey, #ddd); border-radius: .25rem;
+      background: var(--background-default-grey, #fff); }
+    .fil { flex: 1 1 auto; overflow-y: auto; padding: .75rem; }
+    .fil .fil-message { width: fit-content; max-width: 88%; }
+    .fil .fil-po { margin-left: auto; background: var(--background-alt-blue-france, #f5f5fe); }
+    .composeur { border-top: 1px solid var(--border-default-grey, #ddd); padding: .5rem .75rem .65rem; }
+    .composeur form { margin: 0; }
+    .actions-etape { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: .5rem; }
+    .valider-etape { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+    .valider-etape .fr-input { width: auto; flex: 1 1 12rem; }
+    .saisie { display: flex; gap: .5rem; align-items: flex-end; }
+    .saisie textarea { flex: 1; }
+    .rail { position: sticky; top: .5rem; max-height: calc(100vh - 8rem); overflow-y: auto;
+      display: flex; flex-direction: column; gap: .75rem; }
+    details.panneau-rail { border: 1px solid var(--border-default-grey, #ccc); border-radius: .25rem;
+      background: var(--background-default-grey, #fff); }
+    details.panneau-rail > summary { cursor: pointer; padding: .55rem .75rem; font-weight: 700; }
+    details.panneau-rail[open] > summary { border-bottom: 1px solid var(--border-default-grey, #ddd); }
+    .panneau-rail__corps { padding: .6rem .75rem .75rem; font-size: .9rem; }
+    .panneau-rail__corps ul { padding-left: 1.1rem; }
+    .story-bloc { border: 1px solid var(--border-default-grey, #ddd); border-radius: .25rem; margin-bottom: .5rem; }
+    .story-bloc > summary { cursor: pointer; padding: .4rem .5rem; }
+    .story-bloc__corps { border-top: 1px solid var(--border-default-grey, #ddd); padding: .5rem; }
+    .liste-hypotheses li { margin-bottom: .5rem; }
+    @media (max-width: 61.99em) {
+      .chat { height: auto; }
+      .fil { max-height: 55vh; }
+      .rail { position: static; max-height: none; }
+    }
   </style>
 </head>
 <body>

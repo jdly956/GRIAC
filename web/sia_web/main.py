@@ -105,6 +105,9 @@ ETAPES_LIBELLES = {
     "synthese": "5 — Synthèse finale",
 }
 
+# R2 : ordre des étapes pour le stepper DSFR de la barre de session (A5/H8).
+ETAPES_ORDRE = list(ETAPES_LIBELLES)
+
 # Les 7 types de NFR de l'entité Projet (E8/D19) — mêmes valeurs que l'api.
 TYPES_NFR = [
     "performance",
@@ -158,22 +161,68 @@ def _page_session(
     statut_contenus, stories_contenus = api_client.appeler(
         "GET", f"/workflows/{session_id}/stories/contenus"
     )
-    # S3.7 : le registre replié ne se déplie tout seul que si une levée
-    # proposée (S2.13) attend la décision du PO.
+    # Compteur des levées proposées (S2.13) en attente de décision du PO.
     nb_levees_a_decider = sum(
         1
         for h in etat.get("hypotheses", [])
         if h.get("statut") == "en_attente" and h.get("statut_propose")
     )
+    messages = messages if isinstance(messages, list) else []
+    # R2 : panneau Stories du rail — contenus S3.13 en priorité, sinon repli
+    # sur les seuls titres (l'endpoint contenus peut manquer, jamais bloquant).
+    stories_affichees = stories_contenus if statut_contenus == 200 and stories_contenus else []
+    if not stories_affichees and isinstance(stories, list):
+        stories_affichees = [{"titre": t, "contenu": "", "editee": False} for t in stories]
+    # R2 (UX6) : le résultat d'un POST rejoint le BAS du fil comme un message —
+    # sauf s'il y figure déjà (stack réelle : persisté par l'api, S3.9).
+    dernier_message = None
+    if dernier_resultat:
+        deja_dans_fil = (
+            bool(messages)
+            and messages[-1].get("role") == "assistant"
+            and messages[-1].get("contenu") == dernier_resultat.get("reponse")
+        )
+        if not deja_dans_fil:
+            notices = list(dernier_resultat.get("avertissements") or [])
+            if dernier_resultat.get("hypotheses_ajoutees"):
+                notices.append(
+                    f"{len(dernier_resultat['hypotheses_ajoutees'])} hypothèse(s) ajoutée(s) "
+                    "au registre — à décider dans le panneau Hypothèses (A8)."
+                )
+            if dernier_resultat.get("levees_proposees"):
+                notices.append(
+                    f"{len(dernier_resultat['levees_proposees'])} levée(s) d'hypothèse "
+                    "proposée(s) — la décision vous revient, panneau Hypothèses (A8)."
+                )
+            dernier_message = {
+                "role": "assistant",
+                "etape": dernier_resultat.get("etape", etat["etape"]),
+                "contenu": dernier_resultat.get("reponse", ""),
+                "sources": dernier_resultat.get("sources") or [],
+                "avertissements": notices,
+                "divergences": dernier_resultat.get("divergences") or [],
+            }
+    # R2 (H6) : panneau « sources de la dernière réponse » — celles du POST,
+    # sinon celles du dernier message assistant tracé (S3.9).
+    sources_dernier = (dernier_resultat or {}).get("sources") or []
+    if not sources_dernier:
+        for message in reversed(messages):
+            if message.get("role") == "assistant" and message.get("sources"):
+                sources_dernier = message["sources"]
+                break
     return templates.TemplateResponse(
         request=request,
         name="session.html",
         context={
             "etat": etat,
-            "messages": messages if isinstance(messages, list) else [],
-            "stories": stories if isinstance(stories, list) else [],
+            "messages": messages,
             "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
-            "dernier_resultat": dernier_resultat,
+            "etape_index": (
+                ETAPES_ORDRE.index(etat["etape"]) if etat["etape"] in ETAPES_ORDRE else 0
+            ),
+            "etapes_total": len(ETAPES_ORDRE),
+            "dernier_message": dernier_message,
+            "sources_dernier": sources_dernier,
             "nb_levees_a_decider": nb_levees_a_decider,
             # S3.11 : conso de la session (None si l'api ne répond pas — simple
             # indication, jamais bloquant).
@@ -181,7 +230,7 @@ def _page_session(
             # S3.12 : le PO sait quel modèle écrit.
             "modele_actif": parametres.get("modele_actif") if statut_parametres == 200 else None,
             # S3.13 : édition/copie des stories (version éditée gagnante à l'export).
-            "stories_contenus": stories_contenus if statut_contenus == 200 else [],
+            "stories_affichees": stories_affichees,
             "erreur": erreur,
         },
     )

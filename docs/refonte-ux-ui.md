@@ -153,11 +153,13 @@ Une page à deux sections ancrées : Télémétrie (indicateurs + jauge tpd) et 
 - **R2 — Écran session : structure cible** : barre de session (stepper, meta, actions),
   colonne chat chronologique à défilement interne, composeur unifié, rail 3 panneaux —
   en POST pleine page d'abord (H7 arrive en R3). Suppression des blocs redondants.
+  *Livrée avec le panneau Stories complet (notation, édition, copie) : **R5 absorbée**.*
 - **R3 — Dynamisme fragments htmx** : envoi → le message s'ajoute au fil + mise à jour
   out-of-band des panneaux + indicateur de génération ; anti double-envoi conservé ; repli sans JS.
 - **R4 — Hypothèses en masse** ⚙ : endpoint lot + cases à cocher + barre de sélection ;
   intégration des levées proposées / lot relu existants.
-- **R5 — Panneau Stories complet** : notation intégrée, édition, copie ; retrait des blocs bas de page.
+- **R5 — Panneau Stories complet** : *absorbée par R2 (le relogement notation/édition/copie
+  n'avait pas de sens en deux temps — l'écran aurait été moitié ancien, moitié nouveau).*
 - **R6 — Cycle de vie session** ⚙ : suppression définitive (l'archivage S3.13 existe),
   renommage dans la barre de session.
 
