@@ -1,5 +1,13 @@
 {% extends "base.html" %}
 {% block titre %}Projet {{ projet.nom }}{% endblock %}
+{% block fil_ariane %}
+<nav role="navigation" class="fr-breadcrumb" aria-label="vous êtes ici :">
+  <ol class="fr-breadcrumb__list">
+    <li><a class="fr-breadcrumb__link" href="{{ racine }}/projets">Projets</a></li>
+    <li><a class="fr-breadcrumb__link" aria-current="page">{{ projet.nom }}</a></li>
+  </ol>
+</nav>
+{% endblock %}
 {% block contenu %}
 <h1>{{ projet.nom }}</h1>
 <p>{{ projet.contexte or "Sans contexte." }}</p>
@@ -46,6 +54,4 @@
   <input class="fr-input" id="dossier_libre" name="dossier_libre" placeholder="nom-du-dossier">
   <button class="fr-btn" type="submit">Enregistrer l'association</button>
 </form>
-
-<p><a href="{{ racine }}/projets">← Retour aux projets</a></p>
 {% endblock %}

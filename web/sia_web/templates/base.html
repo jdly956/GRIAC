@@ -4,14 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titre %}SIA PO{% endblock %} — assistant de rédaction de user stories</title>
-  <!-- DSFR par CDN au MVP (à vendorer pour la prod, E7) ; styles de repli locaux ci-dessous. -->
+  <!-- DSFR par CDN au MVP (à vendorer pour la prod, E7) ; styles de repli locaux ci-dessous.
+       R1 (UX13) : conformité DSFR — composants officiels (fr-header, fr-nav, fr-notice,
+       fr-breadcrumb…) ; le JS DSFR est requis par les composants interactifs (H15). -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12/dist/dsfr.min.css">
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12/dist/dsfr.module.min.js"></script>
   <!-- S3.8 : htmx vendoré — progressive enhancement : sans JavaScript, les
        formulaires classiques restent pleinement fonctionnels. -->
   <script src="{{ racine }}/static/htmx.min.js" defer></script>
   <style>
+    /* Repli local minimal si le CDN DSFR est inaccessible : la page reste lisible. */
     body { font-family: Marianne, arial, sans-serif; margin: 0; }
-    .conteneur { max-width: 60rem; margin: 0 auto; padding: 1rem; }
     .fil-message { border: 1px solid #ddd; border-radius: .25rem; padding: .75rem; margin: .5rem 0; white-space: pre-wrap; }
     .fil-po { background: #f5f5fe; }
     .fil-assistant { background: #fff; }
@@ -37,21 +40,67 @@
     /* S3.11 : jauge de consommation quotidienne vs quota tpd. */
     .jauge { background: #eee; border-radius: .25rem; height: .75rem; overflow: hidden; }
     .jauge-remplie { background: #000091; height: 100%; }
+    /* R1 : repli navigation si le CSS DSFR manque (liens espacés, lisibles). */
+    .fr-nav__list { list-style: none; display: flex; flex-wrap: wrap; gap: .25rem; margin: 0; padding: 0; }
   </style>
 </head>
 <body>
   <header role="banner" class="fr-header">
-    <div class="conteneur">
-      <p><a href="{{ racine }}/" title="Accueil">🏛️ <strong>SIA PO</strong></a> — assistant de rédaction de user stories</p>
-      <nav role="navigation" aria-label="Menu principal">
-        <a href="{{ racine }}/">Sessions</a> · <a href="{{ racine }}/projets">Projets</a> · <a href="{{ racine }}/documents">Mes documents</a> · <a href="{{ racine }}/telemetrie">Télémétrie</a> · <a href="{{ racine }}/parametres">Paramètres</a>
-      </nav>
-      <div class="fr-alert fr-alert--warning" role="alert">
-        <p><strong>⚠️ Ne collez pas de données personnelles.</strong> Données publiques ou internes non sensibles uniquement.</p>
+    <div class="fr-header__body">
+      <div class="fr-container">
+        <div class="fr-header__body-row">
+          <div class="fr-header__brand fr-enlarge-link">
+            <div class="fr-header__brand-top">
+              <div class="fr-header__logo">
+                <p class="fr-logo">République<br>Française</p>
+              </div>
+            </div>
+            <div class="fr-header__service">
+              <a href="{{ racine }}/" title="Accueil — SIA PO">
+                <p class="fr-header__service-title">SIA PO</p>
+              </a>
+              <p class="fr-header__service-tagline">assistant de rédaction de user stories</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="fr-header__menu">
+      <div class="fr-container">
+        <nav class="fr-nav" role="navigation" aria-label="Menu principal">
+          <ul class="fr-nav__list">
+            <li class="fr-nav__item">
+              <a class="fr-nav__link" href="{{ racine }}/"{% if nav_actif == "sessions" %} aria-current="true"{% endif %}>Sessions</a>
+            </li>
+            <li class="fr-nav__item">
+              <a class="fr-nav__link" href="{{ racine }}/projets"{% if nav_actif == "projets" %} aria-current="true"{% endif %}>Projets</a>
+            </li>
+            <li class="fr-nav__item">
+              <a class="fr-nav__link" href="{{ racine }}/documents"{% if nav_actif == "documents" %} aria-current="true"{% endif %}>Mes documents</a>
+            </li>
+            <li class="fr-nav__item">
+              <a class="fr-nav__link" href="{{ racine }}/telemetrie"{% if nav_actif == "telemetrie" %} aria-current="true"{% endif %}>Télémétrie</a>
+            </li>
+            <li class="fr-nav__item">
+              <a class="fr-nav__link" href="{{ racine }}/parametres"{% if nav_actif == "parametres" %} aria-current="true"{% endif %}>Paramètres</a>
+            </li>
+          </ul>
+        </nav>
       </div>
     </div>
   </header>
-  <main role="main" class="conteneur">
+  {# R1 (UX11 + D15) : l'obligation d'affichage tient en une notice discrète
+     d'une ligne — l'alerte pleine largeur écrasait chaque page. #}
+  <div class="fr-notice fr-notice--info">
+    <div class="fr-container">
+      <div class="fr-notice__body">
+        <p><span class="fr-notice__title">Ne collez pas de données personnelles.</span>
+          Données publiques ou internes non sensibles uniquement.</p>
+      </div>
+    </div>
+  </div>
+  <main role="main" class="fr-container fr-py-2w">
+    {% block fil_ariane %}{% endblock %}
     {% block contenu %}{% endblock %}
   </main>
 </body>

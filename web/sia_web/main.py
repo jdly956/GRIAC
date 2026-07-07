@@ -41,6 +41,28 @@ def _contexte_racine(request: Request) -> dict[str, str]:
     return {"racine": request.scope.get("root_path", "").rstrip("/")}
 
 
+# R1 (socle DSFR) : entrée active de la navigation, déduite du chemin
+# APPLICATIF (scope["path"] ne porte pas le root_path — cohérent avec le
+# proxy à préfixe du pod, cf. docstring du module).
+_NAV_PREFIXES = [
+    ("/projets", "projets"),
+    ("/documents", "documents"),
+    ("/telemetrie", "telemetrie"),
+    ("/parametres", "parametres"),
+    ("/sessions", "sessions"),
+]
+
+
+def _contexte_navigation(request: Request) -> dict[str, str]:
+    chemin = request.scope.get("path", "/")
+    if chemin == "/":
+        return {"nav_actif": "sessions"}
+    for prefixe, entree in _NAV_PREFIXES:
+        if chemin.startswith(prefixe):
+            return {"nav_actif": entree}
+    return {"nav_actif": ""}
+
+
 # S3.6 : rendu serveur des messages du moteur — le PO lisait le markdown BRUT
 # (tableaux Gherkin en pipes, constaté sessions 9/11). `html=False` : tout HTML
 # présent dans la source est échappé (le contenu vient du LLM — jamais de HTML
@@ -55,7 +77,7 @@ def rendre_markdown(texte: str) -> str:
 
 templates = Jinja2Templates(
     directory=str(Path(__file__).parent / "templates"),
-    context_processors=[_contexte_racine],
+    context_processors=[_contexte_racine, _contexte_navigation],
 )
 templates.env.filters["markdown"] = rendre_markdown
 

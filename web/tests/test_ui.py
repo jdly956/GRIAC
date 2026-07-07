@@ -979,3 +979,41 @@ def test_export_proxifie(api, monkeypatch: pytest.MonkeyPatch) -> None:
     assert reponse.status_code == 200
     assert reponse.headers["content-type"].startswith("text/csv")
     assert reponse.text.startswith('"Summary"')
+
+
+# --- R1 : socle DSFR & navigation (refonte UX/UI, arbitrages UX9/UX11/UX13) ---
+
+
+def test_socle_dsfr_header_notice_et_ressources(api) -> None:
+    # R1 : en-tête DSFR officiel + notice D15 discrète (l'obligation d'affichage
+    # demeure — plus d'alerte pleine largeur) ; CSS ET JS DSFR chargés (H15).
+    api.brancher("GET", "/projects", 200, [])
+    texte = client.get("/").text
+    assert 'class="fr-header"' in texte and 'class="fr-nav"' in texte
+    assert 'class="fr-notice fr-notice--info"' in texte
+    assert "Ne collez pas de données personnelles" in texte  # D15 tenu
+    assert "fr-alert fr-alert--warning" not in texte  # l'ancienne alerte a disparu
+    assert "dsfr.min.css" in texte and "dsfr.module.min.js" in texte
+
+
+def test_navigation_entree_active_par_ecran(api) -> None:
+    # R1 : l'entrée active porte aria-current — le PO sait toujours où il est.
+    api.brancher("GET", "/projects", 200, [])
+    accueil = client.get("/").text
+    assert '<a class="fr-nav__link" href="/" aria-current="true">Sessions</a>' in accueil
+    api.brancher("GET", "/documents", 200, [])
+    api.brancher("GET", "/documents/stats", 200, DOCS_STATS)
+    documents = client.get("/documents").text
+    assert 'href="/documents" aria-current="true">Mes documents</a>' in documents
+    assert 'href="/" aria-current="true"' not in documents  # une seule entrée active
+
+
+def test_fil_ariane_sur_les_fiches(api) -> None:
+    # R1 : fil d'Ariane DSFR sur les sous-pages (fiche document, fiche projet).
+    api.brancher("GET", "/documents/1", 200, FICHE_MINIMALE)
+    texte = client.get("/documents/1").text
+    assert 'class="fr-breadcrumb"' in texte
+    assert 'href="/documents">Mes documents</a>' in texte
+    api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
+    api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
+    assert 'class="fr-breadcrumb"' in client.get("/projets/1").text

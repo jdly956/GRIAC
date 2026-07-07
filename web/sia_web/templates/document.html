@@ -1,12 +1,19 @@
 {% extends "base.html" %}
 {% block titre %}{{ fiche.nom }}{% endblock %}
+{% block fil_ariane %}
+<nav role="navigation" class="fr-breadcrumb" aria-label="vous êtes ici :">
+  <ol class="fr-breadcrumb__list">
+    <li><a class="fr-breadcrumb__link" href="{{ racine }}/documents">Mes documents</a></li>
+    <li><a class="fr-breadcrumb__link" aria-current="page">{{ fiche.nom }}</a></li>
+  </ol>
+</nav>
+{% endblock %}
 {% block contenu %}
 <h1>{{ fiche.nom }}
   <span class="fr-badge fr-badge--info">{{ libelles.get(fiche.statut_parsing, fiche.statut_parsing) }}</span>
   {% if fiche.est_reference %}<span class="fr-badge fr-badge--success">référence</span>{% endif %}
   {% if fiche.doublon_de %}<span class="fr-badge">doublon</span>{% endif %}
 </h1>
-<p><a href="{{ racine }}/documents">← Mes documents</a></p>
 
 {# S3.17 : télécharger l'original / supprimer (base + fichiers — définitif). #}
 <div class="panneau">
