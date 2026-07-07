@@ -187,6 +187,25 @@ def gerer_session(session_id: int, entree: SessionMaj, connexion: Connexion) -> 
     return {"id": ligne[0], "titre": ligne[1], "archivee": ligne[2]}
 
 
+@router.delete("/workflows/{session_id}", status_code=204)
+def supprimer_session(session_id: int, connexion: Connexion) -> None:
+    """R6 (refonte UX/UI, arbitrage UX8) : suppression DÉFINITIVE d'une session.
+
+    L'archivage (S3.13) reste le geste réversible ; ici tout part avec la
+    ligne : messages, traces A3, hypothèses, feedback et éditions suivent par
+    cascade FK (0008/0009/0014/0015), la conso de tokens est conservée
+    dérattachée (SET NULL, 0011 — la télémétrie globale reste juste).
+    """
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            "DELETE FROM workflow_sessions WHERE id = %(id)s RETURNING id",
+            {"id": session_id},
+        )
+        if curseur.fetchone() is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
+    connexion.commit()
+
+
 @router.get("/workflows/{session_id}")
 def lire_session(session_id: int, connexion: Connexion) -> EtatSession:
     with connexion.cursor() as curseur:

@@ -147,21 +147,25 @@ Une page à deux sections ancrées : Télémétrie (indicateurs + jauge tpd) et 
 
 **Vague 1 — socle + session (priorité UX12)**
 
-- **R1 — Socle DSFR & navigation** : en-tête + nav 4 entrées avec état actif, notice D15 fine,
+- [x] **R1 — Socle DSFR & navigation** : en-tête + nav avec état actif, notice D15 fine,
   gabarit/cartes/badges partagés, fil d'Ariane — touche `base.html` + retouches minimales de
-  chaque gabarit (aucun changement d'API).
-- **R2 — Écran session : structure cible** : barre de session (stepper, meta, actions),
+  chaque gabarit (aucun changement d'API). *Livrée le 07/07 (plan `r1-socle-dsfr.md`) —
+  la nav reste à 5 entrées jusqu'à la fusion R10 (UX9).*
+- [x] **R2 — Écran session : structure cible** : barre de session (stepper, meta, actions),
   colonne chat chronologique à défilement interne, composeur unifié, rail 3 panneaux —
   en POST pleine page d'abord (H7 arrive en R3). Suppression des blocs redondants.
-  *Livrée avec le panneau Stories complet (notation, édition, copie) : **R5 absorbée**.*
-- **R3 — Dynamisme fragments htmx** : envoi → le message s'ajoute au fil + mise à jour
+  *Livrée le 07/07 avec le panneau Stories complet (notation, édition, copie) :
+  **R5 absorbée** (plan `r2-ecran-session.md`).*
+- [x] **R3 — Dynamisme fragments htmx** : envoi → le message s'ajoute au fil + mise à jour
   out-of-band des panneaux + indicateur de génération ; anti double-envoi conservé ; repli sans JS.
-- **R4 — Hypothèses en masse** ⚙ : endpoint lot + cases à cocher + barre de sélection ;
-  intégration des levées proposées / lot relu existants.
+  *Livrée le 07/07 (plan `r3-fragments-htmx.md`).*
+- [x] **R4 — Hypothèses en masse** ⚙ : endpoint lot + cases à cocher + barre de sélection ;
+  intégration des levées proposées / lot relu existants. *Livrée le 07/07
+  (plan `r4-hypotheses-en-masse.md`).*
 - **R5 — Panneau Stories complet** : *absorbée par R2 (le relogement notation/édition/copie
   n'avait pas de sens en deux temps — l'écran aurait été moitié ancien, moitié nouveau).*
-- **R6 — Cycle de vie session** ⚙ : suppression définitive (l'archivage S3.13 existe),
-  renommage dans la barre de session.
+- [x] **R6 — Cycle de vie session** ⚙ : suppression définitive (l'archivage S3.13 existe),
+  renommage dans la barre de session. *Livrée le 07/07 (plan `r6-suppression-session.md`).*
 
 **Vague 2 — parcours quotidien**
 

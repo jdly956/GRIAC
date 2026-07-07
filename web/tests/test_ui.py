@@ -1193,3 +1193,23 @@ def test_lot_sans_selection_ne_touche_pas_l_api(api) -> None:
     )
     assert reponse.status_code == 303
     assert not any("decider-lot" in chemin for _, chemin, _ in api.appels)
+
+
+# --- R6 : suppression définitive d'une session (UX8) ---
+
+
+def test_suppression_de_session_confirmee_et_redirigee(api) -> None:
+    # R6 : le menu « Gérer la session » porte la suppression définitive (avec
+    # garde-fou navigateur) ; le POST appelle DELETE et renvoie à l'accueil.
+    api.brancher("GET", "/workflows/1", 200, ETAT_SESSION)
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    texte = client.get("/sessions/1").text
+    assert "Supprimer définitivement" in texte
+    assert 'action="/sessions/1/supprimer"' in texte
+    assert "confirm(" in texte  # action définitive : garde-fou navigateur
+
+    api.brancher("DELETE", "/workflows/1", 204, {})
+    reponse = client.post("/sessions/1/supprimer", follow_redirects=False)
+    assert reponse.status_code == 303
+    assert reponse.headers["location"] == "/"  # retour à l'accueil
+    assert ("DELETE", "/workflows/1", None) in api.appels

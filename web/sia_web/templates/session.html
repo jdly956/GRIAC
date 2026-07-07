@@ -34,6 +34,13 @@
           <p class="fr-hint-text">L'archivage masque la session de l'accueil — rien n'est supprimé.</p>
           <button class="fr-btn fr-btn--sm fr-btn--secondary" name="archiver" value="1" type="submit">Archiver la session</button>
         </form>
+        {# R6 (UX8) : suppression DÉFINITIVE — fil, hypothèses, stories et
+           feedback partent avec la session (cascade). L'archivage reste le
+           geste réversible. #}
+        <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/supprimer" class="action-secondaire"
+              onsubmit="return confirm('Supprimer définitivement cette session ? Fil, hypothèses, stories et notes seront perdus — l\'archivage est le geste réversible.')">
+          <button class="fr-btn fr-btn--sm fr-btn--secondary" type="submit">Supprimer définitivement</button>
+        </form>
       </div>
     </details>
   </div>

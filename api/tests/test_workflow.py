@@ -430,6 +430,18 @@ def test_decision_en_lot_sans_correspondance_409(brancher) -> None:
     assert "Aucune hypothèse en attente" in reponse.json()["detail"]
 
 
+def test_suppression_definitive_de_session(brancher) -> None:
+    # R6 (UX8) : DELETE — la ligne part, messages/hypothèses/feedback/éditions
+    # suivent par cascade FK ; la session inconnue reste un 404.
+    connexion = brancher([(7,)])
+    assert client.delete("/workflows/7").status_code == 204
+    assert connexion.commits == 1
+    requete, parametres = connexion.curseur.requetes[0]
+    assert "DELETE FROM workflow_sessions" in requete and parametres == {"id": 7}
+    brancher([None])
+    assert client.delete("/workflows/99").status_code == 404
+
+
 def test_decision_en_lot_contrat_ferme(brancher) -> None:
     # Le contrat refuse la sélection vide et tout statut inventé (A8) ; la
     # session inconnue reste un 404.

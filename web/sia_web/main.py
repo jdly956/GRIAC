@@ -431,6 +431,13 @@ def gerer_session_web(
     return _rediriger(request, f"/sessions/{session_id}")
 
 
+@app.post("/sessions/{session_id}/supprimer")
+def supprimer_session_web(request: Request, session_id: int) -> RedirectResponse:
+    """R6 (UX8) : suppression définitive — confirmée à l'écran, cascade en base."""
+    api_client.appeler("DELETE", f"/workflows/{session_id}")
+    return _rediriger(request, "/")
+
+
 @app.post("/sessions/{session_id}/hypotheses/appliquer-propositions")
 def appliquer_levees_proposees(request: Request, session_id: int) -> RedirectResponse:
     """S3.21 : applique en lot les levées proposées relues par le PO (A8 assoupli, arbitré)."""
