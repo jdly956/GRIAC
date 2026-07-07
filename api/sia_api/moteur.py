@@ -129,6 +129,39 @@ def controler_conformite(etape: str, contenu: str) -> list[str]:
     return rapports
 
 
+# S3.15 : bornes de la requête de recherche enrichie — la requête alimente
+# BM25 + embedding (fenêtre bge-m3 : 8192), ce n'est pas un second prompt.
+REQUETE_MAX_FEATURE = 400
+REQUETE_MAX_CONTEXTE_PROJET = 200
+
+
+def construire_requete_recherche(message: str, feature: str | None, projet: dict | None) -> str:
+    """La recherche voit le projet et la Feature, pas le seul dernier message.
+
+    Constat session 12 : 14 messages sur 26 sans source — « oui », « voir
+    étape C », réponses d'interview courtes ne retrouvent rien seules. Le nom
+    et le contexte projet + le début de la Feature ancrent la requête dans le
+    vocabulaire du corpus. Mesure avant/après : jeu d'éval retrieval recall@15
+    (S3.3, gated corpus réel).
+    """
+    morceaux: list[str] = []
+    if projet:
+        entete = " — ".join(
+            partie
+            for partie in (
+                (projet.get("nom") or "").strip(),
+                (projet.get("contexte") or "").strip()[:REQUETE_MAX_CONTEXTE_PROJET],
+            )
+            if partie
+        )
+        if entete:
+            morceaux.append(entete)
+    if feature and feature.strip():
+        morceaux.append(feature.strip()[:REQUETE_MAX_FEATURE])
+    morceaux.append(message)
+    return "\n".join(morceaux)
+
+
 def charger_few_shot() -> tuple[str, str] | None:
     """(exemple, origine) — gold prioritaire ; repli silver jamais présenté comme validé."""
     if DOSSIER_GOLD.is_dir():
@@ -324,11 +357,16 @@ def message_route(
         hypotheses_en_attente = [(h[0], h[1]) for h in registre if h[2] == "en_attente"]
 
         # A2 : le RAG est mobilisé à chaque étape, question libre comprise.
+        # S3.15 : la requête de recherche voit le projet et la Feature, pas le
+        # seul dernier message (session 12 : 14 messages sur 26 sans source).
         contexte = construire_contexte(
             connexion,
             client,
             settings,
-            RechercheEntree(question=entree.message, projet_id=projet_id),
+            RechercheEntree(
+                question=construire_requete_recherche(entree.message, feature, projet),
+                projet_id=projet_id,
+            ),
         )
         if contexte.avertissement:
             avertissements.append(contexte.avertissement)
