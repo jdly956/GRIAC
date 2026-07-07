@@ -9,8 +9,55 @@
 </nav>
 {% endblock %}
 {% block contenu %}
-<h1>{{ projet.nom }}</h1>
+<h1>{{ projet.nom }}
+  {% if projet.archive %}<span class="fr-badge">archivé — masqué des listes</span>{% endif %}
+</h1>
 <p>{{ projet.contexte or "Sans contexte." }}</p>
+
+{# R9 : édition APRÈS création — nom, contexte, NFR (les dossiers A6 gardent
+   leur formulaire dédié ci-dessous). Vider une formulation retire la NFR. #}
+<details class="panneau">
+  <summary><strong>Modifier le projet</strong> — nom, contexte, NFR (E8)</summary>
+  <form method="post" action="{{ racine }}/projets/{{ projet.id }}/modifier">
+    <label class="fr-label" for="edition-nom">Nom</label>
+    <input class="fr-input" id="edition-nom" name="nom" value="{{ projet.nom }}" required>
+    <label class="fr-label" for="edition-contexte">Contexte libre</label>
+    <textarea class="fr-input" id="edition-contexte" name="contexte" rows="4">{{ projet.contexte }}</textarea>
+    <h3 class="fr-h6">Exigences non fonctionnelles</h3>
+    <p class="fr-hint-text">Modifier une ligne, vider sa formulation pour la retirer,
+      remplir une ligne vide pour en ajouter.</p>
+    {% for nfr in projet.nfrs %}
+    <fieldset class="fr-fieldset">
+      <legend>NFR {{ loop.index }}</legend>
+      <select class="fr-select" name="nfr_type_{{ loop.index }}" aria-label="Type de la NFR {{ loop.index }}">
+        {% for type_nfr in types_nfr %}
+        <option value="{{ type_nfr }}" {% if type_nfr == nfr.type %}selected{% endif %}>{{ type_nfr }}</option>
+        {% endfor %}
+      </select>
+      <input class="fr-input" name="nfr_formulation_{{ loop.index }}" value="{{ nfr.formulation }}"
+        aria-label="Formulation de la NFR {{ loop.index }}">
+      <input class="fr-input" name="nfr_valeur_{{ loop.index }}" value="{{ nfr.valeur_cible or '' }}"
+        placeholder="Valeur cible (optionnelle)" aria-label="Valeur cible de la NFR {{ loop.index }}">
+    </fieldset>
+    {% endfor %}
+    {% for i in range(projet.nfrs | length + 1, projet.nfrs | length + 3) %}
+    <fieldset class="fr-fieldset">
+      <legend>NFR {{ i }} (nouvelle)</legend>
+      <select class="fr-select" name="nfr_type_{{ i }}" aria-label="Type de la NFR {{ i }}">
+        <option value="">— type —</option>
+        {% for type_nfr in types_nfr %}
+        <option value="{{ type_nfr }}">{{ type_nfr }}</option>
+        {% endfor %}
+      </select>
+      <input class="fr-input" name="nfr_formulation_{{ i }}"
+        placeholder="Formulation vérifiable (ex. p95 &lt; 1 s)" aria-label="Formulation de la NFR {{ i }}">
+      <input class="fr-input" name="nfr_valeur_{{ i }}"
+        placeholder="Valeur cible (optionnelle)" aria-label="Valeur cible de la NFR {{ i }}">
+    </fieldset>
+    {% endfor %}
+    <button class="fr-btn" type="submit">Enregistrer les modifications</button>
+  </form>
+</details>
 
 <div class="panneau">
   <h2>Exigences non fonctionnelles ({{ projet.nfrs | length }})</h2>
@@ -54,4 +101,24 @@
   <input class="fr-input" id="dossier_libre" name="dossier_libre" placeholder="nom-du-dossier">
   <button class="fr-btn" type="submit">Enregistrer l'association</button>
 </form>
+
+{# R9 (UX8/H9) : cycle de vie — archiver (réversible) / supprimer (définitif,
+   les sessions liées continuent SANS le contexte du projet — arbitrage H9). #}
+<div class="panneau">
+  <h2>Gérer le projet</h2>
+  <form method="post" action="{{ racine }}/projets/{{ projet.id }}/gerer" class="action-en-ligne">
+    {% if projet.archive %}
+    <input type="hidden" name="archiver" value="0">
+    <button class="fr-btn fr-btn--secondary" type="submit">Désarchiver</button>
+    {% else %}
+    <input type="hidden" name="archiver" value="1">
+    <button class="fr-btn fr-btn--secondary" type="submit"
+      title="Masqué des listes et du choix à la création de session — réversible">Archiver le projet</button>
+    {% endif %}
+  </form>
+  <form method="post" action="{{ racine }}/projets/{{ projet.id }}/supprimer" class="action-en-ligne"
+        onsubmit="return confirm('Supprimer définitivement le projet « {{ projet.nom }} » ? Ses NFR et associations de dossiers partent avec lui ; les sessions existantes continueront SANS son contexte ni ses NFR (H9).')">
+    <button class="fr-btn fr-btn--secondary" type="submit">Supprimer définitivement</button>
+  </form>
+</div>
 {% endblock %}

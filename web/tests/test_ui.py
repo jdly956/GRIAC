@@ -845,6 +845,7 @@ PROJET_DETAIL = {
     "id": 1,
     "nom": "Téléservice X",
     "contexte": "Suivi des demandes",
+    "archive": False,  # R9 — extension mécanique de la fixture
     "nfrs": [{"type": "performance", "formulation": "p95 < 1 s", "valeur_cible": "1 s"}],
     "dossiers": [
         {"dossier": "projet-alpha", "origine": "suggestion"},
@@ -909,6 +910,67 @@ def test_ecran_projet_detail_suggestions_et_ajout_manuel(api) -> None:
     assert 'value="projet-beta" checked' not in reponse.text  # … mais pas coché
     assert "dossier-manuel" in reponse.text and "(ajout manuel)" in reponse.text
     assert "elles ne valent pas association" in reponse.text  # A6
+
+
+def test_edition_projet_apres_creation(api) -> None:
+    # R9 : le formulaire d'édition envoie un PUT complet — NFR reconstruites
+    # depuis les lignes remplies, dossiers A6 PRÉSERVÉS tels quels.
+    api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
+    api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
+    texte = client.get("/projets/1").text
+    assert "Modifier le projet" in texte
+    assert 'value="p95 &lt; 1 s"' in texte  # NFR existante pré-remplie
+
+    api.brancher("PUT", "/projects/1", 200, PROJET_DETAIL)
+    reponse = client.post(
+        "/projets/1/modifier",
+        data={
+            "nom": "Téléservice X v2",
+            "contexte": "Nouveau périmètre",
+            "nfr_type_1": "performance",
+            "nfr_formulation_1": "",  # formulation vidée : la NFR est retirée
+            "nfr_type_2": "rgpd",
+            "nfr_formulation_2": "registre des traitements tenu",
+            "nfr_valeur_2": "",
+        },
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    methode, chemin, corps = api.appels[-1]
+    assert (methode, chemin) == ("PUT", "/projects/1")
+    assert corps["nom"] == "Téléservice X v2"
+    assert corps["contexte"] == "Nouveau périmètre"
+    assert corps["nfrs"] == [
+        {"type": "rgpd", "formulation": "registre des traitements tenu", "valeur_cible": None}
+    ]
+    assert corps["dossiers"] == PROJET_DETAIL["dossiers"]  # A6 intacte
+
+
+def test_cycle_de_vie_projet_archiver_et_supprimer(api) -> None:
+    # R9 (UX8/H9) : archiver = PATCH réversible ; supprimer = DELETE confirmé
+    # (l'écran rappelle que les sessions liées continueront sans le contexte).
+    api.brancher("GET", "/projects/1", 200, PROJET_DETAIL)
+    api.brancher("GET", "/dossiers/suggestions", 200, SUGGESTIONS)
+    texte = client.get("/projets/1").text
+    assert "Archiver le projet" in texte
+    assert "continueront SANS son contexte" in texte  # l'avertissement H9
+
+    api.brancher("PATCH", "/projects/1", 200, {})
+    reponse = client.post("/projets/1/gerer", data={"archiver": "1"}, follow_redirects=False)
+    assert reponse.status_code == 303 and reponse.headers["location"] == "/projets"
+    patch = next(a for a in api.appels if a[0] == "PATCH")
+    assert patch[2] == {"archive": True}
+
+    api.brancher("DELETE", "/projects/1", 204, {})
+    reponse = client.post("/projets/1/supprimer", follow_redirects=False)
+    assert reponse.status_code == 303
+    assert ("DELETE", "/projects/1", None) in api.appels
+
+    # Les archivés restent visibles sur l'écran projets (section dédiée).
+    api.brancher("GET", "/projects", 200, [])
+    api.brancher("GET", "/projects?archives=true", 200, [dict(PROJET_DETAIL, archive=True)])
+    texte = client.get("/projets").text
+    assert "Projets archivés (1)" in texte and "Désarchiver" in texte
 
 
 def test_association_dossiers_envoie_un_put_complet(api) -> None:

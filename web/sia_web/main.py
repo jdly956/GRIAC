@@ -294,13 +294,18 @@ def index(request: Request) -> HTMLResponse:
     statut_archivees, archivees = api_client.appeler("GET", "/workflows?archivees=true")
     erreur = None if statut == 200 else projets.get("detail")
     projets = projets if statut == 200 else []
+    # R9 : les projets archivés gardent leur nom sur les lignes de session.
+    statut_pa, projets_archives = api_client.appeler("GET", "/projects?archives=true")
+    noms_projets = {p["id"]: p["nom"] for p in projets}
+    if statut_pa == 200 and isinstance(projets_archives, list):
+        noms_projets.update({p["id"]: f"{p['nom']} (archivé)" for p in projets_archives})
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
             "projets": projets,
             "sessions": sessions if statut_sessions == 200 else [],
-            "noms_projets": {p["id"]: p["nom"] for p in projets},
+            "noms_projets": noms_projets,
             "nb_archivees": (
                 len(archivees) if statut_archivees == 200 and isinstance(archivees, list) else 0
             ),
@@ -577,11 +582,14 @@ def ecran_telemetrie(request: Request) -> HTMLResponse:
 
 def _page_projets(request: Request, erreur: str | None = None) -> HTMLResponse:
     statut, projets = api_client.appeler("GET", "/projects")
+    # R9 : le versant archivé, consultable et réversible depuis la même page.
+    statut_archives, archives = api_client.appeler("GET", "/projects?archives=true")
     return templates.TemplateResponse(
         request=request,
         name="projets.html",
         context={
             "projets": projets if statut == 200 else [],
+            "archives": archives if statut_archives == 200 and isinstance(archives, list) else [],
             "types_nfr": TYPES_NFR,
             "erreur": erreur or (None if statut == 200 else projets.get("detail")),
         },
@@ -650,8 +658,59 @@ def voir_projet(request: Request, projet_id: int) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="projet.html",
-        context={"projet": projet, "dossiers": lignes},
+        # R9 : types_nfr alimente le formulaire d'édition (NFR après création).
+        context={"projet": projet, "dossiers": lignes, "types_nfr": TYPES_NFR},
     )
+
+
+@app.post("/projets/{projet_id}/modifier", response_model=None)
+async def modifier_projet(request: Request, projet_id: int) -> HTMLResponse | RedirectResponse:
+    """R9 : édition du projet APRÈS création (nom, contexte, NFR) — PUT complet.
+
+    Les dossiers A6 sont PRÉSERVÉS tels quels (leur formulaire dédié reste le
+    seul à les toucher). Lignes NFR dynamiques : type + formulation remplis =
+    NFR retenue ; formulation vidée = NFR retirée.
+    """
+    statut, projet = api_client.appeler("GET", f"/projects/{projet_id}")
+    if statut != 200:
+        return _page_erreur(request, statut, projet)
+    formulaire = await request.form()
+    nfrs = []
+    index = 1
+    while f"nfr_type_{index}" in formulaire or f"nfr_formulation_{index}" in formulaire:
+        type_nfr = str(formulaire.get(f"nfr_type_{index}") or "").strip()
+        formulation = str(formulaire.get(f"nfr_formulation_{index}") or "").strip()
+        valeur = str(formulaire.get(f"nfr_valeur_{index}") or "").strip()
+        if type_nfr and formulation:
+            nfrs.append(
+                {"type": type_nfr, "formulation": formulation, "valeur_cible": valeur or None}
+            )
+        index += 1
+    corps = {
+        "nom": str(formulaire.get("nom") or "").strip() or projet["nom"],
+        "contexte": str(formulaire.get("contexte") or ""),
+        "nfrs": nfrs,
+        "dossiers": projet["dossiers"],
+    }
+    api_client.appeler("PUT", f"/projects/{projet_id}", json=corps)
+    return _rediriger(request, f"/projets/{projet_id}")
+
+
+@app.post("/projets/{projet_id}/gerer")
+def gerer_projet_web(
+    request: Request, projet_id: int, archiver: Annotated[str, Form()]
+) -> RedirectResponse:
+    """R9 (UX8) : archiver (masqué des listes et du choix de session) / désarchiver."""
+    api_client.appeler("PATCH", f"/projects/{projet_id}", json={"archive": archiver == "1"})
+    return _rediriger(request, "/projets")
+
+
+@app.post("/projets/{projet_id}/supprimer")
+def supprimer_projet_web(request: Request, projet_id: int) -> RedirectResponse:
+    """R9 (H9, « suppression libre ») : définitif — les sessions liées continuent
+    sans contexte projet (confirmé à l'écran)."""
+    api_client.appeler("DELETE", f"/projects/{projet_id}")
+    return _rediriger(request, "/projets")
 
 
 @app.post("/projets/{projet_id}/dossiers", response_model=None)
