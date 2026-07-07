@@ -152,10 +152,13 @@ class FausseConnexion:
 
 
 class FauxChat:
-    def __init__(self, contenu: str, finish_reason: str = "stop") -> None:
+    def __init__(
+        self, contenu: str, finish_reason: str = "stop", usage: tuple[int, int] | None = None
+    ) -> None:
         self.appels: list[dict] = []
         self._contenu = contenu
         self._finish = finish_reason
+        self._usage = usage  # (prompt_tokens, completion_tokens) — S3.11
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._creer))
 
     def _creer(self, **kwargs):
@@ -165,14 +168,24 @@ class FauxChat:
                 SimpleNamespace(
                     message=SimpleNamespace(content=self._contenu), finish_reason=self._finish
                 )
-            ]
+            ],
+            usage=(
+                SimpleNamespace(prompt_tokens=self._usage[0], completion_tokens=self._usage[1])
+                if self._usage
+                else None
+            ),
         )
 
 
 CONTEXTE_CANNE = ContexteResultat(
     contexte="[Source : spec_v2.docx — Spec > CA]\ncontenu",
     sources=[
-        SourceCitee(document="projet-alpha/spec_v2.docx", nom="spec_v2.docx", section="Spec > CA")
+        SourceCitee(
+            document="projet-alpha/spec_v2.docx",
+            nom="spec_v2.docx",
+            section="Spec > CA",
+            extrait="contenu exact du chunk cité",
+        )
     ],
     nb_tokens=120,
     rerank_applique=True,
@@ -189,9 +202,10 @@ def brancher(monkeypatch: pytest.MonkeyPatch):
         reponse_llm: str,
         contexte: ContexteResultat = CONTEXTE_CANNE,
         finish_reason: str = "stop",
+        usage: tuple[int, int] | None = None,
     ):
         connexion = FausseConnexion(resultats)
-        faux_client = FauxChat(reponse_llm, finish_reason)
+        faux_client = FauxChat(reponse_llm, finish_reason, usage)
         app.dependency_overrides[get_connexion] = lambda: connexion
         app.dependency_overrides[get_albert] = lambda: (faux_client, _settings())
         monkeypatch.setattr(moteur, "construire_contexte", lambda *a, **k: contexte)
@@ -203,6 +217,7 @@ def brancher(monkeypatch: pytest.MonkeyPatch):
 
 SCRIPT_NOMINAL = [
     ("interview", None, "Ma Feature"),  # session
+    None,  # parametres : pas de surcharge de modèle (S3.12)
     [("po", "Ma Feature")],  # historique
     [],  # registre des hypothèses (id, texte, statut) — vide
 ]
@@ -236,6 +251,7 @@ def test_message_nominal_alimente_fil_et_registre(brancher) -> None:
 def test_hypothese_deja_connue_non_dupliquee(brancher) -> None:
     script = [
         ("interview", None, "Ma Feature"),
+        None,  # pas de surcharge de modèle
         [],
         [(3, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],  # déjà au registre
     ]
@@ -251,6 +267,7 @@ def test_reformulation_du_registre_non_dupliquee(brancher) -> None:
     # d'autres mots ne crée pas d'entrée (bruit session 11 : 18 « en attente »).
     script = [
         ("interview", None, "Ma Feature"),
+        None,  # pas de surcharge de modèle
         [],
         [(3, "- Taille maximale d'une pièce jointe : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],
     ]
@@ -294,6 +311,7 @@ def test_aucune_source_avertit(brancher) -> None:
 
 SCRIPT_REGISTRE_EN_ATTENTE = [
     ("interview", None, "Ma Feature"),  # session
+    None,  # parametres : pas de surcharge de modèle (S3.12)
     [("po", "Ma Feature")],  # historique
     [(3, "Seuil proposé : 10 Mo [HYPOTHÈSE À VALIDER]", "en_attente")],  # registre
 ]
@@ -328,6 +346,48 @@ def test_levee_proposee_hors_registre_ignoree(brancher) -> None:
     corps = client_http.post("/workflows/7/message", json={"message": "ok"}).json()
     assert corps["levees_proposees"] == []
     assert not any("SET statut_propose" in r for r, _ in connexion.curseur.requetes)
+
+
+def test_surcharge_modele_ui_appliquee_a_l_appel(brancher) -> None:
+    # S3.12 : la surcharge de l'écran Paramètres (table parametres) prime sur
+    # le défaut env/code, sans relance de l'api.
+    script = [
+        ("interview", None, "Ma Feature"),
+        ("openweight-large",),  # surcharge UI
+        [("po", "Ma Feature")],
+        [],
+    ]
+    _, faux_client = brancher(script, "Réponse.")
+    assert client_http.post("/workflows/7/message", json={"message": "ok"}).status_code == 200
+    assert faux_client.appels[0]["model"] == "openweight-large"
+
+
+def test_traces_persistees_sur_le_message(brancher) -> None:
+    # S3.9 (A3 complet) : sources (avec extrait exact), avertissements et
+    # divergences entrent dans message_traces — le fil les restitue au
+    # rechargement, fin de la « v1 assumée » S2.8.
+    reponse = "Réponse.\n[DIVERGENCE] 15 vs 30 jours [Source : spec_v2.docx].\nQ1 ? Q2 ? Q3 ? Q4 ?"
+    connexion, _ = brancher(list(SCRIPT_NOMINAL), reponse)
+    client_http.post("/workflows/7/message", json={"message": "délai ?"})
+    traces = [p for r, p in connexion.curseur.requetes if "INSERT INTO message_traces" in r]
+    assert {
+        "nom": "spec_v2.docx",
+        "section": "Spec > CA",
+        "extrait": "contenu exact du chunk cité",
+        "id": 7,
+    } in traces  # la source + extrait
+    assert any(p.get("type") == "avertissement" for p in traces)  # règle 1 (4 questions)
+    assert any(p.get("type") == "divergence" for p in traces)
+
+
+def test_usage_verse_au_registre_de_conso(brancher) -> None:
+    # S3.11 : l'usage de chaque appel chat entre dans conso_tokens (jauge tpd) ;
+    # sans usage dans la réponse (fixtures par défaut), aucun INSERT — couvert
+    # par les autres tests qui n'attendent pas cette requête.
+    connexion, _ = brancher(list(SCRIPT_NOMINAL), "Réponse.", usage=(1_200, 300))
+    assert client_http.post("/workflows/7/message", json={"message": "ok"}).status_code == 200
+    inserts = [p for r, p in connexion.curseur.requetes if "conso_tokens" in r]
+    assert inserts == [{"id": 7, "modele": "openweight-medium", "entree": 1_200, "sortie": 300}]
 
 
 def test_reponse_vide_erreur_explicite(brancher) -> None:
@@ -409,6 +469,7 @@ def test_pas_de_controle_hors_etapes_de_production() -> None:
 def test_route_remonte_les_controles_en_avertissements(brancher) -> None:
     script = [
         ("controle_dor", None, "Ma Feature"),  # session à l'étape 4
+        None,  # pas de surcharge de modèle
         [("po", "Ma Feature")],  # historique
         [],  # hypothèses connues
     ]

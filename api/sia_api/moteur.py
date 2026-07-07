@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from sia_api.config import Settings
 from sia_api.db import get_connexion
 from sia_api.gabarit import extraire_stories_us, titre_us, valider_dor, valider_us
+from sia_api.parametres import lire_surcharge_modele
 from sia_api.recherche import (
     RechercheEntree,
     SourceCitee,
@@ -280,6 +281,10 @@ def message_route(
             raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
         etape, projet_id, feature = session
 
+        # S3.12 : le modèle de chat est surchargeable depuis l'écran Paramètres
+        # (table parametres) SANS relance — surcharge UI > env/défaut (S2.14).
+        modele_chat = lire_surcharge_modele(curseur) or settings.albert_model_chat
+
         projet = None
         if projet_id is not None:
             curseur.execute(
@@ -347,7 +352,7 @@ def message_route(
             )
 
         reponse_llm = client.chat.completions.create(
-            model=settings.albert_model_chat,
+            model=modele_chat,
             messages=messages,
             max_tokens=MAX_TOKENS_REPONSE,
         )
@@ -358,6 +363,21 @@ def message_route(
                 status_code=502,
                 detail=f"Réponse vide du modèle (finish_reason={choix.finish_reason}) — "
                 "voir le gotcha modèles à raisonnement (S1.5).",
+            )
+
+        # S3.11 : chaque appel chat verse son usage au registre de consommation
+        # (jauge vs quota tpd 2,46 M — S1.5). Absent du retour = rien à verser.
+        usage = getattr(reponse_llm, "usage", None)
+        if usage is not None:
+            curseur.execute(
+                "INSERT INTO conso_tokens (source, session_id, modele, tokens_entree, "
+                "tokens_sortie) VALUES ('chat', %(id)s, %(modele)s, %(entree)s, %(sortie)s)",
+                {
+                    "id": session_id,
+                    "modele": modele_chat,
+                    "entree": getattr(usage, "prompt_tokens", 0) or 0,
+                    "sortie": getattr(usage, "completion_tokens", 0) or 0,
+                },
             )
 
         # Règle 1 : signalée, jamais bloquée silencieusement.
@@ -377,6 +397,37 @@ def message_route(
             "VALUES (%(id)s, 'assistant', %(etape)s, %(contenu)s)",
             {"id": session_id, "etape": etape, "contenu": contenu_reponse},
         )
+
+        # S3.9 (A3 complet) : sources (avec extrait exact), avertissements et
+        # divergences persistés sur le message assistant — plus de « v1
+        # assumée » S2.8 où tout disparaissait au rechargement. La sous-requête
+        # cible le message tout juste inséré (aucun RETURNING nécessaire).
+        cible = (
+            "(SELECT max(id) FROM workflow_messages "
+            "WHERE session_id = %(id)s AND role = 'assistant')"
+        )
+        for source in contexte.sources:
+            curseur.execute(
+                "INSERT INTO message_traces (message_id, type, nom, section, extrait) "
+                f"VALUES ({cible}, 'source', %(nom)s, %(section)s, %(extrait)s)",
+                {
+                    "id": session_id,
+                    "nom": source.nom,
+                    "section": source.section,
+                    "extrait": source.extrait,
+                },
+            )
+        divergences = extraire_divergences(contenu_reponse)
+        for type_trace, contenus_trace in (
+            ("avertissement", avertissements),
+            ("divergence", divergences),
+        ):
+            for contenu_trace in contenus_trace:
+                curseur.execute(
+                    "INSERT INTO message_traces (message_id, type, contenu) "
+                    f"VALUES ({cible}, %(type)s, %(contenu)s)",
+                    {"id": session_id, "type": type_trace, "contenu": contenu_trace},
+                )
 
         # Déduplication à deux étages : clé normalisée (décoration markdown)
         # puis rapprochement sémantique (S2.15) — les récapitulatifs du modèle
@@ -422,6 +473,7 @@ def message_route(
         etape=etape,
         sources=contexte.sources,
         hypotheses_ajoutees=hypotheses_ajoutees,
+        divergences=divergences,
         levees_proposees=[
             LeveeProposeeSortie(
                 hypothese_id=levee.hypothese_id,
@@ -430,6 +482,5 @@ def message_route(
             )
             for levee in levees
         ],
-        divergences=extraire_divergences(contenu_reponse),
         avertissements=avertissements,
     )

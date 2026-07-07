@@ -19,9 +19,15 @@ def _settings() -> Settings:
 class FauxClient:
     """Renvoie des vecteurs déterministes ; peut échouer sur un lot donné."""
 
-    def __init__(self, dimension: int = 1024, echoue_au_lot: int | None = None) -> None:
+    def __init__(
+        self,
+        dimension: int = 1024,
+        echoue_au_lot: int | None = None,
+        tokens_par_lot: int | None = None,
+    ) -> None:
         self.dimension = dimension
         self.echoue_au_lot = echoue_au_lot
+        self.tokens_par_lot = tokens_par_lot
         self.appels: list[dict] = []
         self.embeddings = SimpleNamespace(create=self._creer)
 
@@ -34,7 +40,12 @@ class FauxClient:
             data=[
                 SimpleNamespace(index=i, embedding=[float(i)] * self.dimension)
                 for i in range(len(contenus))
-            ]
+            ],
+            usage=(
+                SimpleNamespace(total_tokens=self.tokens_par_lot, prompt_tokens=None)
+                if self.tokens_par_lot
+                else None
+            ),
         )
 
 
@@ -73,7 +84,7 @@ def test_vectorisation_par_lots() -> None:
     client = FauxClient()
     statistiques = traiter_chunks(connexion, client, _settings(), taille_lot=2)
 
-    assert statistiques == {"vectorises": 3, "lots": 2, "lots_en_echec": 0}
+    assert statistiques == {"vectorises": 3, "lots": 2, "lots_en_echec": 0, "tokens": 0}
     assert [len(appel["input"]) for appel in client.appels] == [2, 1]
     # Gotcha Albert (S1.5) : float explicite, jamais le base64 par défaut du SDK
     assert all(appel["encoding_format"] == "float" for appel in client.appels)
@@ -89,7 +100,7 @@ def test_lot_en_echec_n_interrompt_pas(capsys: pytest.CaptureFixture) -> None:
     client = FauxClient(echoue_au_lot=1)
     statistiques = traiter_chunks(connexion, client, _settings(), taille_lot=2)
 
-    assert statistiques == {"vectorises": 2, "lots": 2, "lots_en_echec": 1}
+    assert statistiques == {"vectorises": 2, "lots": 2, "lots_en_echec": 1, "tokens": 0}
     assert "lot en échec (chunks 1–2)" in capsys.readouterr().err
     majs = [p for r, p in connexion.curseur.requetes if "UPDATE chunks" in r]
     assert [p["id"] for p in majs] == [3, 4]  # le second lot est bien passé
@@ -104,7 +115,21 @@ def test_dimension_inattendue_avertit(capsys: pytest.CaptureFixture) -> None:
 def test_aucun_chunk_a_vectoriser() -> None:
     connexion = FausseConnexion([])
     statistiques = traiter_chunks(connexion, FauxClient(), _settings())
-    assert statistiques == {"vectorises": 0, "lots": 0, "lots_en_echec": 0}
+    assert statistiques == {"vectorises": 0, "lots": 0, "lots_en_echec": 0, "tokens": 0}
+
+
+def test_conso_tokens_versee_au_registre() -> None:
+    # S3.11 : chaque lot verse ses tokens dans conso_tokens (jauge tpd).
+    connexion = FausseConnexion([(1, "a"), (2, "b"), (3, "c")])
+    statistiques = traiter_chunks(
+        connexion, FauxClient(tokens_par_lot=120), _settings(), taille_lot=2
+    )
+    assert statistiques["tokens"] == 240  # 2 lots x 120
+    inserts = [p for r, p in connexion.curseur.requetes if "conso_tokens" in r]
+    assert inserts == [
+        {"modele": "openweight-embeddings", "tokens": 120},
+        {"modele": "openweight-embeddings", "tokens": 120},
+    ]
 
 
 def test_formater_vecteur() -> None:

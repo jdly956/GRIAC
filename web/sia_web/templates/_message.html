@@ -5,6 +5,28 @@
   <p><strong>{{ "PO" if message.role == "po" else "Assistant" }}</strong> <em>({{ message.etape }})</em></p>
   {% if message.role == "assistant" %}
   <div class="contenu-md">{{ message.contenu | markdown | safe }}</div>
+  {# S3.9 (A3 complet) : la traçabilité persiste dans le fil au rechargement,
+     avec l'extrait exact du chunk cité, consultable. #}
+  {% if message.sources %}
+  <details class="sources">
+    <summary>Sources mobilisées ({{ message.sources | length }})</summary>
+    <ul>
+      {% for source in message.sources %}
+      <li>{{ source.nom }} — {{ source.section }}
+        {% if source.extrait %}
+        <details><summary>extrait exact</summary><blockquote>{{ source.extrait }}</blockquote></details>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+  {% for divergence in message.divergences or [] %}
+  <div class="fr-alert fr-alert--warning" role="alert"><p>{{ divergence }} — c'est vous qui arbitrez (A9).</p></div>
+  {% endfor %}
+  {% for avertissement in message.avertissements or [] %}
+  <div class="fr-alert fr-alert--info" role="alert"><p>{{ avertissement }}</p></div>
+  {% endfor %}
   {% else %}
   <div>{{ message.contenu }}</div>
   {% endif %}

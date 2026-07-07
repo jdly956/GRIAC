@@ -2,6 +2,12 @@
 {% block titre %}Session {{ etat.id }}{% endblock %}
 {% block contenu %}
 <h1>Session {{ etat.id }} <span class="fr-badge fr-badge--info">{{ libelle_etape }}</span></h1>
+<p class="fr-hint-text">
+{% if modele_actif %}Modèle : <strong>{{ modele_actif }}</strong>{% endif %}
+{% if conso and conso.appels %}{% if modele_actif %} — {% endif %}Consommation de la session : {{ conso.appels }} appel(s),
+  {{ "{:,}".format(conso.tokens_entree).replace(",", " ") }} tokens entrée /
+  {{ "{:,}".format(conso.tokens_sortie).replace(",", " ") }} sortie{% endif %}
+</p>
 
 {% if erreur %}
 <div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur }}</p></div>
@@ -18,7 +24,11 @@
   <p><strong>Sources mobilisées (A3)</strong> :</p>
   <ul>
     {% for source in dernier_resultat.sources %}
-    <li>{{ source.nom }} — {{ source.section }}</li>
+    <li>{{ source.nom }} — {{ source.section }}
+      {% if source.extrait %}
+      <details><summary>extrait exact</summary><blockquote>{{ source.extrait }}</blockquote></details>
+      {% endif %}
+    </li>
     {% endfor %}
   </ul>
   {% endif %}
@@ -136,6 +146,37 @@
   {% endfor %}
 </details>
 {% endif %}
+
+{% if stories_contenus %}
+<details class="panneau">
+  <summary><strong>Stories — éditer / copier ({{ stories_contenus | length }})</strong> — la version éditée gagne à l'export (S3.13)</summary>
+  {% for story in stories_contenus %}
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/stories/edition" class="action-secondaire">
+    <p><strong>{{ story.titre }}</strong>
+      {% if story.editee %}<span class="fr-badge fr-badge--new">éditée — cette version part à l'export</span>{% endif %}
+    </p>
+    <input type="hidden" name="titre" value="{{ story.titre }}">
+    <textarea class="fr-input" name="contenu" rows="8">{{ story.contenu }}</textarea>
+    <button class="fr-btn fr-btn--sm" type="submit">Enregistrer l'édition</button>
+    <button class="fr-btn fr-btn--sm fr-btn--secondary" type="button"
+      onclick="navigator.clipboard.writeText(this.closest('form').querySelector('textarea').value)">Copier</button>
+  </form>
+  {% endfor %}
+</details>
+{% endif %}
+
+<details class="panneau">
+  <summary><strong>Gérer la session</strong> — renommer, archiver</summary>
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/gerer">
+    <label class="fr-label" for="titre-session">Nom affiché à l'accueil</label>
+    <input class="fr-input" id="titre-session" name="titre" placeholder="ex. Priorisation des actes > seuil">
+    <button class="fr-btn fr-btn--sm" type="submit">Renommer</button>
+  </form>
+  <form method="post" action="{{ racine }}/sessions/{{ etat.id }}/gerer" class="action-secondaire">
+    <p>L'archivage masque la session de l'accueil — rien n'est supprimé.</p>
+    <button class="fr-btn fr-btn--sm fr-btn--secondary" name="archiver" value="1" type="submit">Archiver la session</button>
+  </form>
+</details>
 
 <div class="panneau">
   <h2>Export (E5)</h2>

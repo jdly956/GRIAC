@@ -29,7 +29,7 @@
     {% for session in sessions %}
     <li><a href="{{ racine }}/sessions/{{ session.id }}"><strong>Session {{ session.id }}</strong></a>
       <span class="fr-badge fr-badge--info">{{ libelles_etapes.get(session.etape, session.etape) }}</span>
-      — {{ session.apercu_feature }}</li>
+      — {{ session.titre or session.apercu_feature }}</li>
     {% endfor %}
   </ul>
   {% else %}

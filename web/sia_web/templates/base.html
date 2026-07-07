@@ -34,6 +34,9 @@
     .htmx-indicator { display: none; font-weight: bold; }
     .htmx-request .htmx-indicator { display: inline-block; }
     .htmx-request button[type], .htmx-request button { cursor: wait; }
+    /* S3.11 : jauge de consommation quotidienne vs quota tpd. */
+    .jauge { background: #eee; border-radius: .25rem; height: .75rem; overflow: hidden; }
+    .jauge-remplie { background: #000091; height: 100%; }
   </style>
 </head>
 <body>
@@ -41,7 +44,7 @@
     <div class="conteneur">
       <p><a href="{{ racine }}/" title="Accueil">🏛️ <strong>SIA PO</strong></a> — assistant de rédaction de user stories</p>
       <nav role="navigation" aria-label="Menu principal">
-        <a href="{{ racine }}/">Sessions</a> · <a href="{{ racine }}/projets">Projets</a> · <a href="{{ racine }}/documents">Mes documents</a> · <a href="{{ racine }}/telemetrie">Télémétrie</a>
+        <a href="{{ racine }}/">Sessions</a> · <a href="{{ racine }}/projets">Projets</a> · <a href="{{ racine }}/documents">Mes documents</a> · <a href="{{ racine }}/telemetrie">Télémétrie</a> · <a href="{{ racine }}/parametres">Paramètres</a>
       </nav>
       <div class="fr-alert fr-alert--warning" role="alert">
         <p><strong>⚠️ Ne collez pas de données personnelles.</strong> Données publiques ou internes non sensibles uniquement.</p>

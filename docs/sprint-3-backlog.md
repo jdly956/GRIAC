@@ -77,6 +77,8 @@ Critères d'acceptation :
 - [ ] Panneau sources : **extrait exact consultable** (le texte du chunk cité, replié par défaut) — la promesse de l'arbitrage A3
 - [ ] TU api (persistance) + écran
 
+*Code livré le 06/07/2026 : migration 0014 (`message_traces` : source/avertissement/divergence par message, index) ; `SourceCitee.extrait` porte le contenu exact du chunk depuis l'assemblage E2 ; le moteur persiste les traces sur le message assistant (sous-requête `max(id)` — aucun RETURNING) ; `GET /workflows/{id}/messages` restitue la traçabilité par message ; fil web : « Sources mobilisées (N) » + « extrait exact » dépliables, alertes A9/avertissements persistants ; panneau « Dernière réponse » : extrait consultable. 4 TU — 268 tests. Plan `docs/plans-test/s3.9-tracabilite-a3.md`.*
+
 ### S3.10 — Corpus depuis l'UI : upload + pipeline + suivi
 
 - [ ] « Mes documents » : **dépôt de fichiers** (multipart → dossier corpus du pod, taille/format contrôlés, statut « en attente d'indexation »)
@@ -84,11 +86,15 @@ Critères d'acceptation :
 - [ ] **Écran de suivi** : run en cours et historique (début/fin, compteurs par nœud, échecs détaillés, tokens embeddings consommés) — table `ingestion_runs` (migration)
 - [ ] TU api (upload, déclenchement, statuts — pipeline mocké) + écran ; le plan de test réel mesure un run complet sur le pod
 
+*Code livré le 06/07/2026 : migration 0013 (`ingestion_runs`, rapport JSONB mis à jour nœud par nœud), `sia_ingestion/pipeline.py` (orchestrateur scan→embed, politique d'échec : code 2 = arrêt, code 1 = `echec_partiel` et poursuite — reprise sur hash D9), `sia_api/ingestion.py` (upload multipart sécurisé — nom neutralisé, extensions, 50 Mo —, `POST /ingestion/lancer` en sous-processus détaché avec log par run, un seul run à la fois + déblocage manuel), écran « Mes documents » enrichi (dépôt, bouton Indexer, suivi auto-rafraîchi 5 s). ⚠️ Limite : en déploiement par images, l'api n'embarque pas l'ingestion (pilote = pod, arbitré) — E7. 12 TU — 265 tests. Plan `docs/plans-test/s3.10-corpus-ui.md`.*
+
 ### S3.11 — Comptabilité tokens (global / session / import)
 
 - [ ] Chaque appel chat capture `usage` (prompt + completion) → colonnes sur `workflow_messages` (migration) ; chaque lot d'embeddings capture ses tokens → rattaché au run S3.10
 - [ ] Télémétrie : conso **globale** (jour/semaine, jauge vs tpd 2,46 M), **par session** (affichée aussi sur l'écran session), **par import**
 - [ ] TU (usage simulé dans les fausses réponses Albert)
+
+*Code livré le 06/07/2026 : migration 0011 — **registre unique `conso_tokens`** (source chat/embeddings, session_id SET NULL — variante assumée des « colonnes sur workflow_messages » : un seul mécanisme pour les deux sources) ; capture `usage` dans le moteur (chat, rattaché à la session) et dans `embed.py` (une ligne par lot) ; `GET /workflows/{id}/conso` + `GET /telemetrie/tokens` (jauge du jour vs tpd, `ALBERT_TPD_QUOTA` surchargeable) ; conso affichée sous le titre de session + panneau Télémétrie avec jauge. « Par import » = par jour tant que S3.10 n'a pas ses runs. 7 TU — 246 tests. Plan `docs/plans-test/s3.11-conso-tokens.md`.*
 
 ### S3.12 — Changement de modèle depuis l'UI (global instance)
 
@@ -96,12 +102,25 @@ Critères d'acceptation :
 - [ ] Précédence documentée : base (UI) > défaut du code ; la variable d'env reste le réglage d'infra prioritaire au démarrage
 - [ ] Le modèle actif est affiché sur l'écran session (le PO sait qui écrit) ; TU api + écran
 
+*Code livré le 06/07/2026 : migration 0012 (table `parametres` clé/valeur), `sia_api/parametres.py` (GET / PUT modele-chat / DELETE = retour au défaut, upsert appliqué sans relance), moteur : `lire_surcharge_modele` à chaque appel (surcharge UI > env > défaut code — la conso S3.11 enregistre le modèle réellement utilisé), écran Paramètres (select + champ libre prioritaire + bouton retour défaut) + lien de navigation + modèle actif affiché sous le titre de session. 7 TU — 253 tests. Plan `docs/plans-test/s3.12-modele-ui.md`.*
+
 ### S3.13 — Confort PO : édition des stories, gestion des sessions, copie
 
 - [ ] **Édition** (arbitrage : version simple) : chaque story extraite est éditable (textarea pré-remplie), la version éditée est stockée (migration) et **gagne à l'export** ; le « taux d'édition » de la télémétrie devient une mesure réelle (part des stories éditées)
 - [ ] Sessions : **renommer** (titre libre affiché à l'accueil) et **archiver** (masquée de l'accueil, conservée en base — pas de suppression destructive)
 - [ ] **Copier une story** : bouton par story (clipboard, dégradé acceptable sans JS : zone sélectionnable)
 - [ ] TU api + écran
+
+*Code livré le 06/07/2026 : migration 0015 (`story_editions` UNIQUE(session, titre) + `workflow_sessions.titre/archivee`), `sia_api/stories.py` (`GET /workflows/{id}/stories/contenus` — version éditée prioritaire — et `PUT …/stories/edition` en upsert), **l'édition gagne à l'export** (surcouche dans `_charger_session` E5), `PATCH /workflows/{id}` (renommer/archiver — l'accueil masque les archivées, rien n'est détruit), panneaux web « Stories — éditer / copier » (badge + bouton copier clipboard) et « Gérer la session ». Le rattachement télémétrique du taux d'édition réel reste à câbler (comptage `story_editions` — mineur). 10 TU — 275 tests. Plan `docs/plans-test/s3.13-confort-po.md`.*
+
+### S3.14 — Fiche document : voir le traitement du pipeline, document par document
+
+> Demande référent post-validation du lot (06/07/2026) : « accéder à chaque document depuis l'UI et voir le résultat du traitement (OCR, chunks, etc.) ».
+
+- [ ] L'inventaire « Mes documents » pointe vers une **fiche par document** (`GET /documents/{id}`) : identité (taille, sha256, version détectée, doublon de, projet suggéré), **traitement** (statut, erreur de parsing/OCR, date, dérivé markdown **rendu** — aperçu 8 k, lu du disque, absence signalée sans échec), **chunks** (fil de titres, tokens, contenu exact, état d'embedding ✅/⏳, compteurs)
+- [ ] TU api (fiche complète, dérivé absent, 404 ; route `stats` enregistrée avant la route dynamique) + TU écran
+
+*Code livré le 06/07/2026 : `GET /documents/{id}` (+ `id` exposé à l'inventaire), lecture du dérivé `derived/md/<sha>.md`, écran `document.html` (badges, parsing rendu, chunks dépliables), liens depuis l'inventaire. 5 TU — 279 tests. Plan `docs/plans-test/s3.14-fiche-document.md`.*
 
 ## S3.5 — Préparation du pilote (semaine 0 du protocole §6) — *gated : panel*
 

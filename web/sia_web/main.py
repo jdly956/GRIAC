@@ -21,7 +21,7 @@ racine (prod Helm, dev compose), root_path vide = comportement inchangé.
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -131,6 +131,11 @@ def _page_session(
         return _page_erreur(request, statut_etat, etat)
     _, messages = api_client.appeler("GET", f"/workflows/{session_id}/messages")
     _, stories = api_client.appeler("GET", f"/workflows/{session_id}/stories")
+    statut_conso, conso = api_client.appeler("GET", f"/workflows/{session_id}/conso")
+    statut_parametres, parametres = api_client.appeler("GET", "/parametres")
+    statut_contenus, stories_contenus = api_client.appeler(
+        "GET", f"/workflows/{session_id}/stories/contenus"
+    )
     # S3.7 : le registre replié ne se déplie tout seul que si une levée
     # proposée (S2.13) attend la décision du PO.
     nb_levees_a_decider = sum(
@@ -148,6 +153,13 @@ def _page_session(
             "libelle_etape": ETAPES_LIBELLES.get(etat["etape"], etat["etape"]),
             "dernier_resultat": dernier_resultat,
             "nb_levees_a_decider": nb_levees_a_decider,
+            # S3.11 : conso de la session (None si l'api ne répond pas — simple
+            # indication, jamais bloquant).
+            "conso": conso if statut_conso == 200 else None,
+            # S3.12 : le PO sait quel modèle écrit.
+            "modele_actif": parametres.get("modele_actif") if statut_parametres == 200 else None,
+            # S3.13 : édition/copie des stories (version éditée gagnante à l'export).
+            "stories_contenus": stories_contenus if statut_contenus == 200 else [],
             "erreur": erreur,
         },
     )
@@ -252,6 +264,37 @@ def story_suivante(request: Request, session_id: int) -> HTMLResponse:
     return _page_session(request, session_id, dernier_resultat=resultat)
 
 
+@app.post("/sessions/{session_id}/stories/edition")
+def editer_story_web(
+    request: Request,
+    session_id: int,
+    titre: Annotated[str, Form()],
+    contenu: Annotated[str, Form()],
+) -> RedirectResponse:
+    """S3.13 : la version éditée est stockée et gagne à l'export."""
+    api_client.appeler(
+        "PUT",
+        f"/workflows/{session_id}/stories/edition",
+        json={"titre": titre, "contenu": contenu},
+    )
+    return _rediriger(request, f"/sessions/{session_id}")
+
+
+@app.post("/sessions/{session_id}/gerer")
+def gerer_session_web(
+    request: Request,
+    session_id: int,
+    titre: Annotated[str, Form()] = "",
+    archiver: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    """S3.13 : renommer / archiver (l'archivage masque de l'accueil, sans détruire)."""
+    if archiver:
+        api_client.appeler("PATCH", f"/workflows/{session_id}", json={"archivee": True})
+        return _rediriger(request, "/")
+    api_client.appeler("PATCH", f"/workflows/{session_id}", json={"titre": titre})
+    return _rediriger(request, f"/sessions/{session_id}")
+
+
 @app.post("/sessions/{session_id}/hypotheses/{hypothese_id}")
 def decider_hypothese(
     request: Request, session_id: int, hypothese_id: int, statut: Annotated[str, Form()]
@@ -281,15 +324,52 @@ def noter_story(
     return _rediriger(request, f"/sessions/{session_id}")
 
 
+@app.get("/parametres", response_class=HTMLResponse)
+def ecran_parametres(request: Request, erreur: str | None = None) -> HTMLResponse:
+    statut, parametres = api_client.appeler("GET", "/parametres")
+    if statut != 200:
+        return _page_erreur(request, statut, parametres)
+    return templates.TemplateResponse(
+        request=request,
+        name="parametres.html",
+        context={"parametres": parametres, "erreur": erreur},
+    )
+
+
+@app.post("/parametres/modele")
+def changer_modele(
+    request: Request,
+    modele: Annotated[str, Form()] = "",
+    modele_libre: Annotated[str, Form()] = "",
+) -> RedirectResponse:
+    """S3.12 : le champ libre (alias hors catalogue) prime sur le select."""
+    choix = (modele_libre or modele).strip()
+    if choix:
+        api_client.appeler("PUT", "/parametres/modele-chat", json={"modele": choix})
+    return _rediriger(request, "/parametres")
+
+
+@app.post("/parametres/modele-defaut")
+def modele_par_defaut(request: Request) -> RedirectResponse:
+    api_client.appeler("DELETE", "/parametres/modele-chat")
+    return _rediriger(request, "/parametres")
+
+
 @app.get("/telemetrie", response_class=HTMLResponse)
 def ecran_telemetrie(request: Request) -> HTMLResponse:
     statut, telemetrie = api_client.appeler("GET", "/telemetrie")
+    statut_tokens, tokens = api_client.appeler("GET", "/telemetrie/tokens")
     if statut != 200:
         return _page_erreur(request, statut, telemetrie)
     return templates.TemplateResponse(
         request=request,
         name="telemetrie.html",
-        context={"telemetrie": telemetrie},
+        context={
+            "telemetrie": telemetrie,
+            # S3.11 : la jauge tokens est une indication — l'écran reste servi
+            # même si l'endpoint conso est indisponible.
+            "tokens": tokens if statut_tokens == 200 else None,
+        },
     )
 
 
@@ -415,6 +495,9 @@ def ecran_documents(request: Request) -> HTMLResponse:
     statut_stats, stats = api_client.appeler("GET", "/documents/stats")
     if statut_stats != 200:
         return _page_erreur(request, statut_stats, stats)
+    # S3.10 : suivi des runs d'ingestion — l'écran reste servi sans l'endpoint.
+    statut_runs, runs = api_client.appeler("GET", "/ingestion/runs")
+    runs = runs if statut_runs == 200 and isinstance(runs, list) else []
     return templates.TemplateResponse(
         request=request,
         name="documents.html",
@@ -424,8 +507,51 @@ def ecran_documents(request: Request) -> HTMLResponse:
             "libelles": STATUTS_PARSING_LIBELLES,
             "alerte_couverture": stats["couverture_parsing"] < SEUIL_COUVERTURE,
             "seuil": SEUIL_COUVERTURE,
+            "runs": runs,
+            "run_en_cours": any(r.get("statut") == "en_cours" for r in runs),
+            "erreur_ingestion": request.query_params.get("erreur"),
         },
     )
+
+
+@app.get("/documents/{document_id}", response_class=HTMLResponse)
+def ecran_document(request: Request, document_id: int) -> HTMLResponse:
+    """S3.14 : la fiche d'un document — tout ce que le pipeline en a fait."""
+    statut, fiche = api_client.appeler("GET", f"/documents/{document_id}")
+    if statut != 200:
+        return _page_erreur(request, statut, fiche)
+    return templates.TemplateResponse(
+        request=request,
+        name="document.html",
+        context={"fiche": fiche, "libelles": STATUTS_PARSING_LIBELLES},
+    )
+
+
+@app.post("/documents/upload")
+async def deposer_document(request: Request, fichier: UploadFile) -> RedirectResponse:
+    """S3.10 : dépôt → dossier corpus (statut « en attente d'indexation »)."""
+    contenu = await fichier.read()
+    statut, corps = api_client.envoyer_fichier(
+        "/documents/upload", fichier.filename or "", contenu, fichier.content_type or ""
+    )
+    if statut != 201:
+        return _rediriger(request, f"/documents?erreur={corps.get('detail', 'dépôt refusé')}")
+    return _rediriger(request, "/documents")
+
+
+@app.post("/documents/indexer")
+def lancer_indexation(request: Request) -> RedirectResponse:
+    """S3.10 (arbitrage : manuel) : lance le pipeline complet en arrière-plan."""
+    statut, corps = api_client.appeler("POST", "/ingestion/lancer")
+    if statut not in (200, 202):
+        return _rediriger(request, f"/documents?erreur={corps.get('detail', 'lancement refusé')}")
+    return _rediriger(request, "/documents")
+
+
+@app.post("/documents/runs/{run_id}/echec")
+def debloquer_run(request: Request, run_id: int) -> RedirectResponse:
+    api_client.appeler("POST", f"/ingestion/runs/{run_id}/echec")
+    return _rediriger(request, "/documents")
 
 
 @app.get("/sessions/{session_id}/export/{format_export}")

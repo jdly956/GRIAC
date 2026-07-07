@@ -128,6 +128,7 @@ class SessionResume(BaseModel):
     etape: str
     projet_id: int | None
     apercu_feature: str
+    titre: str | None = None  # nom libre (S3.13) — sinon l'aperçu de la Feature
 
 
 @router.get("/workflows")
@@ -135,12 +136,13 @@ def lister_sessions(connexion: Connexion) -> list[SessionResume]:
     """Liste des sessions — l'accueil E4 permet de RETROUVER une session en cours.
 
     Constaté en session de validation (06/07/2026) : sans liste, une session
-    perdue de vue ne se retrouve que par URL devinée.
+    perdue de vue ne se retrouve que par URL devinée. Les sessions archivées
+    (S3.13) sont masquées — jamais supprimées.
     """
     with connexion.cursor() as curseur:
         curseur.execute(
-            "SELECT id, etape, projet_id, feature FROM workflow_sessions "
-            "ORDER BY modifie_le DESC, id DESC"
+            "SELECT id, etape, projet_id, feature, titre FROM workflow_sessions "
+            "WHERE NOT archivee ORDER BY modifie_le DESC, id DESC"
         )
         return [
             SessionResume(
@@ -148,9 +150,41 @@ def lister_sessions(connexion: Connexion) -> list[SessionResume]:
                 etape=ligne[1],
                 projet_id=ligne[2],
                 apercu_feature=(ligne[3][:120] + "…") if len(ligne[3]) > 120 else ligne[3],
+                titre=ligne[4],
             )
             for ligne in curseur.fetchall()
         ]
+
+
+class SessionMaj(BaseModel):
+    titre: str | None = None
+    archivee: bool | None = None
+
+
+@router.patch("/workflows/{session_id}")
+def gerer_session(session_id: int, entree: SessionMaj, connexion: Connexion) -> dict:
+    """Renommer / archiver (S3.13) — l'archivage masque, ne détruit jamais."""
+    champs = []
+    parametres: dict = {"id": session_id}
+    if entree.titre is not None:
+        champs.append("titre = %(titre)s")
+        parametres["titre"] = entree.titre.strip() or None
+    if entree.archivee is not None:
+        champs.append("archivee = %(archivee)s")
+        parametres["archivee"] = entree.archivee
+    if not champs:
+        raise HTTPException(status_code=422, detail="Rien à modifier (titre ou archivee).")
+    with connexion.cursor() as curseur:
+        curseur.execute(
+            f"UPDATE workflow_sessions SET {', '.join(champs)} "
+            "WHERE id = %(id)s RETURNING id, titre, archivee",
+            parametres,
+        )
+        ligne = curseur.fetchone()
+        if ligne is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
+    connexion.commit()
+    return {"id": ligne[0], "titre": ligne[1], "archivee": ligne[2]}
 
 
 @router.get("/workflows/{session_id}")
@@ -162,26 +196,60 @@ def lire_session(session_id: int, connexion: Connexion) -> EtatSession:
     return etat
 
 
+class TraceSource(BaseModel):
+    nom: str
+    section: str
+    extrait: str  # l'extrait EXACT du chunk cité (A3, S3.9)
+
+
 class MessageFil(BaseModel):
     role: Literal["po", "assistant"]
     etape: str
     contenu: str
+    sources: list[TraceSource] = []
+    avertissements: list[str] = []
+    divergences: list[str] = []
 
 
 @router.get("/workflows/{session_id}/messages")
 def lire_messages(session_id: int, connexion: Connexion) -> list[MessageFil]:
-    """Le fil de la conversation — consommé par l'écran E4."""
+    """Le fil de la conversation, avec sa traçabilité persistée (S3.9/A3)."""
     with connexion.cursor() as curseur:
         if _lire_session(curseur, session_id) is None:
             raise HTTPException(status_code=404, detail=f"Session {session_id} introuvable")
         curseur.execute(
-            "SELECT role, etape, contenu FROM workflow_messages "
+            "SELECT id, role, etape, contenu FROM workflow_messages "
             "WHERE session_id = %(id)s ORDER BY id",
             {"id": session_id},
         )
+        lignes = curseur.fetchall()
+        curseur.execute(
+            "SELECT t.message_id, t.type, t.nom, t.section, t.extrait, t.contenu "
+            "FROM message_traces t JOIN workflow_messages m ON m.id = t.message_id "
+            "WHERE m.session_id = %(id)s ORDER BY t.id",
+            {"id": session_id},
+        )
+        traces: dict[int, dict[str, list]] = {}
+        for message_id, type_trace, nom, section, extrait, contenu in curseur.fetchall():
+            par_message = traces.setdefault(
+                message_id, {"sources": [], "avertissements": [], "divergences": []}
+            )
+            if type_trace == "source":
+                par_message["sources"].append(
+                    TraceSource(nom=nom or "", section=section or "", extrait=extrait or "")
+                )
+            elif type_trace == "avertissement":
+                par_message["avertissements"].append(contenu or "")
+            else:
+                par_message["divergences"].append(contenu or "")
         return [
-            MessageFil(role=ligne[0], etape=ligne[1], contenu=ligne[2])
-            for ligne in curseur.fetchall()
+            MessageFil(
+                role=ligne[1],
+                etape=ligne[2],
+                contenu=ligne[3],
+                **traces.get(ligne[0], {}),
+            )
+            for ligne in lignes
         ]
 
 

@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.6",
     "openai>=1.55",
     "httpx>=0.27",
+    "python-multipart>=0.0.9",
 ]
 
 # psycopg et sqlalchemy sont exigés par Alembic et le conteneur migrate ;
@@ -20,6 +21,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.27",
+    "python-multipart>=0.0.9",
 ]
 
 [build-system]

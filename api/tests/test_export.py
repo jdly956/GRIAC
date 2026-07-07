@@ -106,8 +106,23 @@ def brancher():
 SCRIPT_AVEC_STORIES = [
     (7,),  # session existe
     [("assistant", "redaction", f"---\n{US_A}\n---")],  # messages
+    [],  # aucune édition PO (S3.13)
     [("Seuil 10 Mo [HYPOTHÈSE À VALIDER]",)],  # hypothèses en attente
 ]
+
+
+def test_edition_du_po_gagne_a_l_export(brancher) -> None:
+    # S3.13 : la version éditée (clé = titre) remplace la story extraite du fil.
+    script = [
+        (7,),
+        [("assistant", "redaction", f"---\n{US_A}\n---")],
+        [("Consulter mon dossier", "**US — Consulter mon dossier**\n\nversion ÉDITÉE par le PO")],
+        [],
+    ]
+    brancher(script)
+    reponse = client.get("/workflows/7/export/markdown")
+    assert "version ÉDITÉE par le PO" in reponse.text
+    assert "**En tant que** usager" not in reponse.text  # l'originale est remplacée
 
 
 def test_endpoint_csv(brancher) -> None:

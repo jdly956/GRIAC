@@ -301,6 +301,261 @@ def test_htmx_prefixe_par_le_root_path(api) -> None:
     assert 'src="/proxy/8081/static/htmx.min.js"' in texte
 
 
+def test_conso_de_session_affichee(api) -> None:
+    # S3.11 : la conso s'affiche sous le titre — simple indication, l'écran
+    # reste servi si l'endpoint est absent (défaut 404 des autres tests).
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher(
+        "GET",
+        "/workflows/1/conso",
+        200,
+        {"appels": 3, "tokens_entree": 12000, "tokens_sortie": 4500},
+    )
+    texte = client.get("/sessions/1").text
+    assert "Consommation de la session : 3 appel(s)" in texte
+    assert "12 000 tokens entrée" in texte
+
+
+def test_jauge_tokens_en_telemetrie(api) -> None:
+    api.brancher(
+        "GET",
+        "/telemetrie",
+        200,
+        {
+            "sessions_total": 1,
+            "actifs_hebdo": [],
+            "stories_notees": 0,
+            "note_moyenne": None,
+            "pourcentage_conservees": None,
+            "validations_total": 0,
+            "taux_edition": None,
+        },
+    )
+    api.brancher(
+        "GET",
+        "/telemetrie/tokens",
+        200,
+        {
+            "total_entree": 200000,
+            "total_sortie": 50000,
+            "jour_total": 123000,
+            "tpd_quota": 2460000,
+            "jour_part_tpd": 0.05,
+            "par_source": [{"source": "chat", "tokens_entree": 150000, "tokens_sortie": 50000}],
+        },
+    )
+    texte = client.get("/telemetrie").text
+    assert "123 000 tokens" in texte
+    assert "5.0 % du quota quotidien" in texte
+    assert "Chat (sessions)" in texte
+
+
+def test_ecran_parametres_et_changement_de_modele(api) -> None:
+    # S3.12 : réglage global instance — modèle actif affiché, changement PUT,
+    # champ libre prioritaire sur le select, retour au défaut en DELETE.
+    api.brancher(
+        "GET",
+        "/parametres",
+        200,
+        {
+            "modele_chat": None,
+            "modele_actif": "openweight-medium",
+            "modeles_proposes": ["openweight-medium", "openweight-large"],
+        },
+    )
+    texte = client.get("/parametres").text
+    assert "openweight-medium" in texte and "défaut de l'instance" in texte
+    api.brancher("PUT", "/parametres/modele-chat", 200, {})
+    reponse = client.post(
+        "/parametres/modele",
+        data={"modele": "openweight-medium", "modele_libre": "mistral-medium"},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    appel = next(a for a in api.appels if a[0] == "PUT")
+    assert appel[2] == {"modele": "mistral-medium"}  # le champ libre prime
+    api.brancher("DELETE", "/parametres/modele-chat", 200, {})
+    client.post("/parametres/modele-defaut", follow_redirects=False)
+    assert any(a[0] == "DELETE" for a in api.appels)
+
+
+def test_modele_actif_affiche_sur_la_session(api) -> None:
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher(
+        "GET",
+        "/parametres",
+        200,
+        {
+            "modele_chat": "openweight-large",
+            "modele_actif": "openweight-large",
+            "modeles_proposes": [],
+        },
+    )
+    assert "Modèle : <strong>openweight-large</strong>" in client.get("/sessions/1").text
+
+
+DOCS_STATS = {
+    "total": 1,
+    "parsables": 1,
+    "parses": 1,
+    "echecs": 0,
+    "ocr_requis": 0,
+    "references": 1,
+    "couverture_parsing": 1.0,
+}
+
+
+def test_depot_et_indexation_depuis_mes_documents(api, monkeypatch: pytest.MonkeyPatch) -> None:
+    # S3.10 : formulaire de dépôt + bouton « Indexer maintenant » (manuel) +
+    # suivi des runs nœud par nœud, rafraîchi tant qu'un run tourne.
+    api.brancher("GET", "/documents", 200, [])
+    api.brancher("GET", "/documents/stats", 200, DOCS_STATS)
+    api.brancher(
+        "GET",
+        "/ingestion/runs",
+        200,
+        [
+            {
+                "id": 2,
+                "statut": "en_cours",
+                "corpus": "corpus",
+                "rapport": {"scan": "ok"},
+                "demarre_le": "2026-07-06 21:10",
+                "termine_le": None,
+            }
+        ],
+    )
+    texte = client.get("/documents").text
+    assert "Déposer un document" in texte
+    assert "Indexation en cours…" in texte  # bouton désactivé pendant un run
+    assert 'http-equiv="refresh"' in texte  # suivi en direct
+    assert "scan : ok" in texte
+
+    envois: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        api_client,
+        "envoyer_fichier",
+        lambda chemin, nom, contenu, ct: envois.append((chemin, nom)) or (201, {}),
+    )
+    reponse = client.post(
+        "/documents/upload",
+        files={"fichier": ("spec.docx", b"contenu", "application/msword")},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    assert envois == [("/documents/upload", "spec.docx")]
+
+    api.brancher("POST", "/ingestion/lancer", 202, {"id": 3})
+    assert client.post("/documents/indexer", follow_redirects=False).status_code == 303
+    assert any(a[:2] == ("POST", "/ingestion/lancer") for a in api.appels)
+
+
+def test_traces_du_fil_avec_extrait_exact(api) -> None:
+    # S3.9 : au rechargement, chaque message assistant garde ses sources —
+    # l'extrait exact du chunk est consultable (la promesse A3).
+    messages = [
+        {
+            "role": "assistant",
+            "etape": "interview",
+            "contenu": "Réponse sourcée",
+            "sources": [
+                {"nom": "spec_v2.docx", "section": "Spec > CA", "extrait": "délai de 30 jours"}
+            ],
+            "avertissements": ["Budget dépassé"],
+            "divergences": [],
+        }
+    ]
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, messages)
+    texte = client.get("/sessions/1").text
+    assert "Sources mobilisées (1)" in texte
+    assert "extrait exact" in texte and "délai de 30 jours" in texte
+    assert "Budget dépassé" in texte
+
+
+def test_edition_et_gestion_de_session(api) -> None:
+    # S3.13 : panneau d'édition (version éditée gagnante à l'export), copie,
+    # renommage et archivage (masque sans détruire).
+    api.brancher("GET", "/workflows/1", 200, dict(ETAT_SESSION, hypotheses=[], nb_en_attente=0))
+    api.brancher("GET", "/workflows/1/messages", 200, [])
+    api.brancher(
+        "GET",
+        "/workflows/1/stories/contenus",
+        200,
+        [{"titre": "Consulter mon dossier", "contenu": "**US — …**", "editee": True}],
+    )
+    texte = client.get("/sessions/1").text
+    assert "Stories — éditer / copier (1)" in texte
+    assert "éditée — cette version part à l'export" in texte
+    assert "navigator.clipboard.writeText" in texte  # bouton copier (dégradé sans JS : textarea)
+    assert "Gérer la session" in texte
+
+    api.brancher("PUT", "/workflows/1/stories/edition", 200, {})
+    reponse = client.post(
+        "/sessions/1/stories/edition",
+        data={"titre": "Consulter mon dossier", "contenu": "édité"},
+        follow_redirects=False,
+    )
+    assert reponse.status_code == 303
+    appel = next(a for a in api.appels if a[0] == "PUT" and "edition" in a[1])
+    assert appel[2] == {"titre": "Consulter mon dossier", "contenu": "édité"}
+
+    api.brancher("PATCH", "/workflows/1", 200, {})
+    archive = client.post("/sessions/1/gerer", data={"archiver": "1"}, follow_redirects=False)
+    assert archive.headers["location"] == "/"  # retour à l'accueil après archivage
+    patch = next(a for a in api.appels if a[0] == "PATCH")
+    assert patch[2] == {"archivee": True}
+
+
+def test_fiche_document_affiche_le_traitement(api) -> None:
+    # S3.14 : depuis « Mes documents », chaque document a sa fiche — parsing,
+    # dérivé markdown rendu, chunks avec état d'embedding.
+    api.brancher(
+        "GET",
+        "/documents/1",
+        200,
+        {
+            "id": 1,
+            "chemin": "pa/spec-v2.docx",
+            "nom": "spec-v2.docx",
+            "extension": "docx",
+            "taille_octets": 12345,
+            "sha256": "abc123def456ghij",
+            "statut_parsing": "parse",
+            "erreur_parsing": None,
+            "date_parsing": "2026-07-06 22:00",
+            "chemin_derive": "derived/md/abc.md",
+            "derive_apercu": "# Titre parsé\n\n| A | B |\n|---|---|\n| 1 | 2 |",
+            "derive_tronque": False,
+            "est_reference": True,
+            "doublon_de": None,
+            "projet_suggere": "pa",
+            "version_no": 2,
+            "groupe_version": "spec",
+            "chunks": [
+                {
+                    "ordinal": 0,
+                    "section": "Spec > Exigences",
+                    "nb_tokens": 640,
+                    "contenu": "contenu exact du chunk",
+                    "embarque": True,
+                }
+            ],
+            "nb_chunks": 1,
+            "nb_embarques": 1,
+        },
+    )
+    texte = client.get("/documents/1").text
+    assert "Voir le résultat du parsing" in texte
+    assert "<table>" in texte  # le dérivé markdown est rendu
+    assert "Chunks (E1, nœud D) — 1, dont 1 vectorisé(s)" in texte
+    assert "Spec &gt; Exigences" in texte or "Spec > Exigences" in texte
+    assert "✅ vectorisé" in texte
+    assert "contenu exact du chunk" in texte
+
+
 def test_session_inconnue_page_erreur(api) -> None:
     api.brancher("GET", "/workflows/99", 404, {"detail": "Session 99 introuvable"})
     reponse = client.get("/sessions/99")

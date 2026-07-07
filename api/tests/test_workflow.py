@@ -213,13 +213,31 @@ def brancher():
 def test_liste_des_sessions_pour_l_accueil(brancher) -> None:
     # Sans liste, une session perdue de vue ne se retrouve que par URL devinée
     # (constaté session de validation, 06/07/2026).
-    brancher([[(7, "interview", None, "F" * 130), (5, "synthese", 1, "Feature courte")]])
+    brancher(
+        [[(7, "interview", None, "F" * 130, None), (5, "synthese", 1, "Feature courte", "Mon nom")]]
+    )
     reponse = client.get("/workflows")
     assert reponse.status_code == 200
     corps = reponse.json()
     assert [session["id"] for session in corps] == [7, 5]
     assert corps[0]["apercu_feature"] == "F" * 120 + "…"  # aperçu tronqué
-    assert corps[1]["apercu_feature"] == "Feature courte"
+    assert corps[1]["titre"] == "Mon nom"  # nom libre (S3.13)
+
+
+def test_renommer_et_archiver_une_session(brancher) -> None:
+    # S3.13 : renommer (titre libre) et archiver (masquée, jamais supprimée).
+    connexion = brancher([(7, "Priorisation actes", False)])
+    corps = client.patch("/workflows/7", json={"titre": "  Priorisation actes  "}).json()
+    assert corps["titre"] == "Priorisation actes"
+    maj = [p for r, p in connexion.curseur.requetes if "UPDATE workflow_sessions" in r]
+    assert maj[0]["titre"] == "Priorisation actes"  # espaces nettoyés
+
+    connexion = brancher([(7, None, True)])
+    assert client.patch("/workflows/7", json={"archivee": True}).json()["archivee"] is True
+    assert client.patch("/workflows/7", json={}).status_code == 422  # rien à modifier
+
+    brancher([None])
+    assert client.patch("/workflows/99", json={"archivee": True}).status_code == 404
 
 
 def test_creation_session_enregistre_les_hypotheses_de_la_feature(brancher) -> None:
@@ -362,7 +380,11 @@ def test_lecture_du_fil(brancher) -> None:
         [
             (7, "interview", None),  # _lire_session (contrôle d'existence)
             [],
-            [("po", "recuperation_feature", "Ma feature"), ("assistant", "interview", "Q1 ?")],
+            [
+                (1, "po", "recuperation_feature", "Ma feature"),
+                (2, "assistant", "interview", "Q1 ?"),
+            ],
+            [],  # aucune trace persistée (S3.9)
         ]
     )
     reponse = client.get("/workflows/7/messages")
@@ -370,3 +392,27 @@ def test_lecture_du_fil(brancher) -> None:
     fil = reponse.json()
     assert [message["role"] for message in fil] == ["po", "assistant"]
     assert fil[1]["contenu"] == "Q1 ?"
+
+
+def test_lecture_du_fil_avec_traces_persistees(brancher) -> None:
+    # S3.9 (A3 complet) : sources — avec l'extrait exact — avertissements et
+    # divergences reviennent avec le fil au rechargement (fin de la v1 S2.8).
+    brancher(
+        [
+            (7, "interview", None),
+            [],
+            [(2, "assistant", "interview", "Réponse sourcée")],
+            [
+                (2, "source", "spec_v2.docx", "Spec > CA", "le délai est de 30 jours", None),
+                (2, "avertissement", None, None, None, "Budget dépassé"),
+                (2, "divergence", None, None, None, "[DIVERGENCE] 15 vs 30 jours [Source : spec]"),
+            ],
+        ]
+    )
+    fil = client.get("/workflows/7/messages").json()
+    message = fil[0]
+    assert message["sources"] == [
+        {"nom": "spec_v2.docx", "section": "Spec > CA", "extrait": "le délai est de 30 jours"}
+    ]
+    assert message["avertissements"] == ["Budget dépassé"]
+    assert len(message["divergences"]) == 1
