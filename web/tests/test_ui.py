@@ -934,6 +934,7 @@ def test_association_dossiers_envoie_un_put_complet(api) -> None:
 
 DOCUMENTS = [
     {
+        "id": 1,
         "chemin": "projet-alpha/spec-v2.docx",
         "nom": "spec-v2.docx",
         "extension": "docx",
@@ -941,8 +942,10 @@ DOCUMENTS = [
         "est_reference": True,
         "doublon": False,
         "projet_suggere": "projet-alpha",
+        "est_obsolete": False,
     },
     {
+        "id": 2,
         "chemin": "divers/scan.pdf",
         "nom": "scan.pdf",
         "extension": "pdf",
@@ -950,6 +953,7 @@ DOCUMENTS = [
         "est_reference": False,
         "doublon": False,
         "projet_suggere": None,
+        "est_obsolete": True,  # R8 : la bascule « Réactiver » s'affiche
     },
 ]
 
@@ -982,6 +986,42 @@ def test_ecran_documents_couverture_ok_sans_alerte(api) -> None:
     reponse = client.get("/documents")
     assert reponse.status_code == 200
     assert "Couverture documentaire faible" not in reponse.text
+
+
+def test_inventaire_groupe_par_dossier_avec_obsolete(api) -> None:
+    # R8 : inventaire regroupé PAR DOSSIER (la clé A6/S3.18) avec projets
+    # associés affichés ; bascule obsolète/réactiver par document (H10).
+    api.brancher("GET", "/documents", 200, DOCUMENTS)
+    api.brancher("GET", "/documents/stats", 200, _stats(1.0))
+    api.brancher(
+        "GET",
+        "/projects",
+        200,
+        [
+            {
+                "id": 1,
+                "nom": "Téléservice X",
+                "contexte": "",
+                "nfrs": [],
+                "dossiers": [{"dossier": "projet-alpha", "origine": "po"}],
+            }
+        ],
+    )
+    texte = client.get("/documents").text
+    assert "📁 projet-alpha" in texte and "📁 divers" in texte  # groupes
+    assert "associé au(x) projet(s) : Téléservice X" in texte
+    assert "associé à aucun projet" in texte  # divers — le trou A6 est visible
+    assert 'action="/documents/1/obsolete"' in texte
+    assert "Réactiver" in texte  # scan.pdf est obsolète → bascule inverse
+    assert ">obsolète<" in texte  # badge sur la ligne
+
+    api.brancher("PATCH", "/documents/1", 200, {})
+    reponse = client.post(
+        "/documents/1/obsolete", data={"est_obsolete": "1"}, follow_redirects=False
+    )
+    assert reponse.status_code == 303
+    patch = next(a for a in api.appels if a[0] == "PATCH")
+    assert patch[2] == {"est_obsolete": True}
 
 
 def test_export_proxifie(api, monkeypatch: pytest.MonkeyPatch) -> None:

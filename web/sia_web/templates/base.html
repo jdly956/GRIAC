@@ -100,6 +100,21 @@
       background: var(--background-default-grey, #fff); }
     .action-en-ligne { display: inline; }
     .actions-ligne { white-space: nowrap; }
+    /* R8 : tuiles d'état du corpus + inventaire regroupé par dossier. */
+    .tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+      gap: .6rem; margin: .5rem 0 1rem; }
+    .tuile { border: 1px solid var(--border-default-grey, #ddd); border-radius: .25rem;
+      background: var(--background-default-grey, #fff); padding: .5rem .75rem;
+      display: flex; flex-direction: column; }
+    .tuile__valeur { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .tuile__intitule { font-size: .72rem; color: var(--text-mention-grey, #666);
+      text-transform: uppercase; letter-spacing: .03em; }
+    .tuile--attention .tuile__valeur { color: var(--text-default-warning, #b34000); }
+    .compteur { background: var(--background-action-high-blue-france, #000091);
+      color: var(--text-inverted-blue-france, #fff); border-radius: .7rem;
+      font-size: .72rem; padding: 0 .5rem; font-weight: 700; }
+    .dossier-groupe, .suivi-runs { margin-bottom: .6rem; }
+    .dossier-groupe > summary .fr-hint-text { font-weight: 400; }
   </style>
 </head>
 <body>

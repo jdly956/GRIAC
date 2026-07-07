@@ -13,12 +13,28 @@
   <span class="fr-badge fr-badge--info">{{ libelles.get(fiche.statut_parsing, fiche.statut_parsing) }}</span>
   {% if fiche.est_reference %}<span class="fr-badge fr-badge--success">référence</span>{% endif %}
   {% if fiche.doublon_de %}<span class="fr-badge">doublon</span>{% endif %}
+  {% if fiche.est_obsolete %}<span class="fr-badge">obsolète — exclu des recherches</span>{% endif %}
 </h1>
 
 {# S3.17 : télécharger l'original / supprimer (base + fichiers — définitif). #}
 <div class="panneau">
   <h2>Actions</h2>
   <p><a class="fr-btn fr-btn--secondary" href="{{ racine }}/documents/{{ fiche.id }}/original" download="{{ fiche.nom }}">Télécharger l'original</a></p>
+  {# R8 (H10) : obsolète = exclu des recherches, réversible — l'alternative
+     douce à la suppression. #}
+  <form method="post" action="{{ racine }}/documents/{{ fiche.id }}/obsolete" class="action-secondaire">
+    {% if fiche.est_obsolete %}
+    <input type="hidden" name="est_obsolete" value="0">
+    <button class="fr-btn fr-btn--secondary" type="submit">Réactiver ce document</button>
+    <p><em>Le document redevient cité par la recherche — immédiat (chunks et
+      embeddings conservés, aucune ré-indexation).</em></p>
+    {% else %}
+    <input type="hidden" name="est_obsolete" value="1">
+    <button class="fr-btn fr-btn--secondary" type="submit">Marquer obsolète</button>
+    <p><em>Le document sort des recherches sans rien détruire — réversible,
+      contrairement à la suppression.</em></p>
+    {% endif %}
+  </form>
   <form method="post" action="{{ racine }}/documents/{{ fiche.id }}/supprimer"
         onsubmit="return confirm('Supprimer définitivement « {{ fiche.nom }} » ? Le fichier source, son parsing et ses chunks seront retirés du corpus et de la recherche.')">
     <button class="fr-btn fr-btn--secondary" type="submit">Supprimer ce document</button>

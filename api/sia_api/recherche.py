@@ -40,6 +40,7 @@ REQUETE_DOSSIERS_PROJET = "SELECT dossier FROM project_dossiers WHERE project_id
 
 FILTRES_COMMUNS = """
       AND (%(tout_statut)s OR d.est_reference)
+      AND NOT d.est_obsolete
       AND (%(dossiers)s::text[] IS NULL OR d.projet_suggere = ANY(%(dossiers)s::text[]))
 """
 

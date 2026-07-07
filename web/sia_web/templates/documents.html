@@ -2,63 +2,12 @@
 {% block titre %}Mes documents{% endblock %}
 {% block contenu %}
 {% if run_en_cours %}<meta http-equiv="refresh" content="5">{% endif %}
-<h1>Mes documents</h1>
+<div class="entete-page">
+  <h1>Mes documents</h1>
+</div>
 
 {% if erreur_ingestion %}
 <div class="fr-alert fr-alert--error" role="alert"><p>{{ erreur_ingestion }}</p></div>
-{% endif %}
-
-{# S3.10 : dépôt + indexation MANUELLE (arbitrage 06/07 — maîtrise du quota
-   d'embeddings) + suivi du pipeline nœud par nœud. #}
-<div class="panneau">
-  <h2>Ajouter des documents</h2>
-  <form method="post" action="{{ racine }}/documents/upload" enctype="multipart/form-data">
-    <label class="fr-label" for="fichier">Déposer un document (docx, pdf, pptx, xlsx, eml, md, txt, odt — 50 Mo max)</label>
-    <input class="fr-input" type="file" id="fichier" name="fichier" required>
-    {# S3.18 : dossier OBLIGATOIRE — c'est lui qu'on associe à un projet (A6) ;
-       saisir un nom nouveau crée le dossier au dépôt. #}
-    <label class="fr-label" for="dossier">Dossier de destination (obligatoire)
-      <span class="fr-hint-text">C'est ce dossier qui est associé à un projet — choisir un
-        dossier existant ou taper un nouveau nom pour le créer.</span>
-    </label>
-    <input class="fr-input" id="dossier" name="dossier" list="dossiers-existants" required>
-    <datalist id="dossiers-existants">
-      {% for nom_dossier in dossiers %}<option value="{{ nom_dossier }}">{% endfor %}
-    </datalist>
-    <button class="fr-btn" type="submit">Déposer</button>
-  </form>
-  <form method="post" action="{{ racine }}/documents/indexer" class="action-secondaire">
-    <p>Le dépôt ne suffit pas : l'indexation (scan → parsing → qualification → chunks →
-      embeddings) se lance <strong>manuellement</strong> — elle consomme le quota Albert.</p>
-    <button class="fr-btn" type="submit" {% if run_en_cours %}disabled{% endif %}>
-      {% if run_en_cours %}Indexation en cours…{% else %}Indexer maintenant{% endif %}
-    </button>
-  </form>
-</div>
-
-{% if runs %}
-<div class="panneau">
-  <h2>Suivi des indexations{% if run_en_cours %} — ⏳ run en cours (page rafraîchie toutes les 5 s){% endif %}</h2>
-  <table class="fr-table">
-    <thead><tr><th>Run</th><th>Statut</th><th>Avancement par nœud</th><th>Début</th><th>Fin</th><th></th></tr></thead>
-    <tbody>
-      {% for run in runs %}
-      <tr>
-        <td>#{{ run.id }}</td>
-        <td>{{ run.statut }}</td>
-        <td>{% for noeud, resultat in run.rapport.items() %}{{ noeud }} : {{ resultat }}<br>{% else %}démarrage…{% endfor %}</td>
-        <td>{{ run.demarre_le }}</td>
-        <td>{{ run.termine_le or "—" }}</td>
-        <td>{% if run.statut == "en_cours" %}
-          <form method="post" action="{{ racine }}/documents/runs/{{ run.id }}/echec">
-            <button class="fr-btn fr-btn--sm fr-btn--secondary" type="submit">Marquer en échec</button>
-          </form>
-        {% endif %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
 {% endif %}
 
 {% if alerte_couverture %}
@@ -71,38 +20,121 @@
 </div>
 {% endif %}
 
-<div class="panneau">
-  <h2>État du corpus</h2>
-  <ul>
-    <li>{{ stats.total }} documents, dont {{ stats.parsables }} parsables (docx/pdf)</li>
-    <li>{{ stats.parses }} indexés — couverture
-      {{ (stats.couverture_parsing * 100) | round(1) }} %</li>
-    <li>{{ stats.echecs }} en échec, {{ stats.ocr_requis }} OCR requis</li>
-    <li>{{ stats.references }} documents de référence</li>
-  </ul>
+{# R8 : l'état du corpus d'un coup d'œil — tuiles (A5). #}
+<div class="tuiles">
+  <div class="tuile"><span class="tuile__valeur">{{ stats.total }}</span><span class="tuile__intitule">documents</span></div>
+  <div class="tuile"><span class="tuile__valeur">{{ stats.parses }}</span><span class="tuile__intitule">indexés</span></div>
+  <div class="tuile"><span class="tuile__valeur">{{ (stats.couverture_parsing * 100) | round(1) }} %</span><span class="tuile__intitule">couverture ({{ stats.parsables }} parsables)</span></div>
+  <div class="tuile{% if stats.echecs or stats.ocr_requis %} tuile--attention{% endif %}"><span class="tuile__valeur">{{ stats.echecs + stats.ocr_requis }}</span><span class="tuile__intitule">à traiter ({{ stats.echecs }} échec(s), {{ stats.ocr_requis }} OCR)</span></div>
+  <div class="tuile"><span class="tuile__valeur">{{ stats.references }}</span><span class="tuile__intitule">références</span></div>
 </div>
 
+{# S3.10/S3.18 : dépôt + indexation MANUELLE (maîtrise du quota d'embeddings). #}
 <div class="panneau">
-  <h2>Inventaire ({{ documents | length }})</h2>
-  {% if documents %}
-  <table class="fr-table">
-    <thead>
-      <tr><th>Chemin</th><th>Statut</th><th>Référence</th><th>Doublon</th><th>Projet suggéré</th></tr>
-    </thead>
-    <tbody>
-      {% for document in documents %}
-      <tr>
-        <td><a href="{{ racine }}/documents/{{ document.id }}">{{ document.chemin }}</a></td>
-        <td>{{ libelles.get(document.statut_parsing, document.statut_parsing) }}</td>
-        <td>{{ "✔ référence" if document.est_reference else "—" }}</td>
-        <td>{{ "doublon" if document.doublon else "—" }}</td>
-        <td>{{ document.projet_suggere or "—" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p>Aucun document — lancez l'ingestion (<code>make ingest CORPUS=…</code>).</p>
-  {% endif %}
+  <h2 class="fr-h6">Ajouter des documents</h2>
+  <form method="post" action="{{ racine }}/documents/upload" enctype="multipart/form-data">
+    <label class="fr-label" for="fichier">Déposer un document (docx, pdf, pptx, xlsx, eml, md, txt, odt — 50 Mo max)</label>
+    <input class="fr-input" type="file" id="fichier" name="fichier" required>
+    <label class="fr-label" for="dossier">Dossier de destination (obligatoire)
+      <span class="fr-hint-text">C'est ce dossier qui est associé à un projet — choisir un
+        dossier existant ou taper un nouveau nom pour le créer.</span>
+    </label>
+    <input class="fr-input" id="dossier" name="dossier" list="dossiers-existants" required>
+    <datalist id="dossiers-existants">
+      {% for nom_dossier in dossiers %}<option value="{{ nom_dossier }}">{% endfor %}
+    </datalist>
+    <button class="fr-btn" type="submit">Déposer</button>
+  </form>
+  <form method="post" action="{{ racine }}/documents/indexer" class="action-secondaire">
+    <p class="fr-hint-text">Le dépôt ne suffit pas : l'indexation (scan → parsing → qualification →
+      chunks → embeddings) se lance <strong>manuellement</strong> — elle consomme le quota Albert.</p>
+    <button class="fr-btn" type="submit" {% if run_en_cours %}disabled{% endif %}>
+      {% if run_en_cours %}Indexation en cours…{% else %}Indexer maintenant{% endif %}
+    </button>
+  </form>
 </div>
+
+{% if runs %}
+{# R8 : le suivi des runs vit replié — déplié tant qu'un run tourne. #}
+<details class="panneau-rail suivi-runs"{% if run_en_cours %} open{% endif %}>
+  <summary>Historique des indexations ({{ runs | length }}){% if run_en_cours %} — ⏳ run en cours (page rafraîchie toutes les 5 s){% endif %}</summary>
+  <div class="panneau-rail__corps">
+    <div class="fr-table">
+      <table>
+        <caption>Runs d'indexation</caption>
+        <thead><tr><th>Run</th><th>Statut</th><th>Avancement par nœud</th><th>Début</th><th>Fin</th><th></th></tr></thead>
+        <tbody>
+          {% for run in runs %}
+          <tr>
+            <td>#{{ run.id }}</td>
+            <td>{{ run.statut }}</td>
+            <td>{% for noeud, resultat in run.rapport.items() %}{{ noeud }} : {{ resultat }}<br>{% else %}démarrage…{% endfor %}</td>
+            <td>{{ run.demarre_le }}</td>
+            <td>{{ run.termine_le or "—" }}</td>
+            <td>{% if run.statut == "en_cours" %}
+              <form method="post" action="{{ racine }}/documents/runs/{{ run.id }}/echec">
+                <button class="fr-btn fr-btn--sm fr-btn--secondary" type="submit">Marquer en échec</button>
+              </form>
+            {% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</details>
+{% endif %}
+
+<h2 class="fr-h6">Inventaire ({{ nb_documents }})</h2>
+{% if dossiers_groupes %}
+{# R8 : regroupé PAR DOSSIER — la clé d'association projet (A6/S3.18). #}
+{% for groupe in dossiers_groupes %}
+<details class="panneau-rail dossier-groupe" open>
+  <summary>📁 {{ groupe.nom }} <span class="compteur">{{ groupe.documents | length }}</span>
+    <span class="fr-hint-text">{% if groupe.projets %}associé au(x) projet(s) : {{ groupe.projets | join(", ") }}{% else %}associé à aucun projet (A6 — cochez-le sur l'écran du projet){% endif %}</span>
+  </summary>
+  <div class="panneau-rail__corps">
+    <div class="fr-table">
+      <table>
+        <caption>Documents du dossier {{ groupe.nom }}</caption>
+        <thead>
+          <tr><th>Document</th><th>Statut</th><th>Qualification</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {% for document in groupe.documents %}
+          <tr>
+            <td><a class="fr-link" href="{{ racine }}/documents/{{ document.id }}">{{ document.nom }}</a></td>
+            <td><span class="fr-badge {{ badges_statuts.get(document.statut_parsing, 'fr-badge--info') }}">{{ libelles.get(document.statut_parsing, document.statut_parsing) }}</span>
+              {% if document.est_obsolete %}<span class="fr-badge">obsolète</span>{% endif %}</td>
+            <td>{{ "✔ référence" if document.est_reference else "" }}{{ " · doublon" if document.doublon else "" }}</td>
+            <td class="actions-ligne">
+              <a class="fr-btn fr-btn--sm fr-btn--tertiary" href="{{ racine }}/documents/{{ document.id }}">Fiche</a>
+              <a class="fr-btn fr-btn--sm fr-btn--tertiary" href="{{ racine }}/documents/{{ document.id }}/original" download="{{ document.nom }}">Original</a>
+              <form method="post" action="{{ racine }}/documents/{{ document.id }}/obsolete" class="action-en-ligne">
+                {% if document.est_obsolete %}
+                <input type="hidden" name="est_obsolete" value="0">
+                <button class="fr-btn fr-btn--sm fr-btn--tertiary" type="submit"
+                  title="Le document redevient cité par la recherche — immédiat, sans ré-indexation">Réactiver</button>
+                {% else %}
+                <input type="hidden" name="est_obsolete" value="1">
+                <button class="fr-btn fr-btn--sm fr-btn--tertiary" type="submit"
+                  title="Sort des recherches sans rien détruire — réversible">Obsolète</button>
+                {% endif %}
+              </form>
+              <form method="post" action="{{ racine }}/documents/{{ document.id }}/supprimer" class="action-en-ligne"
+                    onsubmit="return confirm('Supprimer définitivement « {{ document.nom }} » ? Le fichier source, son parsing et ses chunks seront retirés du corpus et de la recherche.')">
+                <button class="fr-btn fr-btn--sm fr-btn--tertiary" type="submit">Supprimer</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</details>
+{% endfor %}
+{% else %}
+<p>Aucun document — déposez-en un ci-dessus (ou <code>make ingest CORPUS=…</code>).</p>
+{% endif %}
 {% endblock %}

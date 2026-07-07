@@ -686,6 +686,15 @@ def associer_dossiers(
 # --- Écran « mes documents » (E4.3, S2.9, arbitrage A5) ---
 
 
+# R8 : classes de badge DSFR par statut de parsing (état lisible d'un coup d'œil).
+BADGES_STATUTS = {
+    "parse": "fr-badge--success",
+    "echec": "fr-badge--error",
+    "ocr_requis": "fr-badge--warning",
+    "a_parser": "fr-badge--info",
+}
+
+
 @app.get("/documents", response_class=HTMLResponse)
 def ecran_documents(request: Request) -> HTMLResponse:
     statut, documents = api_client.appeler("GET", "/documents")
@@ -700,13 +709,31 @@ def ecran_documents(request: Request) -> HTMLResponse:
     # S3.18 : dossiers existants pour la datalist du dépôt — dégradé en liste vide.
     statut_dossiers, dossiers = api_client.appeler("GET", "/documents/dossiers")
     dossiers = dossiers if statut_dossiers == 200 and isinstance(dossiers, list) else []
+    # R8 : inventaire regroupé PAR DOSSIER (la clé d'association A6, S3.18),
+    # avec les projets associés — dégradé sans l'endpoint projets.
+    statut_projets, projets = api_client.appeler("GET", "/projects")
+    projets_par_dossier: dict[str, list[str]] = {}
+    if statut_projets == 200 and isinstance(projets, list):
+        for projet in projets:
+            for association in projet.get("dossiers", []):
+                projets_par_dossier.setdefault(association["dossier"], []).append(projet["nom"])
+    groupes: dict[str, list] = {}
+    for document in documents:
+        dossier = document["chemin"].split("/")[0] if "/" in document["chemin"] else "(racine)"
+        groupes.setdefault(dossier, []).append(document)
+    dossiers_groupes = [
+        {"nom": nom, "documents": docs, "projets": projets_par_dossier.get(nom, [])}
+        for nom, docs in sorted(groupes.items())
+    ]
     return templates.TemplateResponse(
         request=request,
         name="documents.html",
         context={
-            "documents": documents,
+            "dossiers_groupes": dossiers_groupes,
+            "nb_documents": len(documents),
             "stats": stats,
             "libelles": STATUTS_PARSING_LIBELLES,
+            "badges_statuts": BADGES_STATUTS,
             "alerte_couverture": stats["couverture_parsing"] < SEUIL_COUVERTURE,
             "seuil": SEUIL_COUVERTURE,
             "runs": runs,
@@ -776,6 +803,17 @@ def telecharger_original(document_id: int) -> Response:
         media_type=content_type,
         headers=entetes,
     )
+
+
+@app.post("/documents/{document_id}/obsolete")
+def basculer_obsolete(
+    request: Request, document_id: int, est_obsolete: Annotated[str, Form()]
+) -> RedirectResponse:
+    """R8 (H10) : marquer obsolète (exclu des recherches) / réactiver — réversible."""
+    api_client.appeler(
+        "PATCH", f"/documents/{document_id}", json={"est_obsolete": est_obsolete == "1"}
+    )
+    return _rediriger(request, "/documents")
 
 
 @app.post("/documents/{document_id}/supprimer")
