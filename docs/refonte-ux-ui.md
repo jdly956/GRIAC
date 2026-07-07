@@ -169,15 +169,23 @@ Une page à deux sections ancrées : Télémétrie (indicateurs + jauge tpd) et 
 
 **Vague 2 — parcours quotidien**
 
-- **R7 — Accueil refondu** : liste d'abord, tableau avec badges/actions, création repliée, archivées.
-- **R8 — Mes documents refondu** : tuiles, regroupement par dossier (+ projets associés),
-  actions par ligne, « marquer obsolète » ⚙ (H10), runs en historique replié.
-- **R9 — Projets** ⚙ : édition contexte/NFR après création, archiver/supprimer (H9), écran fiche aligné.
+- [x] **R7 — Accueil refondu** : liste d'abord, tableau avec badges/actions, création repliée,
+  archivées consultables + **désarchivage**. *Livrée le 07/07 (plan `r7-accueil.md`).*
+- [x] **R8 — Mes documents refondu** : tuiles, regroupement par dossier (+ projets associés),
+  actions par ligne, « marquer obsolète » ⚙ (H10, migration 0016 + filtre E2), runs en
+  historique replié. *Livrée le 07/07 (plan `r8-mes-documents.md`).*
+- [x] **R9 — Projets** ⚙ : édition contexte/NFR après création, archiver (migration 0017) /
+  supprimer (H9 : suppression libre, sessions orphelines — FK SET NULL 0008 déjà en place),
+  écran fiche aligné. *Livrée le 07/07 (plan `r9-projets.md`).*
 
 **Vague 3 — périphérie**
 
-- **R10 — Suivi & réglages + fiche document** : fusion télémétrie/paramètres (H12),
-  fiche document alignée sur le socle.
+- [x] **R10 — Suivi & réglages** : fusion télémétrie/paramètres (H12), une page à deux
+  sections ancrées, anciennes routes redirigées, navigation ramenée à 4 entrées (UX9) ;
+  la fiche document avait déjà été alignée par R1/R8. *Livrée le 07/07
+  (plan `r10-suivi-reglages.md`).*
+
+**Parcours de validation pod consolidé : `docs/plans-test/r0-refonte-parcours-pod.md`.**
 
 ## 6. Contraintes tenues (rappel des invariants)
 

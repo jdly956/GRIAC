@@ -1297,6 +1297,49 @@ def test_lot_sans_selection_ne_touche_pas_l_api(api) -> None:
     assert not any("decider-lot" in chemin for _, chemin, _ in api.appels)
 
 
+# --- R10 : « Suivi & réglages » fusionnés (UX9/H12) ---
+
+
+def test_suivi_et_reglages_fusionnes(api) -> None:
+    # R10 : une page à deux sections ancrées ; les anciennes routes redirigent ;
+    # la navigation passe à 4 entrées ; chaque section dégrade indépendamment.
+    api.brancher(
+        "GET",
+        "/telemetrie",
+        200,
+        {
+            "sessions_total": 3,
+            "actifs_hebdo": [],
+            "stories_notees": 0,
+            "note_moyenne": None,
+            "pourcentage_conservees": None,
+            "validations_total": 0,
+            "taux_edition": None,
+        },
+    )
+    api.brancher(
+        "GET",
+        "/parametres",
+        200,
+        {
+            "modele_chat": None,
+            "modele_actif": "openweight-medium",
+            "modeles_proposes": ["openweight-medium"],
+        },
+    )
+    texte = client.get("/suivi").text
+    assert 'id="telemetrie"' in texte and 'id="parametres"' in texte  # deux sections
+    assert "3 sessions au total" in texte and "openweight-medium" in texte
+    assert 'href="/suivi" aria-current="true">Suivi &amp; réglages</a>' in texte  # nav 4 entrées
+    assert "Télémétrie</a>" not in texte  # les anciennes entrées ont disparu
+
+    redirection = client.get("/telemetrie", follow_redirects=False)
+    assert redirection.status_code == 303
+    assert redirection.headers["location"] == "/suivi#telemetrie"
+    redirection = client.get("/parametres", follow_redirects=False)
+    assert redirection.headers["location"] == "/suivi#parametres"
+
+
 # --- R7 : accueil orienté reprise + sessions archivées (UX10/UX8) ---
 
 

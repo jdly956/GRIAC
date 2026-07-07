@@ -47,8 +47,10 @@ def _contexte_racine(request: Request) -> dict[str, str]:
 _NAV_PREFIXES = [
     ("/projets", "projets"),
     ("/documents", "documents"),
-    ("/telemetrie", "telemetrie"),
-    ("/parametres", "parametres"),
+    # R10 (UX9) : télémétrie + paramètres fusionnés sous « Suivi & réglages ».
+    ("/suivi", "suivi"),
+    ("/telemetrie", "suivi"),
+    ("/parametres", "suivi"),
     ("/sessions", "sessions"),
 ]
 
@@ -528,16 +530,29 @@ def noter_story(
     return _rediriger(request, f"/sessions/{session_id}")
 
 
-@app.get("/parametres", response_class=HTMLResponse)
-def ecran_parametres(request: Request, erreur: str | None = None) -> HTMLResponse:
-    statut, parametres = api_client.appeler("GET", "/parametres")
-    if statut != 200:
-        return _page_erreur(request, statut, parametres)
+# R10 (UX9/H12) : « Suivi & réglages » — télémétrie + paramètres sur une page,
+# chaque section dégradée indépendamment si son endpoint manque.
+@app.get("/suivi", response_class=HTMLResponse)
+def ecran_suivi(request: Request) -> HTMLResponse:
+    statut_tele, telemetrie = api_client.appeler("GET", "/telemetrie")
+    statut_tokens, tokens = api_client.appeler("GET", "/telemetrie/tokens")
+    statut_parametres, parametres = api_client.appeler("GET", "/parametres")
     return templates.TemplateResponse(
         request=request,
-        name="parametres.html",
-        context={"parametres": parametres, "erreur": erreur},
+        name="suivi.html",
+        context={
+            "telemetrie": telemetrie if statut_tele == 200 else None,
+            "tokens": tokens if statut_tokens == 200 else None,
+            "parametres": parametres if statut_parametres == 200 else None,
+            "erreur": None,
+        },
     )
+
+
+@app.get("/parametres")
+def ecran_parametres(request: Request) -> RedirectResponse:
+    """R10 : l'ancienne route vit en redirection (liens/favoris préservés)."""
+    return _rediriger(request, "/suivi#parametres")
 
 
 @app.post("/parametres/modele")
@@ -550,31 +565,19 @@ def changer_modele(
     choix = (modele_libre or modele).strip()
     if choix:
         api_client.appeler("PUT", "/parametres/modele-chat", json={"modele": choix})
-    return _rediriger(request, "/parametres")
+    return _rediriger(request, "/suivi#parametres")
 
 
 @app.post("/parametres/modele-defaut")
 def modele_par_defaut(request: Request) -> RedirectResponse:
     api_client.appeler("DELETE", "/parametres/modele-chat")
-    return _rediriger(request, "/parametres")
+    return _rediriger(request, "/suivi#parametres")
 
 
-@app.get("/telemetrie", response_class=HTMLResponse)
-def ecran_telemetrie(request: Request) -> HTMLResponse:
-    statut, telemetrie = api_client.appeler("GET", "/telemetrie")
-    statut_tokens, tokens = api_client.appeler("GET", "/telemetrie/tokens")
-    if statut != 200:
-        return _page_erreur(request, statut, telemetrie)
-    return templates.TemplateResponse(
-        request=request,
-        name="telemetrie.html",
-        context={
-            "telemetrie": telemetrie,
-            # S3.11 : la jauge tokens est une indication — l'écran reste servi
-            # même si l'endpoint conso est indisponible.
-            "tokens": tokens if statut_tokens == 200 else None,
-        },
-    )
+@app.get("/telemetrie")
+def ecran_telemetrie(request: Request) -> RedirectResponse:
+    """R10 : l'ancienne route vit en redirection (liens/favoris préservés)."""
+    return _rediriger(request, "/suivi#telemetrie")
 
 
 # --- Écran projets (E4.2, S2.9) ---

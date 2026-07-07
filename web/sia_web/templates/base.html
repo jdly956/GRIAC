@@ -151,11 +151,9 @@
             <li class="fr-nav__item">
               <a class="fr-nav__link" href="{{ racine }}/documents"{% if nav_actif == "documents" %} aria-current="true"{% endif %}>Mes documents</a>
             </li>
+            {# R10 (UX9) : 4 entrées — télémétrie + paramètres fusionnés. #}
             <li class="fr-nav__item">
-              <a class="fr-nav__link" href="{{ racine }}/telemetrie"{% if nav_actif == "telemetrie" %} aria-current="true"{% endif %}>Télémétrie</a>
-            </li>
-            <li class="fr-nav__item">
-              <a class="fr-nav__link" href="{{ racine }}/parametres"{% if nav_actif == "parametres" %} aria-current="true"{% endif %}>Paramètres</a>
+              <a class="fr-nav__link" href="{{ racine }}/suivi"{% if nav_actif == "suivi" %} aria-current="true"{% endif %}>Suivi &amp; réglages</a>
             </li>
           </ul>
         </nav>
