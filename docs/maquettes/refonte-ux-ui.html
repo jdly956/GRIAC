@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="fr" data-fr-scheme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Refonte UX/UI · SIA PO</title>
+</head>
+<body>
+<style>
+  /* ============================================================
+     Maquette refonte UX/UI — SIA PO
+     Approximation du DSFR (le produit réel charge le CSS DSFR
+     officiel + police Marianne ; ici : tokens équivalents).
+     ============================================================ */
+  :root {
+    --bleu: #000091;
+    --bleu-vif: #1212ff;
+    --bleu-tint: #e3e3fd;
+    --fond: #f6f6f6;
+    --surface: #ffffff;
+    --surface-2: #f9f9ff;
+    --bordure: #dddddd;
+    --bordure-forte: #cecece;
+    --texte: #161616;
+    --texte-2: #3a3a3a;
+    --texte-doux: #666666;
+    --focus: #0a76f6;
+    --info: #0063cb;    --info-t: #e8edff;
+    --succes: #18753c;  --succes-t: #dffee6;
+    --alerte: #b34000;  --alerte-t: #ffe8dc;
+    --erreur: #ce0500;  --erreur-t: #ffe9e9;
+    --neutre-t: #eeeeee;
+    --po-bulle: #e3e3fd;
+    --assistant-bulle: #ffffff;
+    --btn-bg: #000091; --btn-fg: #ffffff;
+    --ombre: 0 1px 3px rgba(0,0,18,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bleu: #8585f6;
+      --bleu-vif: #a1a1fb;
+      --bleu-tint: #272747;
+      --fond: #161616;
+      --surface: #1e1e1e;
+      --surface-2: #232336;
+      --bordure: #3a3a3a;
+      --bordure-forte: #4a4a4a;
+      --texte: #dddddd;
+      --texte-2: #cecece;
+      --texte-doux: #999999;
+      --info: #8ab9f1;    --info-t: #22314a;
+      --succes: #7fe0a2;  --succes-t: #1e2f24;
+      --alerte: #ffab87;  --alerte-t: #3a2418;
+      --erreur: #ff8f8f;  --erreur-t: #3d1a1a;
+      --neutre-t: #2c2c2c;
+      --po-bulle: #272747;
+      --assistant-bulle: #1e1e1e;
+      --btn-bg: #8585f6; --btn-fg: #000091;
+      --ombre: 0 1px 3px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="light"] {
+    --bleu: #000091; --bleu-vif: #1212ff; --bleu-tint: #e3e3fd;
+    --fond: #f6f6f6; --surface: #ffffff; --surface-2: #f9f9ff;
+    --bordure: #dddddd; --bordure-forte: #cecece;
+    --texte: #161616; --texte-2: #3a3a3a; --texte-doux: #666666;
+    --info: #0063cb; --info-t: #e8edff;
+    --succes: #18753c; --succes-t: #dffee6;
+    --alerte: #b34000; --alerte-t: #ffe8dc;
+    --erreur: #ce0500; --erreur-t: #ffe9e9;
+    --neutre-t: #eeeeee;
+    --po-bulle: #e3e3fd; --assistant-bulle: #ffffff;
+    --btn-bg: #000091; --btn-fg: #ffffff;
+    --ombre: 0 1px 3px rgba(0,0,18,.08);
+  }
+  :root[data-theme="dark"] {
+    --bleu: #8585f6; --bleu-vif: #a1a1fb; --bleu-tint: #272747;
+    --fond: #161616; --surface: #1e1e1e; --surface-2: #232336;
+    --bordure: #3a3a3a; --bordure-forte: #4a4a4a;
+    --texte: #dddddd; --texte-2: #cecece; --texte-doux: #999999;
+    --info: #8ab9f1; --info-t: #22314a;
+    --succes: #7fe0a2; --succes-t: #1e2f24;
+    --alerte: #ffab87; --alerte-t: #3a2418;
+    --erreur: #ff8f8f; --erreur-t: #3d1a1a;
+    --neutre-t: #2c2c2c;
+    --po-bulle: #272747; --assistant-bulle: #1e1e1e;
+    --btn-bg: #8585f6; --btn-fg: #000091;
+    --ombre: 0 1px 3px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fond); color: var(--texte);
+    font-family: Marianne, "Segoe UI", -apple-system, system-ui, Roboto, arial, sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  h1, h2, h3 { line-height: 1.25; text-wrap: balance; }
+  a { color: var(--bleu); }
+  :is(a, button, input, textarea, select, summary):focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 2px;
+  }
+  button { font: inherit; }
+
+  /* ---------- barre de démo (chrome de la maquette, pas le produit) -------- */
+  .demo-barre {
+    background: #161616; color: #eee; display: flex; flex-wrap: wrap;
+    align-items: center; gap: .5rem 1rem; padding: .4rem 1rem;
+    font-size: .8rem; position: sticky; top: 0; z-index: 50;
+    border-bottom: 3px solid #6a6af4;
+  }
+  .demo-barre strong { color: #a1a1fb; letter-spacing: .04em; text-transform: uppercase; font-size: .72rem; }
+  .demo-barre .demo-onglets { display: flex; gap: .25rem; }
+  .demo-barre button {
+    background: transparent; color: #ddd; border: 1px solid #555;
+    border-radius: .25rem; padding: .2rem .7rem; cursor: pointer; font-size: .8rem;
+  }
+  .demo-barre button[aria-pressed="true"] { background: #6a6af4; border-color: #6a6af4; color: #fff; font-weight: 600; }
+  .demo-note { color: #999; margin-left: auto; }
+
+  /* ---------- socle : en-tête + navigation + notice D15 ---------- */
+  .entete {
+    background: var(--surface); border-bottom: 1px solid var(--bordure);
+    box-shadow: var(--ombre);
+  }
+  .entete-inner {
+    max-width: 96rem; margin: 0 auto; padding: .6rem 1.25rem;
+    display: flex; align-items: baseline; gap: 2rem; flex-wrap: wrap;
+  }
+  .marque { font-weight: 700; font-size: 1.05rem; color: var(--texte); text-decoration: none; }
+  .marque .devise { display: block; font-weight: 400; font-size: .72rem; color: var(--texte-doux); }
+  .nav-principale { display: flex; gap: .25rem; flex-wrap: wrap; }
+  .nav-principale a {
+    text-decoration: none; color: var(--texte-2); padding: .45rem .85rem .35rem;
+    border-bottom: 3px solid transparent; font-size: .92rem;
+  }
+  .nav-principale a:hover { background: var(--neutre-t); }
+  .nav-principale a[aria-current="page"] {
+    color: var(--bleu); border-bottom-color: var(--bleu); font-weight: 600;
+  }
+  .notice-d15 {
+    background: var(--info-t); color: var(--texte-2);
+    font-size: .8rem; padding: .3rem 1.25rem;
+    border-bottom: 1px solid var(--bordure);
+  }
+  .notice-d15 .pictogramme { color: var(--info); font-weight: 700; }
+
+  .ecran { display: none; }
+  .ecran.actif { display: block; }
+  .page { max-width: 96rem; margin: 0 auto; padding: .9rem 1.25rem 2rem; }
+
+  /* ---------- composants génériques (approximation DSFR) ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: var(--btn-bg); color: var(--btn-fg); border: 1px solid var(--btn-bg);
+    padding: .4rem .9rem; border-radius: .25rem; cursor: pointer;
+    font-size: .9rem; font-weight: 500; text-decoration: none;
+  }
+  .btn:hover { filter: brightness(1.15); }
+  .btn-secondaire { background: transparent; color: var(--bleu); border: 1px solid var(--bleu); }
+  .btn-discret { background: transparent; color: var(--bleu); border: 1px solid transparent; }
+  .btn-discret:hover { background: var(--neutre-t); }
+  .btn-sm { padding: .2rem .6rem; font-size: .8rem; }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .btn-danger { color: var(--erreur); border-color: var(--erreur); background: transparent; }
+
+  .badge {
+    display: inline-block; font-size: .7rem; font-weight: 700;
+    padding: .05rem .5rem; border-radius: .25rem; text-transform: uppercase;
+    letter-spacing: .02em; vertical-align: middle; white-space: nowrap;
+  }
+  .badge-info   { background: var(--info-t); color: var(--info); }
+  .badge-succes { background: var(--succes-t); color: var(--succes); }
+  .badge-alerte { background: var(--alerte-t); color: var(--alerte); }
+  .badge-erreur { background: var(--erreur-t); color: var(--erreur); }
+  .badge-neutre { background: var(--neutre-t); color: var(--texte-2); }
+
+  .chip {
+    display: inline-block; font-size: .72rem; padding: 0 .45rem;
+    border-radius: .7rem; border: 1px solid var(--bordure-forte); color: var(--texte-doux);
+  }
+  .chip-corpus { border-color: var(--info); color: var(--info); }
+  .chip-po     { border-color: var(--succes); color: var(--succes); }
+  .chip-modele { border-color: var(--alerte); color: var(--alerte); }
+
+  .carte {
+    background: var(--surface); border: 1px solid var(--bordure);
+    border-radius: .3rem; box-shadow: var(--ombre);
+  }
+
+  input[type="text"], textarea, select {
+    font: inherit; color: var(--texte); background: var(--surface);
+    border: 1px solid var(--bordure-forte); border-radius: .25rem .25rem 0 0;
+    border-bottom: 2px solid var(--texte-2); padding: .45rem .6rem; width: 100%;
+  }
+
+  /* ---------- écran SESSION ---------- */
+  .barre-session {
+    display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
+    padding: .55rem 1.25rem; background: var(--surface);
+    border-bottom: 1px solid var(--bordure); box-shadow: var(--ombre);
+  }
+  .barre-session .retour { font-size: .85rem; text-decoration: none; white-space: nowrap; }
+  .barre-session h1 { font-size: 1.02rem; margin: 0; font-weight: 700; }
+  .barre-session .meta { font-size: .78rem; color: var(--texte-doux); white-space: nowrap; }
+  .barre-session .actions-session { margin-left: auto; display: flex; gap: .3rem; flex-wrap: wrap; }
+
+  .stepper { min-width: 190px; }
+  .stepper .stepper-txt { font-size: .78rem; font-weight: 600; display: block; }
+  .stepper .segments { display: flex; gap: 3px; margin-top: 3px; }
+  .stepper .segments span { height: 5px; flex: 1; background: var(--neutre-t); border-radius: 2px; }
+  .stepper .segments span.fait { background: var(--bleu); }
+
+  .session-grille {
+    max-width: 96rem; margin: 0 auto; padding: .9rem 1.25rem 1.5rem;
+    display: grid; grid-template-columns: minmax(0, 1fr) 402px;
+    gap: 1rem; align-items: start;
+  }
+
+  .chat { display: flex; flex-direction: column; height: calc(100vh - 232px); min-height: 460px; }
+  .fil { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .9rem; }
+  .msg { display: flex; }
+  .msg-po { justify-content: flex-end; }
+  .bulle {
+    max-width: 86%; padding: .6rem .85rem; border-radius: .5rem;
+    border: 1px solid var(--bordure);
+  }
+  .msg-po .bulle { background: var(--po-bulle); border-color: transparent; border-bottom-right-radius: .15rem; }
+  .msg-assistant .bulle { background: var(--assistant-bulle); border-bottom-left-radius: .15rem; }
+  .bulle .auteur { font-size: .72rem; font-weight: 700; color: var(--texte-doux); text-transform: uppercase; letter-spacing: .04em; }
+  .bulle .auteur .etape-msg { font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+  .sources-inline { margin-top: .5rem; font-size: .82rem; }
+  .sources-inline summary { cursor: pointer; color: var(--bleu); }
+  .sources-inline ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+  .sources-inline blockquote {
+    margin: .3rem 0 0; padding: .4rem .6rem; border-left: 3px solid var(--bleu);
+    background: var(--surface-2); font-size: .8rem; color: var(--texte-2);
+  }
+
+  .alerte-inline {
+    margin-top: .5rem; padding: .45rem .6rem; font-size: .82rem;
+    border-radius: .25rem; border-left: 4px solid;
+  }
+  .alerte-a9 { background: var(--alerte-t); border-color: var(--alerte); color: var(--texte); }
+  .alerte-infos { background: var(--info-t); border-color: var(--info); color: var(--texte); }
+
+  .typing { display: inline-flex; gap: 5px; align-items: center; padding: .3rem 0; }
+  .typing i { width: 7px; height: 7px; background: var(--texte-doux); border-radius: 50%; animation: battement 1.1s infinite; }
+  .typing i:nth-child(2) { animation-delay: .18s; }
+  .typing i:nth-child(3) { animation-delay: .36s; }
+  @keyframes battement { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .typing i { animation: none; opacity: .6; } }
+
+  .composeur { border-top: 1px solid var(--bordure); padding: .6rem .9rem .5rem; background: var(--surface); border-radius: 0 0 .3rem .3rem; }
+  .actions-etape { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-bottom: .5rem; font-size: .82rem; }
+  .actions-etape .intitule { color: var(--texte-doux); }
+  .commentaire-non { display: none; margin-bottom: .5rem; }
+  .commentaire-non.visible { display: flex; gap: .4rem; }
+  .saisie { display: flex; gap: .5rem; align-items: flex-end; }
+  .saisie textarea { resize: vertical; min-height: 52px; }
+  .micro-d15 { font-size: .7rem; color: var(--texte-doux); margin-top: .3rem; }
+
+  /* ---------- rail droit ---------- */
+  .rail {
+    position: sticky; top: .75rem; max-height: calc(100vh - 245px);
+    overflow-y: auto; display: flex; flex-direction: column; gap: .8rem;
+  }
+  .rail details.panneau-rail { border-radius: .3rem; }
+  .panneau-rail summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: .5rem;
+    padding: .55rem .8rem; font-weight: 700; font-size: .9rem;
+    border-bottom: 1px solid transparent;
+  }
+  .panneau-rail[open] summary { border-bottom-color: var(--bordure); }
+  .panneau-rail summary::-webkit-details-marker { display: none; }
+  .panneau-rail summary .fleche { margin-left: auto; transition: transform .15s; color: var(--texte-doux); font-size: .8rem; }
+  .panneau-rail[open] summary .fleche { transform: rotate(90deg); }
+  .panneau-rail .corps { padding: .6rem .8rem .8rem; font-size: .85rem; }
+  .compteur {
+    background: var(--bleu); color: var(--surface); border-radius: .7rem;
+    font-size: .72rem; padding: 0 .5rem; font-weight: 700;
+  }
+  .compteur-attention { background: var(--alerte); }
+
+  /* stories */
+  .story { border: 1px solid var(--bordure); border-radius: .25rem; margin-bottom: .5rem; }
+  .story summary { list-style: none; cursor: pointer; padding: .45rem .6rem; display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
+  .story summary::-webkit-details-marker { display: none; }
+  .story .story-titre { font-weight: 600; font-size: .84rem; flex: 1; min-width: 12rem; }
+  .story .corps-story { border-top: 1px solid var(--bordure); padding: .55rem .6rem; }
+  .rendu-md { font-size: .82rem; }
+  .rendu-md h4 { margin: .5rem 0 .2rem; font-size: .84rem; }
+  .rendu-md p { margin: .3rem 0; }
+  .rendu-md table { border-collapse: collapse; margin: .4rem 0; font-size: .78rem; width: 100%; }
+  .rendu-md th, .rendu-md td { border: 1px solid var(--bordure-forte); padding: .25rem .45rem; text-align: left; vertical-align: top; }
+  .rendu-md th { background: var(--surface-2); }
+  .defile-x { overflow-x: auto; }
+  .story-actions { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .5rem; align-items: center; }
+  .etoiles { display: inline-flex; gap: 2px; }
+  .etoiles button { background: none; border: none; cursor: pointer; font-size: 1.05rem; padding: 0 1px; color: var(--bordure-forte); }
+  .etoiles button.pleine { color: var(--alerte); }
+
+  /* hypothèses */
+  .hypo { display: flex; gap: .5rem; padding: .45rem 0; border-bottom: 1px solid var(--bordure); font-size: .82rem; align-items: flex-start; }
+  .hypo:last-of-type { border-bottom: none; }
+  .hypo input[type="checkbox"] { width: 1rem; height: 1rem; margin-top: .2rem; accent-color: var(--bleu); flex: none; }
+  .hypo .texte-hypo { flex: 1; }
+  .hypo .decision-ligne { margin-top: .25rem; display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }
+  .levee-proposee { font-size: .74rem; background: var(--succes-t); color: var(--succes); border-radius: .25rem; padding: .1rem .4rem; font-weight: 600; }
+  .levee-rejet { background: var(--erreur-t); color: var(--erreur); }
+  .barre-masse { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin-top: .6rem; }
+  .barre-masse .selection-info { font-size: .78rem; color: var(--texte-doux); width: 100%; }
+
+  /* sources rail */
+  .source-item { padding: .4rem 0; border-bottom: 1px solid var(--bordure); }
+  .source-item:last-child { border-bottom: none; }
+  .source-item .doc { font-weight: 600; font-size: .82rem; }
+  .source-item .section-doc { color: var(--texte-doux); font-size: .78rem; }
+
+  /* ---------- écran ACCUEIL ---------- */
+  .entete-page { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: .4rem 0 1rem; }
+  .entete-page h1 { font-size: 1.35rem; margin: 0; }
+  .entete-page .btn { margin-left: auto; }
+  .liste-sessions { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .liste-sessions th { text-align: left; font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--texte-doux); padding: .5rem .75rem; border-bottom: 2px solid var(--bordure-forte); }
+  .liste-sessions td { padding: .55rem .75rem; border-bottom: 1px solid var(--bordure); vertical-align: middle; }
+  .liste-sessions tr:hover td { background: var(--surface-2); }
+  .liste-sessions .titre-session { font-weight: 600; text-decoration: none; }
+  .liste-sessions .actions-ligne { white-space: nowrap; text-align: right; }
+  .form-nouvelle { padding: 1rem; margin-bottom: 1rem; }
+  .form-nouvelle .grille-form { display: grid; grid-template-columns: 240px 1fr; gap: .8rem; align-items: start; }
+  .form-nouvelle label { font-size: .82rem; font-weight: 600; display: block; margin-bottom: .25rem; }
+  .lien-archivees { font-size: .84rem; }
+
+  /* ---------- écran DOCUMENTS ---------- */
+  .tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .7rem; margin-bottom: 1rem; }
+  .tuile { padding: .6rem .8rem; }
+  .tuile .valeur { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tuile .intitule-tuile { font-size: .74rem; color: var(--texte-doux); text-transform: uppercase; letter-spacing: .04em; }
+  .tuile-alerte .valeur { color: var(--alerte); }
+  .barre-corpus { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; padding: .7rem .9rem; margin-bottom: 1rem; }
+  .barre-corpus .note-quota { font-size: .78rem; color: var(--texte-doux); flex: 1; min-width: 14rem; }
+  .dossier-groupe { margin-bottom: .6rem; }
+  .dossier-groupe summary { list-style: none; cursor: pointer; padding: .55rem .8rem; display: flex; gap: .6rem; align-items: center; font-weight: 700; font-size: .9rem; }
+  .dossier-groupe summary::-webkit-details-marker { display: none; }
+  .dossier-groupe .projets-associes { font-weight: 400; font-size: .76rem; color: var(--texte-doux); }
+  .table-docs { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  .table-docs td, .table-docs th { padding: .4rem .8rem; border-top: 1px solid var(--bordure); text-align: left; }
+  .table-docs .actions-ligne { text-align: right; white-space: nowrap; }
+  .table-docs a { text-decoration: none; font-weight: 600; }
+
+  .pied-maquette { max-width: 96rem; margin: 0 auto; padding: 1rem 1.25rem 2rem; color: var(--texte-doux); font-size: .76rem; }
+
+  /* ---------- responsive laptop / écran étroit ---------- */
+  @media (max-width: 1180px) {
+    .session-grille { grid-template-columns: 1fr; }
+    .chat { height: auto; }
+    .fil { max-height: 56vh; }
+    .rail { position: static; max-height: none; }
+  }
+</style>
+
+<!-- ======================= chrome de démo ======================= -->
+<div class="demo-barre" role="navigation" aria-label="Navigation de la maquette">
+  <strong>Maquette · refonte UX/UI</strong>
+  <div class="demo-onglets">
+    <button type="button" data-ecran="ecran-session" aria-pressed="true">Écran session</button>
+    <button type="button" data-ecran="ecran-accueil" aria-pressed="false">Accueil (sessions)</button>
+    <button type="button" data-ecran="ecran-documents" aria-pressed="false">Mes documents</button>
+  </div>
+  <span class="demo-note">Données fictives — l'envoi de message est simulé pour montrer le comportement</span>
+</div>
+
+<!-- ======================= socle commun ======================= -->
+<header class="entete">
+  <div class="entete-inner">
+    <a class="marque" href="#">🏛️ SIA PO
+      <span class="devise">assistant de rédaction de user stories</span>
+    </a>
+    <nav class="nav-principale" aria-label="Menu principal">
+      <a href="#" aria-current="page" data-nav="sessions">Sessions</a>
+      <a href="#" data-nav="projets">Projets</a>
+      <a href="#" data-nav="documents">Documents</a>
+      <a href="#" data-nav="suivi">Suivi &amp; réglages</a>
+    </nav>
+  </div>
+</header>
+<div class="notice-d15" role="note">
+  <span class="pictogramme">ⓘ</span> Ne collez pas de données personnelles — données publiques ou internes non sensibles uniquement.
+</div>
+
+<!-- ======================= ÉCRAN SESSION ======================= -->
+<section id="ecran-session" class="ecran actif" aria-label="Écran session (cible)">
+
+  <div class="barre-session">
+    <a class="retour" href="#">← Sessions</a>
+    <h1>Télétransmission — priorisation des actes &gt; seuil</h1>
+    <div class="stepper" title="Workflow prompt 3, étapes 0 à 5">
+      <span class="stepper-txt">Étape 3/5 — Rédaction des US</span>
+      <div class="segments" aria-hidden="true">
+        <span class="fait"></span><span class="fait"></span><span class="fait"></span><span class="fait"></span><span></span><span></span>
+      </div>
+    </div>
+    <span class="meta">openweight-medium · 12 appels · 84 312 / 9 105 tokens</span>
+    <div class="actions-session">
+      <button class="btn btn-secondaire btn-sm" type="button">Exporter CSV</button>
+      <button class="btn btn-secondaire btn-sm" type="button">Copier (markdown)</button>
+      <button class="btn btn-discret btn-sm" type="button">Renommer</button>
+      <button class="btn btn-discret btn-sm" type="button">Archiver</button>
+    </div>
+  </div>
+
+  <div class="session-grille">
+
+    <!-- ---------- colonne chat ---------- -->
+    <section class="chat carte" aria-label="Fil de la conversation">
+      <div class="fil" id="fil">
+
+        <div class="msg msg-po">
+          <div class="bulle">
+            <span class="auteur">PO <span class="etape-msg">· interview</span></span>
+            <p>Le seuil applicable est de 100 000 € pour les marchés de travaux. La file de travail doit être commune à l'équipe, pas individuelle.</p>
+          </div>
+        </div>
+
+        <div class="msg msg-assistant">
+          <div class="bulle">
+            <span class="auteur">Assistant <span class="etape-msg">· interview</span></span>
+            <p>Merci. J'enregistre ces deux points. Une <strong>divergence</strong> apparaît sur le seuil :</p>
+            <div class="alerte-inline alerte-a9">⚠️ Le corpus indique <strong>50 000 €</strong> (note-cadrage-teletransmission.docx, §3.2) mais vous déclarez <strong>100 000 €</strong> — c'est vous qui arbitrez (A9).</div>
+            <details class="sources-inline">
+              <summary>Sources mobilisées (1)</summary>
+              <ul>
+                <li>note-cadrage-teletransmission.docx — §3.2 Seuils et priorités
+                  <details><summary>extrait exact</summary>
+                    <blockquote>« Les actes relatifs aux marchés de travaux dont le montant excède 50 000 € HT font l'objet d'un traitement prioritaire par le service instructeur… »</blockquote>
+                  </details>
+                </li>
+              </ul>
+            </details>
+          </div>
+        </div>
+
+        <div class="msg msg-po">
+          <div class="bulle">
+            <span class="auteur">PO <span class="etape-msg">· rédaction</span></span>
+            <p>Le seuil de 50 000 € de la note fait foi, je me suis trompé. Rédige la première story.</p>
+          </div>
+        </div>
+
+        <div class="msg msg-assistant">
+          <div class="bulle">
+            <span class="auteur">Assistant <span class="etape-msg">· rédaction</span></span>
+            <div class="rendu-md">
+              <p>Seuil corrigé à 50 000 € (corpus confirmé — je propose la levée de l'hypothèse n°12 dans le registre). Voici la story :</p>
+              <h4>US-02 — Priorisation automatique des actes &gt; seuil</h4>
+              <p><strong>En tant qu'</strong>agent instructeur, <strong>je veux</strong> que les actes de marchés de travaux dépassant 50 000 € HT soient priorisés automatiquement dans la file de travail commune, <strong>afin de</strong> traiter en premier les dossiers à enjeu.</p>
+              <div class="defile-x">
+                <table>
+                  <thead><tr><th>#</th><th>Étant donné</th><th>Quand</th><th>Alors</th></tr></thead>
+                  <tbody>
+                    <tr><td>1</td><td>un acte de type marché de travaux d'un montant de 62 000 € HT</td><td>l'acte est réceptionné par télétransmission</td><td>il apparaît en tête de la file commune avec le badge « prioritaire »</td></tr>
+                    <tr><td>2</td><td>un acte de 48 000 € HT</td><td>l'acte est réceptionné</td><td>il est classé selon la date de réception, sans badge</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p><em>Accessibilité (DSFR)</em> : le badge « prioritaire » est doublé d'un libellé texte ; la file est navigable au clavier.</p>
+            </div>
+            <div class="alerte-inline alerte-infos">1 hypothèse ajoutée au registre · 1 levée proposée — la décision vous revient (A8), panneau « Hypothèses ».</div>
+            <details class="sources-inline">
+              <summary>Sources mobilisées (3)</summary>
+              <ul>
+                <li>note-cadrage-teletransmission.docx — §3.2 Seuils et priorités</li>
+                <li>referentiel-actes.xlsx — Tableau des seuils (partie 2/5)</li>
+                <li>process-instruction.pdf — 4. File de travail</li>
+              </ul>
+            </details>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ---------- composeur ---------- -->
+      <div class="composeur">
+        <div class="actions-etape">
+          <span class="intitule">Actions d'étape :</span>
+          <button class="btn btn-secondaire btn-sm" type="button" id="btn-story-suivante">Story suivante</button>
+          <span class="intitule">·</span>
+          <button class="btn btn-secondaire btn-sm" type="button">Valider l'étape — Oui</button>
+          <button class="btn btn-discret btn-sm" type="button" id="btn-non">Non — itérer</button>
+          <span class="intitule" title="Règle 5 : « Oui » quand toutes les stories candidates sont couvertes.">ⓘ</span>
+        </div>
+        <div class="commentaire-non" id="commentaire-non">
+          <input type="text" placeholder="Commentaire obligatoire : précisez ce qu'il faut changer" aria-label="Commentaire d'itération">
+          <button class="btn btn-sm" type="button">Envoyer l'itération</button>
+        </div>
+        <div class="saisie">
+          <textarea id="champ-message" rows="2" placeholder="Réponse d'interview, correction, ou question documentaire libre — même fil (A2)" aria-label="Votre message"></textarea>
+          <button class="btn" type="button" id="btn-envoyer">Envoyer</button>
+        </div>
+        <p class="micro-d15">Rappel : pas de données personnelles (D15).</p>
+      </div>
+    </section>
+
+    <!-- ---------- rail droit : panneaux empilés ---------- -->
+    <aside class="rail" aria-label="Panneaux de travail">
+
+      <details class="panneau-rail carte" open>
+        <summary>📄 Stories produites <span class="compteur">2</span> <span class="fleche">▶</span></summary>
+        <div class="corps">
+          <details class="story">
+            <summary><span class="story-titre">US-01 — Réception et accusé des actes télétransmis</span>
+              <span class="badge badge-succes">DoR ✓</span><span class="badge badge-info">notée 4/5</span>
+            </summary>
+            <div class="corps-story">
+              <div class="rendu-md"><p><strong>En tant qu'</strong>agent instructeur, <strong>je veux</strong> qu'un accusé de réception soit émis automatiquement à la collectivité émettrice…</p></div>
+              <div class="story-actions">
+                <span class="etoiles" data-note="4" aria-label="Note 4 sur 5"><button type="button" class="pleine">★</button><button type="button" class="pleine">★</button><button type="button" class="pleine">★</button><button type="button" class="pleine">★</button><button type="button">★</button></span>
+                <button class="btn btn-discret btn-sm" type="button">Éditer</button>
+                <button class="btn btn-discret btn-sm" type="button">Copier</button>
+              </div>
+            </div>
+          </details>
+          <details class="story" open>
+            <summary><span class="story-titre">US-02 — Priorisation automatique des actes &gt; seuil</span>
+              <span class="badge badge-alerte">1 hypothèse</span><span class="badge badge-neutre">éditée</span>
+            </summary>
+            <div class="corps-story">
+              <div class="rendu-md">
+                <p><strong>En tant qu'</strong>agent instructeur, <strong>je veux</strong> que les actes &gt; 50 000 € HT soient priorisés dans la file commune, <strong>afin de</strong> traiter en premier les dossiers à enjeu.</p>
+              </div>
+              <div class="story-actions">
+                <span class="etoiles" data-note="0" aria-label="Non notée"><button type="button">★</button><button type="button">★</button><button type="button">★</button><button type="button">★</button><button type="button">★</button></span>
+                <button class="btn btn-discret btn-sm" type="button">Éditer</button>
+                <button class="btn btn-discret btn-sm" type="button">Copier</button>
+                <span class="chip" title="La version éditée gagne à l'export">version éditée → export</span>
+              </div>
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <details class="panneau-rail carte" open>
+        <summary>❓ Hypothèses <span class="compteur compteur-attention">3 en attente</span> <span class="fleche">▶</span></summary>
+        <div class="corps">
+          <div class="hypo">
+            <input type="checkbox" class="coche-hypo" id="h12" aria-labelledby="h12-texte">
+            <div class="texte-hypo" id="h12-texte">
+              <span class="chip chip-modele">modèle</span> #12 — Le seuil réglementaire est fixé à 100 000 € HT.
+              <div class="decision-ligne">
+                <span class="levee-proposee">Levée proposée : Rejeter</span>
+                <em style="font-size:.76rem">« le PO a confirmé le seuil corpus de 50 000 € »</em>
+              </div>
+              <div class="decision-ligne">
+                <button class="btn btn-sm btn-secondaire" type="button">Confirmer</button>
+                <button class="btn btn-sm btn-discret" type="button">Rejeter</button>
+              </div>
+            </div>
+          </div>
+          <div class="hypo">
+            <input type="checkbox" class="coche-hypo" id="h13" aria-labelledby="h13-texte">
+            <div class="texte-hypo" id="h13-texte">
+              <span class="chip chip-modele">modèle</span> #13 — La file de travail est triée par date de réception par défaut.
+              <div class="decision-ligne">
+                <button class="btn btn-sm btn-secondaire" type="button">Confirmer</button>
+                <button class="btn btn-sm btn-discret" type="button">Rejeter</button>
+              </div>
+            </div>
+          </div>
+          <div class="hypo">
+            <input type="checkbox" class="coche-hypo" id="h14" aria-labelledby="h14-texte">
+            <div class="texte-hypo" id="h14-texte">
+              <span class="chip chip-po">déclaré PO</span> #14 — La file de travail est commune à l'équipe (pas de files individuelles).
+              <div class="decision-ligne">
+                <button class="btn btn-sm btn-secondaire" type="button">Confirmer</button>
+                <button class="btn btn-sm btn-discret" type="button">Rejeter</button>
+              </div>
+            </div>
+          </div>
+          <div class="barre-masse">
+            <span class="selection-info" id="selection-info">Cochez pour décider en masse — chaque levée reste votre décision (A8).</span>
+            <label style="font-size:.78rem"><input type="checkbox" id="tout-cocher"> Tout sélectionner</label>
+            <button class="btn btn-sm" type="button" id="btn-confirmer-masse" disabled>Confirmer la sélection</button>
+            <button class="btn btn-sm btn-secondaire" type="button" id="btn-rejeter-masse" disabled>Rejeter la sélection</button>
+          </div>
+          <div class="barre-masse">
+            <button class="btn btn-sm btn-secondaire" type="button">Appliquer la levée proposée (1) — relue</button>
+          </div>
+        </div>
+      </details>
+
+      <details class="panneau-rail carte" open>
+        <summary>📚 Sources de la dernière réponse <span class="compteur">3</span> <span class="fleche">▶</span></summary>
+        <div class="corps">
+          <div class="source-item">
+            <div class="doc">note-cadrage-teletransmission.docx</div>
+            <div class="section-doc">§3.2 Seuils et priorités</div>
+            <details class="sources-inline"><summary>extrait exact</summary>
+              <blockquote>« Les actes relatifs aux marchés de travaux dont le montant excède 50 000 € HT font l'objet d'un traitement prioritaire… »</blockquote>
+            </details>
+          </div>
+          <div class="source-item">
+            <div class="doc">referentiel-actes.xlsx</div>
+            <div class="section-doc">Tableau des seuils (partie 2/5)</div>
+            <details class="sources-inline"><summary>extrait exact</summary>
+              <blockquote>| Type d'acte | Seuil HT | Priorité |<br>| Marchés de travaux | 50 000 € | Haute |</blockquote>
+            </details>
+          </div>
+          <div class="source-item">
+            <div class="doc">process-instruction.pdf</div>
+            <div class="section-doc">4. File de travail</div>
+          </div>
+          <p style="font-size:.74rem;color:var(--texte-doux);margin:.5rem 0 0">L'historique complet des sources reste dans le fil, message par message (A3).</p>
+        </div>
+      </details>
+
+    </aside>
+  </div>
+</section>
+
+<!-- ======================= ÉCRAN ACCUEIL ======================= -->
+<section id="ecran-accueil" class="ecran" aria-label="Accueil (cible)">
+  <div class="page">
+    <div class="entete-page">
+      <h1>Sessions de rédaction</h1>
+      <button class="btn" type="button" id="btn-nouvelle">+ Nouvelle session</button>
+    </div>
+
+    <details class="carte form-nouvelle" id="form-nouvelle">
+      <summary style="cursor:pointer;font-weight:700">Nouvelle session — projet + Feature validée (prompt 2)</summary>
+      <div class="grille-form" style="margin-top:.8rem">
+        <div>
+          <label for="sel-projet">Projet (contexte &amp; NFR injectés — E8)</label>
+          <select id="sel-projet">
+            <option>Contrôle de légalité — GRIAC</option>
+            <option>Télétransmission</option>
+            <option>— aucun projet —</option>
+          </select>
+        </div>
+        <div>
+          <label for="feature-texte">Feature validée — collez-la ici</label>
+          <textarea id="feature-texte" rows="5" placeholder="Description, hypothèse de gain, critères d'acceptation, NFR, dépendances…"></textarea>
+        </div>
+      </div>
+      <p style="margin:.8rem 0 0"><button class="btn" type="button">Créer la session</button></p>
+    </details>
+
+    <div class="carte" style="overflow-x:auto">
+      <table class="liste-sessions">
+        <thead>
+          <tr><th>Session</th><th>Étape</th><th>Projet</th><th>Dernière activité</th><th>Stories</th><th class="actions-ligne">Actions</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a class="titre-session" href="#">Télétransmission — priorisation des actes &gt; seuil</a></td>
+            <td><span class="badge badge-info">Rédaction</span></td>
+            <td>Contrôle de légalité</td>
+            <td>il y a 2 h</td>
+            <td>2</td>
+            <td class="actions-ligne">
+              <button class="btn btn-discret btn-sm" type="button">Renommer</button>
+              <button class="btn btn-discret btn-sm" type="button">Archiver</button>
+              <button class="btn btn-discret btn-sm btn-danger" type="button">Supprimer</button>
+            </td>
+          </tr>
+          <tr>
+            <td><a class="titre-session" href="#">Notification des collectivités</a></td>
+            <td><span class="badge badge-info">Interview</span></td>
+            <td>Contrôle de légalité</td>
+            <td>hier, 17:40</td>
+            <td>0</td>
+            <td class="actions-ligne">
+              <button class="btn btn-discret btn-sm" type="button">Renommer</button>
+              <button class="btn btn-discret btn-sm" type="button">Archiver</button>
+              <button class="btn btn-discret btn-sm btn-danger" type="button">Supprimer</button>
+            </td>
+          </tr>
+          <tr>
+            <td><a class="titre-session" href="#">Import FLUX v3</a></td>
+            <td><span class="badge badge-succes">Synthèse</span></td>
+            <td>Télétransmission</td>
+            <td>05/07</td>
+            <td>5</td>
+            <td class="actions-ligne">
+              <button class="btn btn-discret btn-sm" type="button">Renommer</button>
+              <button class="btn btn-discret btn-sm" type="button">Archiver</button>
+              <button class="btn btn-discret btn-sm btn-danger" type="button">Supprimer</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lien-archivees" style="margin-top:.6rem"><a href="#">Voir les sessions archivées (1)</a> — l'archivage masque, la suppression détruit (confirmation demandée).</p>
+  </div>
+</section>
+
+<!-- ======================= ÉCRAN DOCUMENTS ======================= -->
+<section id="ecran-documents" class="ecran" aria-label="Mes documents (cible)">
+  <div class="page">
+    <div class="entete-page">
+      <h1>Mes documents</h1>
+      <span class="badge badge-succes" style="margin-left:auto">dernier run #7 — succès, hier 22:10</span>
+    </div>
+
+    <div class="tuiles">
+      <div class="carte tuile"><div class="valeur">42</div><div class="intitule-tuile">documents</div></div>
+      <div class="carte tuile"><div class="valeur">38</div><div class="intitule-tuile">indexés</div></div>
+      <div class="carte tuile"><div class="valeur">90,5 %</div><div class="intitule-tuile">couverture</div></div>
+      <div class="carte tuile tuile-alerte"><div class="valeur">2</div><div class="intitule-tuile">échecs à traiter</div></div>
+    </div>
+
+    <div class="carte barre-corpus">
+      <button class="btn" type="button">Déposer un document</button>
+      <button class="btn btn-secondaire" type="button">Indexer maintenant</button>
+      <span class="note-quota">L'indexation consomme le quota Albert (tpd) — lancement manuel. Dépôt : docx, pdf, pptx, xlsx, eml, md, txt (50 Mo max), <strong>dossier de destination obligatoire (A6)</strong>.</span>
+      <a href="#" style="font-size:.8rem">Historique des indexations (7)</a>
+    </div>
+
+    <details class="carte dossier-groupe" open>
+      <summary>📁 controle-legalite <span class="badge badge-neutre">12 documents</span> <span class="projets-associes">associé au projet : Contrôle de légalité — GRIAC</span></summary>
+      <table class="table-docs">
+        <tbody>
+          <tr>
+            <td><a href="#">note-cadrage-teletransmission.docx</a></td>
+            <td><span class="badge badge-succes">indexé</span> <span class="badge badge-info">référence</span></td>
+            <td>v3 · 214 Ko</td>
+            <td class="actions-ligne">
+              <button class="btn btn-discret btn-sm" type="button">Fiche</button>
+              <button class="btn btn-discret btn-sm" type="button">Original</button>
+              <button class="btn btn-discret btn-sm" type="button">Obsolète</button>
+              <button class="btn btn-discret btn-sm btn-danger" type="button">Supprimer</button>
+            </td>
+          </tr>
+          <tr>
+            <td><a href="#">referentiel-actes.xlsx</a></td>
+            <td><span class="badge badge-succes">indexé</span></td>
+            <td>v1 · 1,2 Mo</td>
+            <td class="actions-ligne">
+              <button class="btn btn-discret btn-sm" type="button">Fiche</button>
+              <button class="btn btn-discret btn-sm" type="button">Original</button>
+              <button class="btn btn-discret btn-sm" type="button">Obsolète</button>
+              <button class="btn btn-discret btn-sm btn-danger" type="button">Supprimer</button>
+            </td>
+          </tr>
+          <tr>
+            <td><a href="#">circulaire-2019-scan.pdf</a></td>
+            <td><span class="badge badge-alerte">OCR requis</span></td>
+            <td>v1 · 3,4 Mo</td>
+            <td class="actions-ligne">
+              <button class="btn btn-discret btn-sm" type="button">Fiche</button>
+              <button class="btn btn-discret btn-sm" type="button">Original</button>
+              <button class="btn btn-discret btn-sm" type="button">Obsolète</button>
+              <button class="btn btn-discret btn-sm btn-danger" type="button">Supprimer</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details class="carte dossier-groupe">
+      <summary>📁 teletransmission <span class="badge badge-neutre">8 documents</span> <span class="projets-associes">associé au projet : Télétransmission</span></summary>
+      <table class="table-docs"><tbody><tr><td colspan="4" style="color:var(--texte-doux)">…</td></tr></tbody></table>
+    </details>
+
+    <details class="carte dossier-groupe">
+      <summary>📁 referentiels <span class="badge badge-neutre">22 documents</span> <span class="badge badge-erreur">1 échec</span> <span class="projets-associes">associé aux 2 projets</span></summary>
+      <table class="table-docs"><tbody><tr><td colspan="4" style="color:var(--texte-doux)">…</td></tr></tbody></table>
+    </details>
+  </div>
+</section>
+
+<footer class="pied-maquette">
+  Maquette d'intention (données fictives) — approximation visuelle du DSFR : le produit réel utilise le CSS DSFR officiel (police Marianne, composants natifs) et fonctionne sans JavaScript (progressive enhancement htmx). Thème clair/sombre : suit le réglage du visualiseur.
+</footer>
+
+<script>
+  // ---- bascule des 3 écrans de la maquette ----
+  var boutons = document.querySelectorAll('.demo-barre button[data-ecran]');
+  var navLiens = { 'ecran-session': 'sessions', 'ecran-accueil': 'sessions', 'ecran-documents': 'documents' };
+  boutons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.ecran').forEach(function (e) { e.classList.remove('actif'); });
+      document.getElementById(b.dataset.ecran).classList.add('actif');
+      boutons.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      document.querySelectorAll('.nav-principale a').forEach(function (a) {
+        if (a.dataset.nav === navLiens[b.dataset.ecran]) { a.setAttribute('aria-current', 'page'); }
+        else { a.removeAttribute('aria-current'); }
+      });
+      window.scrollTo(0, 0);
+    });
+  });
+
+  // ---- fil : démarrer en bas (comportement chat) ----
+  var fil = document.getElementById('fil');
+  fil.scrollTop = fil.scrollHeight;
+
+  // ---- envoi simulé : bulle PO -> indicateur -> réponse d'un bloc ----
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function bulle(role, html) {
+    var m = document.createElement('div');
+    m.className = 'msg msg-' + role;
+    m.innerHTML = '<div class="bulle"><span class="auteur">' + (role === 'po' ? 'PO' : 'Assistant') +
+      ' <span class="etape-msg">· rédaction</span></span>' + html + '</div>';
+    fil.appendChild(m);
+    fil.scrollTop = fil.scrollHeight;
+    return m;
+  }
+  function envoyer() {
+    var champ = document.getElementById('champ-message');
+    var texte = champ.value.trim();
+    if (!texte) { return; }
+    var sortie = document.createElement('p');
+    sortie.textContent = texte;
+    bulle('po', sortie.outerHTML);
+    champ.value = '';
+    var btn = document.getElementById('btn-envoyer');
+    btn.disabled = true;
+    var attente = bulle('assistant', '<span class="typing" role="status" aria-label="L’assistant rédige"><i></i><i></i><i></i></span> <em style="font-size:.8rem;color:var(--texte-doux)">l’assistant rédige…</em>');
+    window.setTimeout(function () {
+      attente.remove();
+      bulle('assistant', '<p><em>(Maquette : la réponse réelle vient du moteur E3 — elle arrive d’un bloc, avec ses sources, hypothèses et divergences, et les panneaux de droite se mettent à jour dans la foulée.)</em></p>');
+      btn.disabled = false;
+    }, reduceMotion ? 400 : 1800);
+  }
+  document.getElementById('btn-envoyer').addEventListener('click', envoyer);
+  document.getElementById('champ-message').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { envoyer(); }
+  });
+
+  // ---- « Non — itérer » : révèle le commentaire obligatoire ----
+  document.getElementById('btn-non').addEventListener('click', function () {
+    document.getElementById('commentaire-non').classList.toggle('visible');
+  });
+
+  // ---- hypothèses : sélection en masse ----
+  var coches = Array.prototype.slice.call(document.querySelectorAll('.coche-hypo'));
+  var info = document.getElementById('selection-info');
+  var bConf = document.getElementById('btn-confirmer-masse');
+  var bRej = document.getElementById('btn-rejeter-masse');
+  function majSelection() {
+    var n = coches.filter(function (c) { return c.checked; }).length;
+    bConf.disabled = bRej.disabled = (n === 0);
+    info.textContent = n === 0
+      ? 'Cochez pour décider en masse — chaque levée reste votre décision (A8).'
+      : n + ' hypothèse(s) sélectionnée(s) — la décision s’applique d’un geste.';
+  }
+  coches.forEach(function (c) { c.addEventListener('change', majSelection); });
+  document.getElementById('tout-cocher').addEventListener('change', function () {
+    var v = this.checked;
+    coches.forEach(function (c) { c.checked = v; });
+    majSelection();
+  });
+
+  // ---- notation par étoiles (démo) ----
+  document.querySelectorAll('.etoiles').forEach(function (bloc) {
+    var etoiles = Array.prototype.slice.call(bloc.querySelectorAll('button'));
+    etoiles.forEach(function (e, i) {
+      e.addEventListener('click', function () {
+        etoiles.forEach(function (x, j) { x.classList.toggle('pleine', j <= i); });
+        bloc.setAttribute('aria-label', 'Note ' + (i + 1) + ' sur 5');
+      });
+    });
+  });
+</script>
+</body>
+</html>
