@@ -2,11 +2,18 @@
 
 `make ingest-chunk` : découpe chaque dérivé `derived/md/<sha256>.md` (documents
 au statut `parse`) en chunks par sections de titres, budget **500–800 tokens**
-avec chevauchement, **tableaux jamais coupés** (un tableau plus grand que le
-budget reste entier — la règle prime sur le budget). Chunks écrits en table
-`chunks` avec le fil de titres (`section`) pour la traçabilité des citations
-(E2). Reprise sur hash (D9) : des chunks déjà présents pour le sha256 courant
-ne sont pas recalculés ; un document modifié voit ses chunks remplacés.
+avec chevauchement. Règle tableaux amendée (S3.19, session réelle 12) : on ne
+coupe **jamais une ligne de tableau ni ne la sépare de son en-tête**, mais un
+tableau au-delà du budget est **scindé par groupes de lignes, l'en-tête répété**
+— un classeur Excel entier produisait sinon UN chunk de ~940k caractères qui
+traversait E2 et explosait le budget de contexte. Les lignes de tableau sont
+aussi compactées (docling padde chaque cellule à largeur fixe : ~75 % d'espaces
+sur le xlsx de la session 12). Chunks écrits en table `chunks` avec le fil de
+titres (`section`) pour la traçabilité des citations (E2). Reprise sur hash
+(D9) : des chunks déjà présents pour le sha256 courant ne sont pas recalculés ;
+un document modifié voit ses chunks remplacés. ⚠️ Corollaire : un changement
+d'ALGORITHME de chunking ne re-chunke pas les documents en place — propagation
+par suppression/redépôt du document (UI) ou purge de ses chunks.
 
 Comptage de tokens : approximation `caractères / 4` (POC) — à recaler avec le
 tokenizer réel de bge-m3 si l'éval E6 montre un écart significatif ; la fenêtre
@@ -15,6 +22,7 @@ bge-m3 relevée par `make probe` est de 8192, très au-dessus du budget.
 
 import argparse
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,7 +92,7 @@ def decouper_en_blocs(markdown: str) -> list[Bloc]:
         depouillee = ligne.strip()
         if depouillee.startswith("|"):
             clore_paragraphe()
-            tableau.append(ligne)
+            tableau.append(_compacter_ligne_tableau(ligne))
             continue
         clore_tableau()
         if depouillee.startswith("#"):
@@ -103,10 +111,46 @@ def decouper_en_blocs(markdown: str) -> list[Bloc]:
     return [bloc for bloc in blocs if bloc.contenu]
 
 
+_ESPACES_MULTIPLES = re.compile(r" {2,}")
+
+
+def _compacter_ligne_tableau(ligne: str) -> str:
+    """docling (xlsx surtout) padde chaque cellule à largeur fixe — les runs
+    d'espaces sont du poids mort pour le budget ET pour bge-m3 (S3.19)."""
+    return _ESPACES_MULTIPLES.sub(" ", ligne).rstrip()
+
+
+def _scinder_tableau(bloc: Bloc) -> list[Bloc]:
+    """Tableau au-delà du budget : scindé par GROUPES DE LIGNES, en-tête répété.
+
+    L'esprit de la règle S1.8 est préservé : aucune ligne n'est coupée ni
+    séparée de son en-tête — chaque morceau reste un tableau markdown complet
+    et citable. Sans cela, un classeur Excel = un chunk de ~235k tokens
+    (session 12) qui traversait l'assemblage E2.
+    """
+    lignes = bloc.contenu.splitlines()
+    entete = lignes[:1]
+    if len(lignes) > 1 and set(lignes[1].replace("|", "").strip()) <= set("-: "):
+        entete = lignes[:2]  # ligne de titres + séparateur markdown
+    morceaux: list[Bloc] = []
+    courant = list(entete)
+    for ligne in lignes[len(entete) :]:
+        courant.append(ligne)
+        if estimer_tokens("\n".join(courant)) >= TOKENS_MAX:
+            morceaux.append(Bloc(bloc.section, "\n".join(courant), True))
+            courant = list(entete)
+    if len(courant) > len(entete):
+        morceaux.append(Bloc(bloc.section, "\n".join(courant), True))
+    return morceaux or [bloc]
+
+
 def _scinder_bloc(bloc: Bloc) -> list[Bloc]:
-    """Un paragraphe seul au-dessus du budget est scindé par lignes ; jamais un tableau."""
-    if bloc.est_tableau or estimer_tokens(bloc.contenu) <= TOKENS_MAX:
+    """Bloc au-dessus du budget : paragraphe scindé par lignes, tableau par
+    groupes de lignes avec en-tête répété (S3.19) — jamais au milieu d'une ligne."""
+    if estimer_tokens(bloc.contenu) <= TOKENS_MAX:
         return [bloc]
+    if bloc.est_tableau:
+        return _scinder_tableau(bloc)
     morceaux, courant = [], []
     for ligne in bloc.contenu.splitlines():
         courant.append(ligne)
